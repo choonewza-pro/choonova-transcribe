@@ -152,6 +152,7 @@
               สร้างงานถอดความแบบเบื้องหลังสำหรับไฟล์วิดีโอ MP4/MKV/MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง)
               ระบบประมวลผลใน subprocess แยกต่างหาก คืน <code>job_id</code> ทันที (HTTP 202)
               <br><code>target_chunk_sec</code> / <code>max_chunk_sec</code> (ไม่บังคับ) กำหนดความยาวเป้าหมาย/สูงสุดต่อ chunk — default จาก env 30/60 วินาที
+              <br>เพดานขนาดไฟล์ตั้งค่าได้ผ่าน env <code>MAX_UPLOAD_SIZE_MB</code> (default 0 = ไม่จำกัด, เกิน → HTTP 413)
             </p>
             <div class="code-container">
               <div class="code-header">cURL (Multipart Upload)</div>

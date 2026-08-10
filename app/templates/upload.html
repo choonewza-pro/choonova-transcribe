@@ -19,11 +19,11 @@
       <!-- API Key Settings Card -->
       {% include 'partials/api_key_settings.html' %}
 
-      <form id="uploadForm">
+      <form id="uploadForm" data-max-audio-upload-mb="{{ max_audio_upload_mb|default(50) }}">
         <div class="dropzone" id="dropzone">
           <div class="icon">☁️</div>
           <h3 id="fileName">ลากไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์</h3>
-          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">ขนาดไฟล์ไม่เกิน 50MB</p>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">ขนาดไฟล์ไม่เกิน {{ max_audio_upload_mb|default(50)|int }}MB</p>
           <input type="file" id="audioFileInput" accept="audio/*" style="display: none;">
         </div>
 

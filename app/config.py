@@ -23,6 +23,10 @@ MIN_FREE_DISK_GB = float(os.getenv("MIN_FREE_DISK_GB", "5.0"))
 CLEANUP_RETENTION_HOURS = int(os.getenv("CLEANUP_RETENTION_HOURS", "24"))
 TARGET_CHUNK_DURATION_SEC = float(os.getenv("TARGET_CHUNK_DURATION_SEC", "30.0"))
 MAX_CHUNK_DURATION_SEC = float(os.getenv("MAX_CHUNK_DURATION_SEC", "60.0"))
+# Max upload size for long-form media jobs in MB; 0 = unlimited.
+MAX_UPLOAD_SIZE_MB = float(os.getenv("MAX_UPLOAD_SIZE_MB", "0"))
+# Max upload size for the short audio endpoint in MB; always enforced (must be > 0).
+MAX_AUDIO_UPLOAD_SIZE_MB = float(os.getenv("MAX_AUDIO_UPLOAD_SIZE_MB", "50.0"))
 
 # Auto-detect CUDA availability
 requested_device = os.getenv("DEVICE", "cuda").lower()

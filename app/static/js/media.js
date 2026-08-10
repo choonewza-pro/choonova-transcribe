@@ -159,6 +159,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function handleFileSelected(file) {
+    const maxUploadMb = parseFloat(mediaUploadForm.dataset.maxUploadMb) || 0;
+    if (maxUploadMb > 0 && file.size > maxUploadMb * 1024 * 1024) {
+      alert(`ไฟล์ใหญ่เกินไป! ขนาดสูงสุดที่อนุญาตคือ ${maxUploadMb} MB`);
+      selectedFile = null;
+      mediaFileName.textContent = '📁 ไม่มีไฟล์ (ขนาดเกินกำหนด)';
+      mediaFileSize.textContent = `ไฟล์นี้มีขนาด ${formatBytes(file.size)} — เกิน ${maxUploadMb} MB`;
+      startJobBtn.disabled = true;
+      mediaPreviewContainer.style.display = 'none';
+      return;
+    }
     selectedFile = file;
     mediaFileName.textContent = `📁 ไฟล์ที่เลือก: ${file.name}`;
     mediaFileSize.textContent = formatBytes(file.size);

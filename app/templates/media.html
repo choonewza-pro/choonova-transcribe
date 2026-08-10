@@ -102,16 +102,24 @@
   <main>
     <div class="glass-card">
       <h1>🎬 ถอดไฟล์เสียงและวีดีโอ</h1>
+      {% if max_upload_mb|default(0) > 0 %}
+      <p class="subtitle" style="margin-bottom: 1.5rem;">รองรับไฟล์วิดีโอ MP4, MKV, MOV หรือไฟล์เสียงขนาดยาว (สูงสุด {{ max_upload_mb|int }} MB / 3+ ชั่วโมง) ทำงานเบื้องหลังอัตโนมัติ</p>
+      {% else %}
       <p class="subtitle" style="margin-bottom: 1.5rem;">รองรับไฟล์วิดีโอ MP4, MKV, MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง) ทำงานเบื้องหลังอัตโนมัติ</p>
+      {% endif %}
 
       <!-- API Key Settings Card -->
       {% include 'partials/api_key_settings.html' %}
 
-      <form id="mediaUploadForm">
+      <form id="mediaUploadForm" data-max-upload-mb="{{ max_upload_mb|default(0) }}">
         <div class="dropzone" id="mediaDropzone">
           <div class="icon">📹</div>
           <h3 id="mediaFileName">ลากไฟล์วิดีโอ/ไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์</h3>
+          {% if max_upload_mb|default(0) > 0 %}
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">รองรับ MP4, MKV, MOV, WAV, MP3 ขนาดสูงสุด {{ max_upload_mb|int }} MB</p>
+          {% else %}
           <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">รองรับ MP4, MKV, MOV, WAV, MP3 ขนาดสูงสุด 1 GB+</p>
+          {% endif %}
           <input type="file" id="mediaFileInput" accept="video/*,audio/*" style="display: none;">
         </div>
 

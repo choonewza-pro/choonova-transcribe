@@ -92,6 +92,8 @@ DEVICE=cpu uvicorn app.main:app --host 0.0.0.0 --port 8830
 | `DATA_DIR`                  | `<project>/data`                  | SQLite directory                                  |
 | `TEMP_JOBS_DIR`             | `/tmp/typhoon_jobs`               | Temp job directory                                |
 | `MIN_FREE_DISK_GB`          | `5.0`                             | Min disk space before rejecting uploads           |
+| `MAX_UPLOAD_SIZE_MB`        | `0`                               | Max upload size for long-form media jobs (MB); `0` = unlimited |
+| `MAX_AUDIO_UPLOAD_SIZE_MB`  | `50.0`                            | Max upload size for short audio endpoint (MB); always enforced (> 0) |
 | `TARGET_CHUNK_DURATION_SEC` | `30.0`                            | Target chunk duration for silence-aware splitting |
 | `MAX_CHUNK_DURATION_SEC`    | `60.0`                            | Max chunk duration (hard cut fallback)            |
 | `CLEANUP_RETENTION_HOURS`   | `24`                              | Job retention before periodic cleanup             |

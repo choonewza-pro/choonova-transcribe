@@ -39,6 +39,8 @@ from app.config import (
     CLEANUP_RETENTION_HOURS,
     TARGET_CHUNK_DURATION_SEC,
     MAX_CHUNK_DURATION_SEC,
+    MAX_UPLOAD_SIZE_MB,
+    MAX_AUDIO_UPLOAD_SIZE_MB,
 )
 from app.auth import verify_api_key
 from app.schemas import (
@@ -229,12 +231,20 @@ async def startup_event():
 
 @app.get("/", response_class=HTMLResponse)
 async def home_page(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html")
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"max_audio_upload_mb": MAX_AUDIO_UPLOAD_SIZE_MB},
+    )
 
 
 @app.get("/audio/transcribe", response_class=HTMLResponse)
 async def audio_transcribe_page(request: Request):
-    return templates.TemplateResponse(request=request, name="upload.html")
+    return templates.TemplateResponse(
+        request=request,
+        name="upload.html",
+        context={"max_audio_upload_mb": MAX_AUDIO_UPLOAD_SIZE_MB},
+    )
 
 
 @app.get("/realtime/stream", response_class=HTMLResponse)
@@ -244,7 +254,11 @@ async def realtime_stream_page(request: Request):
 
 @app.get("/media/transcribe", response_class=HTMLResponse)
 async def media_transcribe_page(request: Request):
-    return templates.TemplateResponse(request=request, name="media.html")
+    return templates.TemplateResponse(
+        request=request,
+        name="media.html",
+        context={"max_upload_mb": MAX_UPLOAD_SIZE_MB},
+    )
 
 
 @app.get("/jobs/history", response_class=HTMLResponse)
@@ -285,7 +299,18 @@ async def transcribe_audio(
         raise HTTPException(status_code=422, detail=str(e))
 
     try:
-        content = await file.read()
+        # Stream read in 1MB chunks, enforcing the max upload size (always > 0).
+        max_audio_bytes = int(MAX_AUDIO_UPLOAD_SIZE_MB * 1024 * 1024)
+        content = bytearray()
+        while chunk := await file.read(1024 * 1024):
+            content.extend(chunk)
+            if len(content) > max_audio_bytes:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Audio file exceeds maximum size of {MAX_AUDIO_UPLOAD_SIZE_MB:.0f} MB",
+                )
+        content = bytes(content)
+
         res = router_transcribe_bytes(
             audio_bytes=content,
             filename_hint=file.filename,
@@ -308,6 +333,8 @@ async def transcribe_audio(
             rtf=round(rtf, 5),
             timestamps=timestamps if with_timestamps else None,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error during audio transcription: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -365,13 +392,23 @@ async def create_transcription_job(
     file_ext = os.path.splitext(file.filename)[1] or ".mp4"
     save_path = os.path.join(job_dir, f"input{file_ext}")
 
-    # Stream file upload to disk in chunks of 1MB to prevent OOM
+    # Stream file upload to disk in chunks of 1MB to prevent OOM.
+    # Enforce max upload size (MB) when configured (> 0); 0 = unlimited.
+    max_upload_bytes = int(MAX_UPLOAD_SIZE_MB * 1024 * 1024)
     total_bytes = 0
     try:
         with open(save_path, "wb") as buffer:
             while chunk := await file.read(1024 * 1024):
-                buffer.write(chunk)
                 total_bytes += len(chunk)
+                if MAX_UPLOAD_SIZE_MB > 0 and total_bytes > max_upload_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File exceeds maximum upload size of {MAX_UPLOAD_SIZE_MB:.0f} MB",
+                    )
+                buffer.write(chunk)
+    except HTTPException:
+        safe_delete_dir(job_dir)
+        raise
     except Exception as e:
         safe_delete_dir(job_dir)
         logger.error(f"Error saving upload file for job {job_id}: {e}")

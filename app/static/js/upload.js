@@ -137,6 +137,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function handleFileSelect(file) {
+    const maxAudioMb = parseFloat(uploadForm.dataset.maxAudioUploadMb) || 50;
+    if (file.size > maxAudioMb * 1024 * 1024) {
+      alert(`ไฟล์ใหญ่เกินไป! ขนาดสูงสุดที่อนุญาตคือ ${maxAudioMb} MB`);
+      selectedFile = null;
+      fileNameDisplay.textContent = `📁 ไม่มีไฟล์ (ขนาดเกิน ${maxAudioMb} MB)`;
+      transcribeBtn.disabled = true;
+      document.getElementById('audioPlayerContainer').style.display = 'none';
+      return;
+    }
     selectedFile = file;
     fileNameDisplay.textContent = `📁 ไฟล์ที่เลือก: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
     transcribeBtn.disabled = false;

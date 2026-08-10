@@ -4,7 +4,7 @@
           <span class="api-group-icon">📁</span>
           <div>
             <h3 class="api-group-title">ถอดไฟล์เสียง (Audio File Transcription)</h3>
-            <p class="api-group-desc">แปลงไฟล์เสียงสั้น (สูงสุด 50MB) เป็นข้อความ รองรับภาษา ไทย/อังกฤษ/อัตโนมัติ</p>
+            <p class="api-group-desc">แปลงไฟล์เสียงสั้น (สูงสุด {{ max_audio_upload_mb|default(50)|int }}MB, ตั้งค่าได้ผ่าน env <code>MAX_AUDIO_UPLOAD_SIZE_MB</code>) เป็นข้อความ รองรับภาษา ไทย/อังกฤษ/อัตโนมัติ</p>
           </div>
         </div>
 
@@ -15,7 +15,7 @@
           </summary>
           <div class="api-endpoint-body">
             <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-              แปลงไฟล์เสียงเป็นข้อความ (สูงสุด 50MB) รองรับการเลือกภาษา
+              แปลงไฟล์เสียงเป็นข้อความ (สูงสุด {{ max_audio_upload_mb|default(50)|int }}MB, เกิน → HTTP 413) รองรับการเลือกภาษา
               <code>th</code> (Typhoon ไทย) / <code>en</code> (Whisper อังกฤษ) / <code>auto</code> (Whisper ตรวจจับอัตโนมัติ),
               พร้อมสถิติเวลาและ Word Timestamps
             </p>
