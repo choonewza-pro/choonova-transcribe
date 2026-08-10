@@ -1,0 +1,54 @@
+x-logging: &default-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+  # =========================================================================
+  # 1. Typhoon ASR Service: Python 3.12 FastAPI + NeMo Typhoon ASR Realtime
+  # =========================================================================
+  transcribe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: choonova-transcribe:latest
+    container_name: choonova-transcribe
+    <<: *default-logging
+    restart: unless-stopped
+    ports:
+      - "8830:8830"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8830
+      - GATEWAY_API_KEY=change-me-in-production
+      - MODEL_PATH=/app/model/typhoon-asr-realtime.nemo
+      - DEVICE=cuda
+      - LOG_LEVEL=info
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      - WATCHDOG_DELETE_ON_CRASH=false
+      - CUDA_RESET_BETWEEN_CHUNKS=true
+    networks:
+      - km4u-network
+    volumes:
+      - ./data:/app/data
+      - ./data/jobs:/tmp/typhoon_jobs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8830/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+networks:
+  km4u-network:
+    name: "km4u-network"
+    driver: bridge
+    external: true

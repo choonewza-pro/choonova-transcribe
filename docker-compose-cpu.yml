@@ -1,0 +1,37 @@
+x-logging: &default-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+  # =========================================================================
+  # Typhoon ASR Service (CPU) — Python 3.12 FastAPI + NeMo Typhoon ASR Realtime
+  # Works on Mac M1–M4 (Apple Silicon) via Docker linux/arm64
+  # =========================================================================
+  transcribe:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: choonova-transcribe:cpu
+    container_name: choonova-transcribe-cpu
+    <<: *default-logging
+    restart: unless-stopped
+    ports:
+      - "8830:8830"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8830
+      - GATEWAY_API_KEY=change-me-in-production
+      - MODEL_PATH=/app/model/typhoon-asr-realtime.nemo
+      - DEVICE=cpu
+      - LOG_LEVEL=info
+    volumes:
+      - ./data:/app/data
+      - ./data/jobs:/tmp/typhoon_jobs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8830/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
