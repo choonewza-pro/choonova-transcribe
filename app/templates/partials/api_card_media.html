@@ -1,0 +1,318 @@
+      <!-- ===== Group 4: Long-form Media Pipeline ===== -->
+      <div class="api-group-card">
+        <div class="api-group-header">
+          <span class="api-group-icon">🎬</span>
+          <div>
+            <h3 class="api-group-title">งานเบื้องหลังวิดีโอ/เสียงยาว (Long-form Media)</h3>
+            <p class="api-group-desc">อัปโหลด MP4/MKV/MOV หรือไฟล์เสียงยาว (สูงสุด 1GB+ / 3+ ชั่วโมง) ประมวลผลแบบ async ใน subprocess</p>
+          </div>
+        </div>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-flow">FLOW</span> <code>ลำดับการทำงาน (Sequence Diagram)</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <div class="api-flow">
+              <div class="api-flow-lane">
+                <div class="api-flow-participants">
+                  <div class="flow-participant client">🧑 Client <small>Browser / cURL</small></div>
+                  <div class="flow-participant server">🖥️ FastAPI Server <small>main.py</small></div>
+                  <div class="flow-participant worker">⚙️ Worker Subprocess <small>run_job.py → job_worker.py</small></div>
+                  <div class="flow-participant gpu">🎛️ GPU ASR <small>Typhoon / Whisper</small></div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>1</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Client ส่งไฟล์วิดีโอ/เสียงแบบ multipart ไปที่
+                      <code>POST /v1/media/transcribe/jobs</code>
+                      <span class="flow-tag">upload</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>2</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Server บันทึกไฟล์ลงดิสก์ + สร้างงานใน SQLite (สถานะ <span class="flow-msg">queued</span>)
+                      <span class="flow-tag">create_job</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>3</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Server สร้าง worker subprocess <code>python -m app.run_job &lt;job_id&gt; &lt;input&gt; &lt;lang&gt;</code>
+                      แล้วตอบกลับ Client ทันที <span class="flow-msg">202 Accepted</span> + <code>job_id</code>
+                      <span class="flow-tag">async</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>4</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Worker สกัดเสียงด้วย FFmpeg (MP4 → 16kHz WAV) — อัปเดตสถานะ <span class="flow-msg">extracting</span> 10%
+                      <span class="flow-tag">ffmpeg</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>5</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Worker ตัดแบ่งไฟล์เสียงตามช่วงเงียบเป็นหลาย chunk — อัปเดตสถานะ <span class="flow-msg">chunking</span> 20%
+                      <span class="flow-tag">split_audio_silence</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>6</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Worker ส่งแต่ละ chunk เข้า GPU เพื่อถอดความทีละชิ้น — อัปเดตสถานะ <span class="flow-msg">transcribing</span> 25–100%
+                      <span class="flow-tag">gpu_lock</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>7</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      GPU คืนผลลัพธ์ (ข้อความ + word timestamps) ให้ Worker ต่อ chunk ไปเรื่อย ๆ จนครบ
+                      <span class="flow-tag">inference</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>8</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Worker รวมข้อความทั้งหมด + สร้างไฟล์ SRT + ลบไฟล์ชั่วคราว แล้วอัปเดตสถานะ <span class="flow-msg">completed</span> 100%
+                      <span class="flow-tag">cleanup</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>9</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↻</div>
+                    <div class="flow-step-text">
+                      Client poll <code>GET /v1/media/transcribe/jobs/{job_id}</code> ทุก 2 วินาที
+                      เพื่อดูความคืบหน้า แล้วแสดงผลลัพธ์/ดาวน์โหลดผ่าน
+                      <code>GET .../export/{txt|srt|json}</code>
+                      <span class="flow-tag">polling</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>10</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      (ไม่บังคับ) Client ส่ง <code>DELETE /v1/media/transcribe/jobs/{job_id}</code> เพื่อยกเลิก —
+                      Server ยุติ worker subprocess ทันที (คืน GPU/CPU) แล้วลบงาน + ไฟล์ชั่วคราว
+                      <span class="flow-tag">cancel</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-post">POST</span> <code>/v1/media/transcribe/jobs</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              สร้างงานถอดความแบบเบื้องหลังสำหรับไฟล์วิดีโอ MP4/MKV/MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง)
+              ระบบประมวลผลใน subprocess แยกต่างหาก คืน <code>job_id</code> ทันที (HTTP 202)
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL (Multipart Upload)</div>
+              <pre>curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
+  -H "x-api-key: change-me-in-production" \
+  -F "file=@/path/to/long_video.mp4" \
+  -F "language=th"</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">Response JSON (202 Accepted)</div>
+              <pre>{
+  "status": "accepted",
+  "job_id": "a1b2c3d4-e5f6-4a5b-9c0d-1e2f3a4b5c6d",
+  "filename": "long_video.mp4",
+  "language": "th",
+  "message": "Job created and enqueued for long-form video transcription"
+}</pre>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-get">GET</span> <code>/v1/media/transcribe/jobs</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              แสดงรายการงานถอดความล่าสุดตามเวลาสร้าง รองรับ <code>?limit=N</code> และ <code>?include_text=true</code>
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL Request</div>
+              <pre>curl -X GET "http://localhost:8830/v1/media/transcribe/jobs?limit=10&include_text=true" \
+  -H "x-api-key: change-me-in-production"</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">Response JSON (200 OK)</div>
+              <pre>[
+  {
+    "job_id": "a1b2c3d4-...",
+    "filename": "long_video.mp4",
+    "status": "completed",
+    "progress_pct": 100.0,
+    "current_stage": "Completed",
+    "duration_seconds": 1820.4,
+    "language": "th",
+    "created_at": "2026-08-11T08:00:00",
+    "result_text": "...",
+    "media_files_exist": true
+  }
+]</pre>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-get">GET</span> <code>/v1/media/transcribe/jobs/{job_id}</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              ดูสถานะ, ขั้นตอนการทำงาน (stage), ความคืบหน้า (%) และผลลัพธ์การถอดความของงานเดียว
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL Request</div>
+              <pre>curl -X GET http://localhost:8830/v1/media/transcribe/jobs/a1b2c3d4-... \
+  -H "x-api-key: change-me-in-production"</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">Response JSON (200 OK)</div>
+              <pre>{
+  "job_id": "a1b2c3d4-...",
+  "filename": "long_video.mp4",
+  "file_size_bytes": 2147483648,
+  "language": "th",
+  "status": "completed",
+  "progress_pct": 100.0,
+  "current_stage": "Completed",
+  "total_chunks": 64,
+  "completed_chunks": 64,
+  "duration_seconds": 1820.4,
+  "elapsed_seconds": 152.3,
+  "result_text": "...",
+  "srt_text": "1\n00:00:00,000 --> 00:00:03,000\n...",
+  "timestamps": [],
+  "error_message": null,
+  "created_at": "2026-08-11T08:00:00",
+  "updated_at": "2026-08-11T08:02:32"
+}</pre>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-delete">DELETE</span> <code>/v1/media/transcribe/jobs/{job_id}</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              ยกเลิก/ลบงานถอดความ: ยุติ worker subprocess ทันที (คืน GPU/CPU) ลบงานออกจากฐานข้อมูล SQLite และลบไฟล์ชั่วคราวบนดิสก์ทั้งหมดของงานนั้น
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL Request</div>
+              <pre>curl -X DELETE http://localhost:8830/v1/media/transcribe/jobs/a1b2c3d4-... \
+  -H "x-api-key: change-me-in-production"</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">Response JSON (200 OK)</div>
+              <pre>{
+  "status": "success",
+  "message": "Job a1b2c3d4-... deleted."
+}</pre>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-delete">DELETE</span> <code>/v1/media/transcribe/jobs/{job_id}/media</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              ลบเฉพาะไฟล์ media บนดิสก์เพื่อคืนพื้นที่เครื่อง แต่ยังคงบันทึกข้อความ/SRT/timestamps ไว้ในฐานข้อมูล
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL Request</div>
+              <pre>curl -X DELETE http://localhost:8830/v1/media/transcribe/jobs/a1b2c3d4-.../media \
+  -H "x-api-key: change-me-in-production"</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">Response JSON (200 OK)</div>
+              <pre>{
+  "status": "success",
+  "media_deleted": true,
+  "message": "Media files deleted. Transcription record kept."
+}</pre>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-get">GET</span> <code>/v1/media/transcribe/jobs/{job_id}/export/{export_format}</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              ดาวน์โหลดผลลัพธ์ของงานที่เสร็จสมบูรณ์แล้ว เป็นไฟล์ <code>txt</code>, <code>srt</code> (คำบรรยาย) หรือ <code>json</code> (พร้อม timestamps)
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL Request</div>
+              <pre>curl -X GET http://localhost:8830/v1/media/transcribe/jobs/a1b2c3d4-.../export/srt \
+  -H "x-api-key: change-me-in-production" \
+  -o transcript.srt</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">Supported Formats</div>
+              <pre>export_format: txt | srt | json</pre>
+            </div>
+          </div>
+        </details>
+      </div>

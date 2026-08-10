@@ -51,9 +51,12 @@
           </label>
         </div>
 
-        <button type="submit" class="btn-primary" id="transcribeBtn" disabled>
-          <span>🚀 เริ่มแปลงไฟล์เสียง (Transcribe)</span>
-        </button>
+        <div style="display: flex; gap: 1rem; align-items: center; margin: 1.5rem 0; flex-wrap: wrap;">
+          <button type="submit" class="btn-primary" id="transcribeBtn" disabled>
+            <span>🚀 เริ่มแปลงไฟล์เสียง (Transcribe)</span>
+          </button>
+          <button type="button" class="btn-danger" id="cancelBtn" style="display: none;">❌ ยกเลิกการแปลง</button>
+        </div>
       </form>
 
       <div id="statusMessage" style="margin-top: 1.5rem; font-weight: 500;"></div>
@@ -79,8 +82,13 @@
         </div>
       </div>
     </div>
+
+    <div class="glass-card" style="margin-top: 2rem;">
+      <h2 style="font-size: 1.4rem; margin-bottom: 1rem; color: var(--accent-cyan);">📚 API Endpoint ของหน้านี้</h2>
+      {% include 'partials/api_card_audio.html' %}
+    </div>
   </main>
 
-  <script src="/static/js/upload.js?v=3"></script>
+  <script src="/static/js/upload.js?v=5"></script>
 </body>
 </html>

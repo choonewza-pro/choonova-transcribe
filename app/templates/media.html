@@ -135,7 +135,7 @@
             </select>
           </label>
           <button type="submit" class="btn-primary" id="startJobBtn" disabled>
-            <span>🚀 อัปโหลด & เริ่มกระบวนการถอดความ (Start Pipeline)</span>
+            <span>🚀 เริ่มการถอดความ</span>
           </button>
         </div>
       </form>
@@ -157,6 +157,10 @@
           <div class="step-item" id="step3"><span>3</span> ตัดแบ่งช่วงเงียบ</div>
           <div class="step-item" id="step4"><span>4</span> GPU ถอดความ</div>
           <div class="step-item" id="step5"><span>5</span> เสร็จสมบูรณ์</div>
+        </div>
+
+        <div style="margin-top: 1.25rem; display: flex; justify-content: center;">
+          <button type="button" id="cancelJobBtn" class="btn-danger" style="display: none;">❌ ยกเลิกงานนี้</button>
         </div>
       </div>
 
@@ -183,8 +187,13 @@
         </div>
       </div>
     </div>
+
+    <div class="glass-card" style="margin-top: 2rem;">
+      <h2 style="font-size: 1.4rem; margin-bottom: 1rem; color: var(--accent-cyan);">📚 API Endpoint ของหน้านี้</h2>
+      {% include 'partials/api_card_media.html' %}
+    </div>
   </main>
 
-  <script src="/static/js/media.js?v=2"></script>
+  <script src="/static/js/media.js?v=4"></script>
 </body>
 </html>

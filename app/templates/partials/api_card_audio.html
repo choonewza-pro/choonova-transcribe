@@ -1,0 +1,62 @@
+      <!-- ===== Group 2: Audio File Transcription ===== -->
+      <div class="api-group-card">
+        <div class="api-group-header">
+          <span class="api-group-icon">📁</span>
+          <div>
+            <h3 class="api-group-title">ถอดไฟล์เสียง (Audio File Transcription)</h3>
+            <p class="api-group-desc">แปลงไฟล์เสียงสั้น (สูงสุด 50MB) เป็นข้อความ รองรับภาษา ไทย/อังกฤษ/อัตโนมัติ</p>
+          </div>
+        </div>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-post">POST</span> <code>/v1/audio/transcribe</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              แปลงไฟล์เสียงเป็นข้อความ (สูงสุด 50MB) รองรับการเลือกภาษา
+              <code>th</code> (Typhoon ไทย) / <code>en</code> (Whisper อังกฤษ) / <code>auto</code> (Whisper ตรวจจับอัตโนมัติ),
+              พร้อมสถิติเวลาและ Word Timestamps
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL (Multipart Upload)</div>
+              <pre>curl -X POST http://localhost:8830/v1/audio/transcribe \
+  -H "x-api-key: change-me-in-production" \
+  -F "file=@/path/to/sample_audio.wav" \
+  -F "language=en" \
+  -F "with_timestamps=true"</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">Python (requests)</div>
+              <pre>import requests
+
+url = "http://localhost:8830/v1/audio/transcribe"
+headers = {"x-api-key": "change-me-in-production"}
+
+with open("sample_audio.wav", "rb") as f:
+    files = {"file": f}
+    data = {"language": "auto", "with_timestamps": "true"}
+    response = requests.post(url, headers=headers, files=files, data=data)
+
+print(response.json())</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">Response JSON (200 OK)</div>
+              <pre>{
+  "status": "success",
+  "text": "สวัสดีครับ นี่คือการทดสอบแปลงเสียงพูดเป็นข้อความด้วยไต้ฝุ่นเอเอสอาร์",
+  "duration_seconds": 3.42,
+  "elapsed_seconds": 0.082,
+  "rtf": 0.024,
+  "timestamps": [
+    { "word": "สวัสดีครับ", "start": 0.0, "end": 0.85 },
+    { "word": "นี่คือการทดสอบ", "start": 0.86, "end": 1.75 },
+    { "word": "แปลงเสียงพูดเป็นข้อความ", "start": 1.76, "end": 2.8 },
+    { "word": "ด้วยไต้ฝุ่นเอเอสอาร์", "start": 2.81, "end": 3.42 }
+  ]
+}</pre>
+            </div>
+          </div>
+        </details>
+      </div>

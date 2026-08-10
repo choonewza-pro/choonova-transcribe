@@ -260,7 +260,7 @@ async def health_check():
     return HealthResponse(status="ok", service="typhoon-asr-service", device=DEVICE)
 
 
-@app.post("/v1/transcribe", response_model=TranscribeResponse)
+@app.post("/v1/audio/transcribe", response_model=TranscribeResponse)
 async def transcribe_audio(
     file: UploadFile = File(...),
     with_timestamps: bool = Form(False),
@@ -316,7 +316,7 @@ async def transcribe_audio(
 # =========================================================================
 
 
-@app.post("/v1/transcribe/jobs", status_code=202, response_model=JobCreateResponse)
+@app.post("/v1/media/transcribe/jobs", status_code=202, response_model=JobCreateResponse)
 async def create_transcription_job(
     file: UploadFile = File(...),
     language: str = Form("th"),
@@ -388,7 +388,7 @@ async def create_transcription_job(
     )
 
 
-@app.get("/v1/transcribe/jobs", response_model=List[Dict[str, Any]])
+@app.get("/v1/media/transcribe/jobs", response_model=List[Dict[str, Any]])
 async def list_transcription_jobs(
     limit: int = 50,
     include_text: bool = False,
@@ -411,7 +411,7 @@ async def list_transcription_jobs(
     return jobs
 
 
-@app.get("/v1/transcribe/jobs/{job_id}", response_model=JobStatusResponse)
+@app.get("/v1/media/transcribe/jobs/{job_id}", response_model=JobStatusResponse)
 async def get_transcription_job_status(
     job_id: str, authenticated: bool = Depends(verify_api_key)
 ):
@@ -424,7 +424,7 @@ async def get_transcription_job_status(
     return JobStatusResponse(**job)
 
 
-@app.delete("/v1/transcribe/jobs/{job_id}")
+@app.delete("/v1/media/transcribe/jobs/{job_id}")
 async def cancel_transcription_job(
     job_id: str, authenticated: bool = Depends(verify_api_key)
 ):
@@ -435,13 +435,25 @@ async def cancel_transcription_job(
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found.")
 
+    # Terminate the worker subprocess so GPU/CPU resources are freed immediately
+    # instead of the orphaned worker churning through remaining chunks.
+    proc = _active_workers.pop(job_id, None)
+    if proc is not None and proc.poll() is None:
+        logger.info(f"Terminating worker subprocess for job {job_id} (cancel request)")
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except Exception:
+            logger.warning(f"Worker {job_id} did not exit after terminate; killing it")
+            proc.kill()
+
     delete_job(job_id)
     job_dir = os.path.join(TEMP_JOBS_DIR, job_id)
     safe_delete_dir(job_dir)
     return {"status": "success", "message": f"Job {job_id} deleted."}
 
 
-@app.delete("/v1/transcribe/jobs/{job_id}/media")
+@app.delete("/v1/media/transcribe/jobs/{job_id}/media")
 async def delete_transcription_job_media(
     job_id: str, authenticated: bool = Depends(verify_api_key)
 ):
@@ -487,7 +499,7 @@ def _attachment_header(safe_name: str, ext: str) -> str:
     )
 
 
-@app.get("/v1/transcribe/jobs/{job_id}/export/{export_format}")
+@app.get("/v1/media/transcribe/jobs/{job_id}/export/{export_format}")
 async def export_job_result(
     job_id: str, export_format: str, authenticated: bool = Depends(verify_api_key)
 ):
@@ -568,7 +580,7 @@ def remove_text_overlap(t1: str, t2: str) -> str:
     return (t1 + " " + t2).strip()
 
 
-@app.websocket("/v1/stream")
+@app.websocket("/v1/realtime/stream")
 async def websocket_stream(websocket: WebSocket):
     await websocket.accept()
     logger.info("WebSocket client connected for real-time speech transcription.")

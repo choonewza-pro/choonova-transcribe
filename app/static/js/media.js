@@ -39,6 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const statDuration = document.getElementById('statDuration');
   const statElapsed = document.getElementById('statElapsed');
 
+  const cancelJobBtn = document.getElementById('cancelJobBtn');
+
   let selectedFile = null;
   let activeJobId = null;
   let pollInterval = null;
@@ -200,6 +202,59 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function isProcessingStatus(status) {
+    return ['queued', 'extracting', 'chunking', 'transcribing'].includes(status);
+  }
+
+  function updateCancelBtn(status) {
+    if (!cancelJobBtn) return;
+    cancelJobBtn.style.display = isProcessingStatus(status) ? 'inline-flex' : 'none';
+  }
+
+  function stopPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+
+  function resetToIdle(message) {
+    stopPolling();
+    updateCancelBtn('failed');
+    currentStageText.textContent = message;
+    startJobBtn.disabled = false;
+  }
+
+  async function cancelActiveJob() {
+    if (!activeJobId) return;
+    if (!confirm('❌ ยกเลิกงานนี้?\n\nข้อมูลการถอดความทั้งหมด และไฟล์ชั่วคราวจะถูกลบถาวร ไม่สามารถกู้คืนได้')) {
+      return;
+    }
+    try {
+      const headers = {};
+      const apiKey = getApiKey();
+      if (apiKey) headers['x-api-key'] = apiKey;
+
+      const res = await fetch(`/v1/media/transcribe/jobs/${activeJobId}`, { method: 'DELETE', headers });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const err = await res.json();
+          detail = err.detail || detail;
+        } catch (e2) {}
+        throw new Error(detail);
+      }
+      resetToIdle('❌ ยกเลิกงานเรียบร้อยแล้ว (Cancelled)');
+      alert('✅ ยกเลิกงานเรียบร้อยแล้ว');
+    } catch (err) {
+      alert(`❌ ยกเลิกงานล้มเหลว: ${err.message || err}`);
+    }
+  }
+
+  if (cancelJobBtn) {
+    cancelJobBtn.addEventListener('click', cancelActiveJob);
+  }
+
   // --- Upload Form Handler ---
   mediaUploadForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -219,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/v1/transcribe/jobs', true);
+    xhr.open('POST', '/v1/media/transcribe/jobs', true);
 
     const apiKey = getApiKey();
     if (apiKey) {
@@ -281,20 +336,19 @@ document.addEventListener('DOMContentLoaded', () => {
           headers['x-api-key'] = apiKey;
         }
 
-        const res = await fetch(`/v1/transcribe/jobs/${jobId}`, { headers });
+        const res = await fetch(`/v1/media/transcribe/jobs/${jobId}`, { headers });
         if (!res.ok) return;
 
         const job = await res.json();
         updateProgress(job.progress_pct, job.current_stage || job.status);
         updateStepper(job.current_stage, job.status);
+        updateCancelBtn(job.status);
 
         if (job.status === 'completed') {
-          clearInterval(pollInterval);
-          pollInterval = null;
+          stopPolling();
           handleJobCompleted(job);
         } else if (job.status === 'failed') {
-          clearInterval(pollInterval);
-          pollInterval = null;
+          stopPolling();
           alert(`กระบวนการถอดความล้มเหลว: ${job.error_message || 'Unknown error'}`);
           currentStageText.textContent = `❌ เกิดข้อผิดพลาด: ${job.error_message || 'Failed'}`;
           startJobBtn.disabled = false;
@@ -317,9 +371,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const apiKey = getApiKey();
     const keyParam = apiKey ? `?api_key=${encodeURIComponent(apiKey)}` : '';
 
-    btnDownloadTxt.href = `/v1/transcribe/jobs/${job.job_id}/export/txt${keyParam}`;
-    btnDownloadSrt.href = `/v1/transcribe/jobs/${job.job_id}/export/srt${keyParam}`;
-    btnDownloadJson.href = `/v1/transcribe/jobs/${job.job_id}/export/json${keyParam}`;
+    btnDownloadTxt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/txt${keyParam}`;
+    btnDownloadSrt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/srt${keyParam}`;
+    btnDownloadJson.href = `/v1/media/transcribe/jobs/${job.job_id}/export/json${keyParam}`;
 
     startJobBtn.disabled = false;
   }

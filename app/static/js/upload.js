@@ -23,8 +23,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const timestampsJson = document.getElementById('timestampsJson');
   const audioPreview = document.getElementById('audioPreview');
   const playerStatus = document.getElementById('playerStatus');
+  const cancelBtn = document.getElementById('cancelBtn');
 
   let selectedFile = null;
+  let activeController = null;
 
   // --- API Key Management ---
   function getApiKey() {
@@ -152,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!selectedFile) return;
 
     transcribeBtn.disabled = true;
+    cancelBtn.style.display = 'inline-flex';
     statusMessage.textContent = '⏳ กำลังส่งไฟล์และประมวลผลบน GPU...';
     statusMessage.style.color = 'var(--accent-cyan)';
     resultText.textContent = 'กำลังแปลงเสียงพูดเป็นข้อความ...';
@@ -174,11 +177,15 @@ document.addEventListener('DOMContentLoaded', () => {
       headers['x-api-key'] = apiKey;
     }
 
+    activeController = new AbortController();
+    const signal = activeController.signal;
+
     try {
-      const response = await fetch('/v1/transcribe', {
+      const response = await fetch('/v1/audio/transcribe', {
         method: 'POST',
         headers: headers,
-        body: formData
+        body: formData,
+        signal: signal
       });
 
       const data = await response.json();
@@ -212,11 +219,28 @@ document.addEventListener('DOMContentLoaded', () => {
         resultText.textContent = 'เกิดข้อผิดพลาดในการประมวลผล';
       }
     } catch (err) {
-      statusMessage.textContent = '❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้: ' + err.message;
-      statusMessage.style.color = 'var(--danger)';
-      resultText.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
+      if (err.name === 'AbortError') {
+        statusMessage.textContent = '❌ ยกเลิกการแปลงเรียบร้อยแล้ว (Cancelled)';
+        statusMessage.style.color = 'var(--danger)';
+        resultText.textContent = 'ยกเลิกการแปลงไฟล์เสียง';
+      } else {
+        statusMessage.textContent = '❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้: ' + err.message;
+        statusMessage.style.color = 'var(--danger)';
+        resultText.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
+      }
     } finally {
+      activeController = null;
+      cancelBtn.style.display = 'none';
       transcribeBtn.disabled = false;
     }
   });
+
+  // Cancel button handler: abort the in-flight transcription request
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => {
+      if (activeController) {
+        activeController.abort();
+      }
+    });
+  }
 });

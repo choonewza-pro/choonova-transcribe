@@ -1,0 +1,34 @@
+      <!-- ===== Group 1: Health Check ===== -->
+      <div class="api-group-card">
+        <div class="api-group-header">
+          <span class="api-group-icon">🩺</span>
+          <div>
+            <h3 class="api-group-title">ตรวจสอบระบบ (Health Check)</h3>
+            <p class="api-group-desc">เช็คสถานะบริการและอุปกรณ์ประมวลผล (CUDA/CPU)</p>
+          </div>
+        </div>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-get">GET</span> <code>/healthz</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              ตรวจสอบสถานะการทำงานของบริการ (Health Check) และอุปกรณ์การประมวลผล (CUDA/CPU)
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL Request</div>
+              <pre>curl -X GET http://localhost:8830/healthz</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">Response JSON (200 OK)</div>
+              <pre>{
+  "status": "ok",
+  "service": "typhoon-asr-service",
+  "device": "cuda"
+}</pre>
+            </div>
+          </div>
+        </details>
+      </div>

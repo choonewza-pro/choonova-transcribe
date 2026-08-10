@@ -95,19 +95,19 @@
               <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                 <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.05);">📦 ขนาดไฟล์สูงสุด (Max Payload)</td>
                 <td style="padding: 0.9rem 1.2rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05);">
-                  <strong>50 MB</strong> ต่อการอัปโหลด 1 ครั้งผ่าน REST API (<code>POST /v1/transcribe</code>) — ไฟล์ใหญ่กว่าใช้หน้า/endpoint งานเบื้องหลัง
+                  <strong>50 MB</strong> ต่อการอัปโหลด 1 ครั้งผ่าน REST API (<code>POST /v1/audio/transcribe</code>) — ไฟล์ใหญ่กว่าใช้หน้า/endpoint งานเบื้องหลัง
                 </td>
               </tr>
               <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                 <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.05);">⏱️ ความยาวไฟล์เสียงเดี่ยว (Max Duration)</td>
                 <td style="padding: 0.9rem 1.2rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05);">
-                  <strong>15 - 30 นาที</strong> ต่อไฟล์ (แนะนำเพื่อความเร็ว) — ไฟล์ยาวใช้ <code>POST /v1/transcribe/jobs</code>
+                  <strong>15 - 30 นาที</strong> ต่อไฟล์ (แนะนำเพื่อความเร็ว) — ไฟล์ยาวใช้ <code>POST /v1/media/transcribe/jobs</code>
                 </td>
               </tr>
               <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                 <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.05);">♾️ ความยาวสตรีมมิ่ง (WebSocket Limit)</td>
                 <td style="padding: 0.9rem 1.2rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05);">
-                  <strong style="color: var(--success);">ไม่จำกัดความยาว (Unlimited)</strong> อัดสตรีมสดผ่าน <code>WS /v1/stream</code> ได้ต่อเนื่องตลอดเวลา
+                  <strong style="color: var(--success);">ไม่จำกัดความยาว (Unlimited)</strong> อัดสตรีมสดผ่าน <code>WS /v1/realtime/stream</code> ได้ต่อเนื่องตลอดเวลา
                 </td>
               </tr>
               <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
@@ -141,7 +141,7 @@
       <hr style="border: 0; border-top: 1px solid var(--card-border); margin: 2rem 0;">
 
       <h2 style="font-size: 1.8rem; margin-bottom: 0.5rem; color: var(--accent-cyan);">📚 วิธีการใช้งาน API Endpoints ทั้งหมด</h2>
-      <p style="color: var(--text-muted); margin-bottom: 2rem;">เอกสารประกอบการเชื่อมต่อบริการ ChooNova Transcribe สำหรับนักพัฒนา (Developer API Reference)</p>
+      <p style="color: var(--text-muted); margin-bottom: 2rem;">เอกสารประกอบการเชื่อมต่อบริการ ChooNova Transcribe สำหรับนักพัฒนา (Developer API Reference) — คลิกที่แต่ละ endpoint เพื่อดูรายละเอียด</p>
 
       <!-- Authentication Rules -->
       <div style="background: rgba(0, 242, 254, 0.05); border: 1px solid rgba(0, 242, 254, 0.2); padding: 1.2rem; border-radius: 10px; margin-bottom: 2rem;">
@@ -154,291 +154,10 @@
         </p>
       </div>
 
-      <!-- Endpoint 1: Healthz -->
-      <div style="margin-bottom: 2.5rem;">
-        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
-          <span class="endpoint-badge badge-get">GET</span> <code>/healthz</code>
-        </h3>
-        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-          ตรวจสอบสถานะการทำงานของบริการ (Health Check) และอุปกรณ์การประมวลผล (CUDA/CPU)
-        </p>
-
-        <div class="code-container">
-          <div class="code-header">cURL Request</div>
-          <pre>curl -X GET http://localhost:8830/healthz</pre>
-        </div>
-
-        <div class="code-container">
-          <div class="code-header">Response JSON (200 OK)</div>
-          <pre>{
-  "status": "ok",
-  "service": "typhoon-asr-service",
-  "device": "cuda"
-}</pre>
-        </div>
-      </div>
-
-      <!-- Endpoint 2: Transcribe File -->
-      <div style="margin-bottom: 2.5rem;">
-        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
-          <span class="endpoint-badge badge-post">POST</span> <code>/v1/transcribe</code>
-        </h3>
-        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-          แปลงไฟล์เสียงเป็นข้อความ (สูงสุด 50MB) รองรับการเลือกภาษา
-          <code>th</code> (Typhoon ไทย) / <code>en</code> (Whisper อังกฤษ) / <code>auto</code> (Whisper ตรวจจับอัตโนมัติ),
-          พร้อมสถิติเวลาและ Word Timestamps
-        </p>
-
-        <div class="code-container">
-          <div class="code-header">cURL (Multipart Upload)</div>
-          <pre>curl -X POST http://localhost:8830/v1/transcribe \
-  -H "x-api-key: change-me-in-production" \
-  -F "file=@/path/to/sample_audio.wav" \
-  -F "language=en" \
-  -F "with_timestamps=true"</pre>
-        </div>
-
-        <div class="code-container">
-          <div class="code-header">Python (requests)</div>
-          <pre>import requests
-
-url = "http://localhost:8830/v1/transcribe"
-headers = {"x-api-key": "change-me-in-production"}
-
-with open("sample_audio.wav", "rb") as f:
-    files = {"file": f}
-    data = {"language": "auto", "with_timestamps": "true"}
-    response = requests.post(url, headers=headers, files=files, data=data)
-
-print(response.json())</pre>
-        </div>
-
-        <div class="code-container">
-          <div class="code-header">Response JSON (200 OK)</div>
-          <pre>{
-  "status": "success",
-  "text": "สวัสดีครับ นี่คือการทดสอบแปลงเสียงพูดเป็นข้อความด้วยไต้ฝุ่นเอเอสอาร์",
-  "duration_seconds": 3.42,
-  "elapsed_seconds": 0.082,
-  "rtf": 0.024,
-  "timestamps": [
-    { "word": "สวัสดีครับ", "start": 0.0, "end": 0.85 },
-    { "word": "นี่คือการทดสอบ", "start": 0.86, "end": 1.75 },
-    { "word": "แปลงเสียงพูดเป็นข้อความ", "start": 1.76, "end": 2.8 },
-    { "word": "ด้วยไต้ฝุ่นเอเอสอาร์", "start": 2.81, "end": 3.42 }
-  ]
-}</pre>
-        </div>
-      </div>
-
-      <!-- Endpoint 3: Create Job (Long-form) -->
-      <div style="margin-bottom: 2.5rem;">
-        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
-          <span class="endpoint-badge badge-post">POST</span> <code>/v1/transcribe/jobs</code>
-        </h3>
-        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-          สร้างงานถอดความแบบเบื้องหลังสำหรับไฟล์วิดีโอ MP4/MKV/MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง)
-          ระบบประมวลผลใน subprocess แยกต่างหาก คืน <code>job_id</code> ทันที (HTTP 202)
-        </p>
-
-        <div class="code-container">
-          <div class="code-header">cURL (Multipart Upload)</div>
-          <pre>curl -X POST http://localhost:8830/v1/transcribe/jobs \
-  -H "x-api-key: change-me-in-production" \
-  -F "file=@/path/to/long_video.mp4" \
-  -F "language=th"</pre>
-        </div>
-
-        <div class="code-container">
-          <div class="code-header">Response JSON (202 Accepted)</div>
-          <pre>{
-  "status": "accepted",
-  "job_id": "a1b2c3d4-e5f6-4a5b-9c0d-1e2f3a4b5c6d",
-  "filename": "long_video.mp4",
-  "language": "th",
-  "message": "Job created and enqueued for long-form video transcription"
-}</pre>
-        </div>
-      </div>
-
-      <!-- Endpoint 4: List Jobs -->
-      <div style="margin-bottom: 2.5rem;">
-        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
-          <span class="endpoint-badge badge-get">GET</span> <code>/v1/transcribe/jobs</code>
-        </h3>
-        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-          แสดงรายการงานถอดความล่าสุดตามเวลาสร้าง รองรับ <code>?limit=N</code> และ <code>?include_text=true</code>
-        </p>
-
-        <div class="code-container">
-          <div class="code-header">cURL Request</div>
-          <pre>curl -X GET "http://localhost:8830/v1/transcribe/jobs?limit=10&include_text=true" \
-  -H "x-api-key: change-me-in-production"</pre>
-        </div>
-
-        <div class="code-container">
-          <div class="code-header">Response JSON (200 OK)</div>
-          <pre>[
-  {
-    "job_id": "a1b2c3d4-...",
-    "filename": "long_video.mp4",
-    "status": "completed",
-    "progress": 100,
-    "duration_seconds": 1820.4,
-    "language": "th",
-    "created_at": "2026-08-11T08:00:00",
-    "result_text": "...",
-    "media_files_exist": true
-  }
-]</pre>
-        </div>
-      </div>
-
-      <!-- Endpoint 5: Job Status -->
-      <div style="margin-bottom: 2.5rem;">
-        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
-          <span class="endpoint-badge badge-get">GET</span> <code>/v1/transcribe/jobs/{job_id}</code>
-        </h3>
-        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-          ดูสถานะ, ขั้นตอนการทำงาน (stage), ความคืบหน้า (%) และผลลัพธ์การถอดความของงานเดียว
-        </p>
-
-        <div class="code-container">
-          <div class="code-header">cURL Request</div>
-          <pre>curl -X GET http://localhost:8830/v1/transcribe/jobs/a1b2c3d4-... \
-  -H "x-api-key: change-me-in-production"</pre>
-        </div>
-
-        <div class="code-container">
-          <div class="code-header">Response JSON (200 OK)</div>
-          <pre>{
-  "job_id": "a1b2c3d4-...",
-  "filename": "long_video.mp4",
-  "status": "completed",
-  "stage": "done",
-  "progress": 100,
-  "duration_seconds": 1820.4,
-  "language": "th",
-  "result_text": "...",
-  "srt_text": "1\n00:00:00,000 --> 00:00:03,000\n...",
-  "timestamps": [],
-  "error_message": null,
-  "created_at": "2026-08-11T08:00:00"
-}</pre>
-        </div>
-      </div>
-
-      <!-- Endpoint 6: Delete Job -->
-      <div style="margin-bottom: 2.5rem;">
-        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
-          <span class="endpoint-badge badge-delete">DELETE</span> <code>/v1/transcribe/jobs/{job_id}</code>
-        </h3>
-        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-          ลบงานถอดความออกจากฐานข้อมูล SQLite และลบไฟล์ชั่วคราวบนดิสก์ทั้งหมดของงานนั้น
-        </p>
-
-        <div class="code-container">
-          <div class="code-header">cURL Request</div>
-          <pre>curl -X DELETE http://localhost:8830/v1/transcribe/jobs/a1b2c3d4-... \
-  -H "x-api-key: change-me-in-production"</pre>
-        </div>
-
-        <div class="code-container">
-          <div class="code-header">Response JSON (200 OK)</div>
-          <pre>{
-  "status": "success",
-  "message": "Job a1b2c3d4-... deleted."
-}</pre>
-        </div>
-      </div>
-
-      <!-- Endpoint 7: Delete Job Media -->
-      <div style="margin-bottom: 2.5rem;">
-        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
-          <span class="endpoint-badge badge-delete">DELETE</span> <code>/v1/transcribe/jobs/{job_id}/media</code>
-        </h3>
-        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-          ลบเฉพาะไฟล์ media บนดิสก์เพื่อคืนพื้นที่เครื่อง แต่ยังคงบันทึกข้อความ/SRT/timestamps ไว้ในฐานข้อมูล
-        </p>
-
-        <div class="code-container">
-          <div class="code-header">cURL Request</div>
-          <pre>curl -X DELETE http://localhost:8830/v1/transcribe/jobs/a1b2c3d4-.../media \
-  -H "x-api-key: change-me-in-production"</pre>
-        </div>
-
-        <div class="code-container">
-          <div class="code-header">Response JSON (200 OK)</div>
-          <pre>{
-  "status": "success",
-  "media_deleted": true,
-  "message": "Media files deleted. Transcription record kept."
-}</pre>
-        </div>
-      </div>
-
-      <!-- Endpoint 8: Export Job Result -->
-      <div style="margin-bottom: 2.5rem;">
-        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
-          <span class="endpoint-badge badge-get">GET</span> <code>/v1/transcribe/jobs/{job_id}/export/{export_format}</code>
-        </h3>
-        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-          ดาวน์โหลดผลลัพธ์ของงานที่เสร็จสมบูรณ์แล้ว เป็นไฟล์ <code>txt</code>, <code>srt</code> (คำบรรยาย) หรือ <code>json</code> (พร้อม timestamps)
-        </p>
-
-        <div class="code-container">
-          <div class="code-header">cURL Request</div>
-          <pre>curl -X GET http://localhost:8830/v1/transcribe/jobs/a1b2c3d4-.../export/srt \
-  -H "x-api-key: change-me-in-production" \
-  -o transcript.srt</pre>
-        </div>
-
-        <div class="code-container">
-          <div class="code-header">Supported Formats</div>
-          <pre>export_format: txt | srt | json</pre>
-        </div>
-      </div>
-
-      <!-- Endpoint 9: WebSocket Streaming -->
-      <div style="margin-bottom: 1.5rem;">
-        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
-          <span class="endpoint-badge badge-ws">WS</span> <code>/v1/stream</code>
-        </h3>
-        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-          สตรีมไฟล์เสียงสดจากไมโครโฟนผ่าน WebSocket เพื่อถอดความเป็นข้อความสดแบบ Real-time (รองรับการส่ง query param <code>?api_key=</code> หรือ subprotocol)
-        </p>
-
-        <div class="code-container">
-          <div class="code-header">JavaScript Browser WebSocket Example</div>
-          <pre>const socket = new WebSocket("ws://localhost:8830/v1/stream");
-
-socket.onopen = () => {
-  console.log("Connected to Realtime WebSocket");
-
-  // Stream audio chunks (WebM/Opus or WAV PCM bytes)
-  mediaRecorder.ondataavailable = (event) => {
-    if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
-      socket.send(event.data);
-    }
-  };
-  mediaRecorder.start(500); // Send chunk every 500ms
-};
-
-socket.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log("Live Transcript:", data.text);
-};</pre>
-        </div>
-
-        <div class="code-container">
-          <div class="code-header">WebSocket Server Frame Output (JSON)</div>
-          <pre>{
-  "type": "partial",
-  "text": "กำลังทดสอบพูดภาษาไทย...",
-  "is_final": false
-}</pre>
-        </div>
-      </div>
+      {% include 'partials/api_card_health.html' %}
+      {% include 'partials/api_card_audio.html' %}
+      {% include 'partials/api_card_realtime.html' %}
+      {% include 'partials/api_card_media.html' %}
 
     </div>
   </main>

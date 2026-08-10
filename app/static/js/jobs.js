@@ -154,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const apiKey = getApiKey();
       if (apiKey) headers['x-api-key'] = apiKey;
 
-      const res = await fetch('/v1/transcribe/jobs?limit=50&include_text=false', { headers });
+      const res = await fetch('/v1/media/transcribe/jobs?limit=50&include_text=false', { headers });
       if (!res.ok) {
         let detail = `HTTP ${res.status}`;
         try {
@@ -344,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const apiKey = getApiKey();
       if (apiKey) headers['x-api-key'] = apiKey;
 
-      const res = await fetch(`/v1/transcribe/jobs/${jobId}`, { headers });
+      const res = await fetch(`/v1/media/transcribe/jobs/${jobId}`, { headers });
       if (!res.ok) {
         let detail = `HTTP ${res.status}`;
         try {
@@ -364,9 +364,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Export URLs with API key query param (same pattern as media page)
       const keyParam = apiKey ? `?api_key=${encodeURIComponent(apiKey)}` : '';
-      btnDownloadTxt.href = `/v1/transcribe/jobs/${job.job_id}/export/txt${keyParam}`;
-      btnDownloadSrt.href = `/v1/transcribe/jobs/${job.job_id}/export/srt${keyParam}`;
-      btnDownloadJson.href = `/v1/transcribe/jobs/${job.job_id}/export/json${keyParam}`;
+      btnDownloadTxt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/txt${keyParam}`;
+      btnDownloadSrt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/srt${keyParam}`;
+      btnDownloadJson.href = `/v1/media/transcribe/jobs/${job.job_id}/export/json${keyParam}`;
     } catch (err) {
       modalResultText.style.display = 'none';
       modalErrorBox.style.display = 'block';
@@ -399,7 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!confirm(`🗑 ลบเฉพาะไฟล์ media ของ "${filename}" ?\n\nข้อมูลการถอดความ (ข้อความ/SRT/timestamps) จะถูกเก็บไว้\nหมายเหตุ: งานที่เสร็จแล้ว media ถูกลบไปแล้วโดยอัตโนมัติ`)) {
       return;
     }
-    await doDelete(`/v1/transcribe/jobs/${jobId}/media`, jobId, 'ลบเฉพาะ media');
+    await doDelete(`/v1/media/transcribe/jobs/${jobId}/media`, jobId, 'ลบเฉพาะ media');
   }
 
   // --- Delete: entire row (record + media) ---
@@ -409,7 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!confirm(`❌ ลบทั้งแถว "${filename}" ?\n\nข้อมูลการถอดความทั้งหมด และไฟล์ media ที่เกี่ยวข้องจะถูกลบถาวร ไม่สามารถกู้คืนได้`)) {
       return;
     }
-    await doDelete(`/v1/transcribe/jobs/${jobId}`, jobId, 'ลบทั้งแถว');
+    await doDelete(`/v1/media/transcribe/jobs/${jobId}`, jobId, 'ลบทั้งแถว');
   }
 
   async function doDelete(url, jobId, label) {

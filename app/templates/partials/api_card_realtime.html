@@ -1,0 +1,52 @@
+      <!-- ===== Group 3: Real-time Streaming ===== -->
+      <div class="api-group-card">
+        <div class="api-group-header">
+          <span class="api-group-icon">🎙️</span>
+          <div>
+            <h3 class="api-group-title">Real-time สตรีมมิ่ง (Live Mic)</h3>
+            <p class="api-group-desc">ถอดเสียงสดจากไมโครโฟนแบบต่อเนื่องผ่าน WebSocket</p>
+          </div>
+        </div>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-ws">WS</span> <code>/v1/realtime/stream</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              สตรีมไฟล์เสียงสดจากไมโครโฟนผ่าน WebSocket เพื่อถอดความเป็นข้อความสดแบบ Real-time
+              (รองรับการส่ง query param <code>?api_key=</code> หรือ subprotocol)
+            </p>
+            <div class="code-container">
+              <div class="code-header">JavaScript Browser WebSocket Example</div>
+              <pre>const socket = new WebSocket("ws://localhost:8830/v1/realtime/stream");
+
+socket.onopen = () => {
+  console.log("Connected to Realtime WebSocket");
+
+  // Stream audio chunks (WebM/Opus or WAV PCM bytes)
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
+      socket.send(event.data);
+    }
+  };
+  mediaRecorder.start(500); // Send chunk every 500ms
+};
+
+socket.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log("Live Transcript:", data.text);
+};</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">WebSocket Server Frame Output (JSON)</div>
+              <pre>{
+  "type": "partial",
+  "text": "กำลังทดสอบพูดภาษาไทย...",
+  "is_final": false
+}</pre>
+            </div>
+          </div>
+        </details>
+      </div>

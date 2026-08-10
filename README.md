@@ -4,9 +4,9 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 
 ## Modes
 
-1. **REST API** (`POST /v1/transcribe`) — ถอดความไฟล์เสียงสั้น multipart upload
-2. **WebSocket Real-time** (`/v1/stream`) — ถอดเสียงสดจากไมค์ chunk 250ms
-3. **Long-form Pipeline** (`POST /v1/transcribe/jobs`) — ไฟล์วิดีโอ/เสียงยาวสูงสุด 1GB+ แบบ async
+1. **REST API** (`POST /v1/audio/transcribe`) — ถอดความไฟล์เสียงสั้น multipart upload
+2. **WebSocket Real-time** (`/v1/realtime/stream`) — ถอดเสียงสดจากไมค์ chunk 250ms
+3. **Long-form Pipeline** (`POST /v1/media/transcribe/jobs`) — ไฟล์วิดีโอ/เสียงยาวสูงสุด 1GB+ แบบ async
 4. **ประวัติการถอดความ** (`/jobs/history`) — ดู/export/ลบ งานที่เคยถอดความไว้
 
 ## Tech Stack
@@ -101,57 +101,57 @@ Copy `.env.example` to `.env` to customize.
 
 ## API
 
-| Method | Path                                               | Auth | Description                       |
-| ------ | -------------------------------------------------- | ---- | --------------------------------- |
-| GET    | `/`                                                | —    | Dashboard home                    |
-| GET    | `/audio/transcribe`                                | —    | Audio file transcribe page        |
-| GET    | `/realtime/stream`                                 | —    | Real-time mic stream page         |
-| GET    | `/media/transcribe`                                | —    | Long-form video/audio transcribe  |
-| GET    | `/jobs/history`                                    | —    | Transcription history page        |
-| GET    | `/healthz`                                         | —    | Health check                      |
-| POST   | `/v1/transcribe`                                   | ✅   | Transcribe audio file             |
-| POST   | `/v1/transcribe/jobs`                              | ✅   | Create long-form job (202, async) |
-| GET    | `/v1/transcribe/jobs`                              | ✅   | List jobs                         |
-| GET    | `/v1/transcribe/jobs/{id}`                         | ✅   | Job status + result               |
-| DELETE | `/v1/transcribe/jobs/{id}`                         | ✅   | Delete job (record + media)       |
-| DELETE | `/v1/transcribe/jobs/{id}/media`                   | ✅   | Delete media only (keep record)   |
-| GET    | `/v1/transcribe/jobs/{id}/export/{txt\|srt\|json}` | ✅   | Export result                     |
-| WS     | `/v1/stream`                                       | —    | Real-time streaming               |
+| Method | Path                                                        | Auth | Description                       |
+| ------ | ----------------------------------------------------------- | ---- | --------------------------------- |
+| GET    | `/`                                                         | —    | Dashboard home                    |
+| GET    | `/audio/transcribe`                                         | —    | Audio file transcribe page        |
+| GET    | `/realtime/stream`                                          | —    | Real-time mic stream page         |
+| GET    | `/media/transcribe`                                         | —    | Long-form video/audio transcribe  |
+| GET    | `/jobs/history`                                             | —    | Transcription history page        |
+| GET    | `/healthz`                                                  | —    | Health check                      |
+| POST   | `/v1/audio/transcribe`                                      | ✅   | Transcribe audio file             |
+| POST   | `/v1/media/transcribe/jobs`                                 | ✅   | Create long-form job (202, async) |
+| GET    | `/v1/media/transcribe/jobs`                                 | ✅   | List jobs                         |
+| GET    | `/v1/media/transcribe/jobs/{id}`                            | ✅   | Job status + result               |
+| DELETE | `/v1/media/transcribe/jobs/{id}`                            | ✅   | Delete job (record + media)       |
+| DELETE | `/v1/media/transcribe/jobs/{id}/media`                      | ✅   | Delete media only (keep record)   |
+| GET    | `/v1/media/transcribe/jobs/{id}/export/{txt\|srt\|json}`    | ✅   | Export result                     |
+| WS     | `/v1/realtime/stream`                                       | —    | Real-time streaming               |
 
 ### cURL Examples
 
 ```bash
 # Transcribe audio file (Thai - default)
-curl -X POST http://localhost:8830/v1/transcribe \
+curl -X POST http://localhost:8830/v1/audio/transcribe \
   -H "x-api-key: change-me-in-production" \
   -F "file=@audio.mp3" -F "with_timestamps=true"
 
 # Transcribe English / Thai-English mixed audio via Whisper
-curl -X POST http://localhost:8830/v1/transcribe \
+curl -X POST http://localhost:8830/v1/audio/transcribe \
   -H "x-api-key: change-me-in-production" \
   -F "file=@english.mp3" -F "language=en"
 
 # Transcribe with auto language detection (Whisper)
-curl -X POST http://localhost:8830/v1/transcribe \
+curl -X POST http://localhost:8830/v1/audio/transcribe \
   -H "x-api-key: change-me-in-production" \
   -F "file=@mixed.mp3" -F "language=auto"
 
 # Long-form job (Thai - default)
-curl -X POST http://localhost:8830/v1/transcribe/jobs \
+curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
   -H "x-api-key: change-me-in-production" \
   -F "file=@video.mp4"
 
 # Long-form job with English / mixed audio
-curl -X POST http://localhost:8830/v1/transcribe/jobs \
+curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
   -H "x-api-key: change-me-in-production" \
   -F "file=@video.mp4" -F "language=en"
 
 # Check status
-curl http://localhost:8830/v1/transcribe/jobs/<JOB_ID> \
+curl http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID> \
   -H "x-api-key: change-me-in-production"
 
 # Export SRT
-curl -o subtitle.srt "http://localhost:8830/v1/transcribe/jobs/<JOB_ID>/export/srt?api_key=change-me-in-production"
+curl -o subtitle.srt "http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID>/export/srt?api_key=change-me-in-production"
 ```
 
 `language` รับค่าได้ 3 แบบ:
@@ -159,12 +159,12 @@ curl -o subtitle.srt "http://localhost:8830/v1/transcribe/jobs/<JOB_ID>/export/s
 - `en` — ใช้ faster-whisper (อังกฤษ, output คำอังกฤษเป็นตัวละติน)
 - `auto` — ใช้ faster-whisper ตรวจจับภาษาอัตโนมัติ (รองรับภาษาไทย/อังกฤษผสม หรือ code-switching)
 
-> ⚠️ WebSocket `/v1/stream` (real-time ไมค์) รองรับเฉพาะภาษาไทย (Typhoon) อย่างเดียว — คำอังกฤษในเสียงไทยจะออกเป็นทับศัพท์ตัวไทย โมเดล Whisper ที่โหลดครั้งแรกจะดาวน์โหลดอัตโนมัติจาก HuggingFace (config: `WHISPER_MODEL`, default `medium`)
+> ⚠️ WebSocket `/v1/realtime/stream` (real-time ไมค์) รองรับเฉพาะภาษาไทย (Typhoon) อย่างเดียว — คำอังกฤษในเสียงไทยจะออกเป็นทับศัพท์ตัวไทย โมเดล Whisper ที่โหลดครั้งแรกจะดาวน์โหลดอัตโนมัติจาก HuggingFace (config: `WHISPER_MODEL`, default `medium`)
 
 ### WebSocket
 
 ```javascript
-const ws = new WebSocket(`ws://localhost:8830/v1/stream`);
+const ws = new WebSocket(`ws://localhost:8830/v1/realtime/stream`);
 // Send audio chunks + text commands: "INTERIM", "COMMIT_SEGMENT", "CLEAR"
 ws.send(audioBlob);
 ws.send("COMMIT_SEGMENT");
@@ -173,7 +173,7 @@ ws.send("COMMIT_SEGMENT");
 ## Long-form Pipeline Flow
 
 ```
-POST /v1/transcribe/jobs  (multipart, 1GB+)
+POST /v1/media/transcribe/jobs  (multipart, 1GB+)
         │ 202 Accepted → job_id
         ▼
 job_worker.py (isolated subprocess)
