@@ -6,58 +6,60 @@
   <title>ประวัติการถอดความ - ChooNova Transcribe</title>
   <link rel="stylesheet" href="/static/css/style.css">
   <style>
-    .table-wrap {
-      overflow-x: auto;
+    .jobs-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1rem;
       margin-top: 1.25rem;
+    }
+    .job-card {
+      background: rgba(255, 255, 255, 0.03);
       border: 1px solid var(--card-border);
-      border-radius: 12px;
+      border-radius: 14px;
+      padding: 1.15rem 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      transition: border-color 0.2s ease, transform 0.2s ease;
     }
-    table.jobs-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
-      min-width: 820px;
+    .job-card:hover {
+      border-color: rgba(0, 242, 254, 0.45);
+      transform: translateY(-2px);
     }
-    .jobs-table th {
-      text-align: left;
-      padding: 0.75rem 1rem;
-      background: rgba(255, 255, 255, 0.05);
+    .job-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .job-card-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-main);
+      word-break: break-word;
+      line-height: 1.45;
+    }
+    .job-card-id {
+      font-size: 0.75rem;
       color: var(--text-muted);
-      font-size: 0.78rem;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      border-bottom: 1px solid var(--card-border);
-      white-space: nowrap;
+      font-family: 'Fira Code', monospace;
     }
-    .jobs-table th.sortable {
-      cursor: pointer;
-      user-select: none;
-      transition: color 0.2s ease;
+    .job-card-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      font-size: 0.82rem;
+      color: var(--text-muted);
     }
-    .jobs-table th.sortable:hover { color: var(--text-main); }
-    .sort-ind {
-      margin-left: 0.35rem;
-      font-size: 0.68rem;
-      opacity: 0.75;
-    }
-    .sort-ind.active { color: var(--accent-cyan); opacity: 1; }
-    .jobs-table td {
-      padding: 0.75rem 1rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      vertical-align: middle;
-    }
-    .filename-cell .filename-text {
-      display: block;
-      max-width: 280px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .jobs-table tr:last-child td {
-      border-bottom: none;
-    }
-    .jobs-table tr:hover td {
-      background: rgba(0, 242, 254, 0.03);
+    .job-card-meta-item { white-space: nowrap; }
+    .job-card-media { margin-top: 0.1rem; }
+    .job-card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      margin-top: auto;
     }
     .status-badge {
       display: inline-flex;
@@ -96,12 +98,6 @@
     }
     .media-exists { color: var(--success); background: rgba(46, 160, 67, 0.15); border-color: rgba(46, 160, 67, 0.35); }
     .media-gone { color: var(--text-muted); background: rgba(139, 148, 158, 0.12); border-color: rgba(139, 148, 158, 0.3); }
-    .row-actions {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-      align-items: center;
-    }
     .btn-row {
       display: inline-flex;
       align-items: center;
@@ -275,14 +271,6 @@
       font-size: 0.85rem;
     }
 
-    /* Filename secondary line */
-    .filename-meta {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin-top: 0.2rem;
-      font-family: 'Fira Code', monospace;
-    }
-
     /* Search / Filter / Sort toolbar */
     .filter-bar {
       display: flex;
@@ -325,9 +313,8 @@
       border-color: var(--accent-cyan);
       box-shadow: 0 0 10px rgba(0, 242, 254, 0.15);
     }
-    .sort-mobile { display: none; }
 
-    /* Inline progress bar (processing rows) */
+    /* Inline progress bar (processing cards) */
     .job-progress { padding: 0.25rem 0 0.4rem; }
     .job-progress-label {
       display: flex;
@@ -357,7 +344,7 @@
       transition: width 0.4s ease;
     }
 
-    /* Error strip (failed rows) */
+    /* Error strip (failed cards) */
     .job-error {
       background: rgba(218, 54, 51, 0.1);
       border: 1px solid rgba(218, 54, 51, 0.3);
@@ -368,90 +355,15 @@
     }
 
     /* ============================================================
-       Responsive: desktop table  ->  mobile stacked cards
+       Responsive tweaks (mobile)
        ============================================================ */
-    @media (max-width: 819px) {
+    @media (max-width: 720px) {
+      .jobs-cards { grid-template-columns: 1fr; }
       .filter-bar { flex-wrap: wrap; }
       .search-box { flex: 1 1 100%; order: 1; min-width: 0; }
       .filter-select { flex: 1; order: 2; min-width: 0; }
-      .sort-mobile { display: block; }
-
-      .table-wrap {
-        overflow: visible;
-        border: none;
-        background: none;
-        border-radius: 0;
-        margin-top: 1.25rem;
-      }
-      .jobs-table, .jobs-table tbody { display: block; }
-      .jobs-table thead { display: none; }
-
-      .jobs-table tr {
-        display: flex;
-        flex-wrap: wrap;
-        position: relative;
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: 14px;
-        padding: 1.15rem 1.15rem 1.1rem;
-        margin-bottom: 1rem;
-      }
-      .jobs-table tr:hover td { background: transparent; }
-      .jobs-table td {
-        display: block;
-        padding: 0.4rem 0;
-        border: none;
-        vertical-align: top;
-      }
-      .jobs-table td[data-label]::before {
-        content: attr(data-label);
-        display: block;
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.6px;
-        color: var(--text-muted);
-        margin-bottom: 0.25rem;
-      }
-
-      /* filename = card title */
-      .filename-cell {
-        flex: 0 0 100%;
-        order: 1;
-        padding: 0 0 0.6rem;
-      }
-      .filename-cell .filename-text {
-        max-width: 100%;
-        white-space: normal;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        word-break: break-word;
-        font-size: 1.02rem;
-        font-weight: 600;
-        padding-right: 120px;
-      }
-      .filename-meta { margin-top: 0.35rem; }
-
-      /* status pill -> top-right corner */
-      .cell-status {
-        position: absolute;
-        top: 1.05rem;
-        right: 1.05rem;
-        width: auto;
-        padding: 0;
-      }
-
-      /* meta 2-col grid */
-      .cell-meta { flex: 0 0 50%; order: 3; }
-      .cell-meta:nth-child(odd) { padding-right: 0.75rem; }
-
-      /* actions full width */
-      .cell-actions { flex: 0 0 100%; order: 4; padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.06); }
-      .cell-actions .row-actions { display: grid; grid-template-columns: 1fr; gap: 0.5rem; }
-
-      /* progress / error under the title */
-      .stage-cell, .error-cell { flex: 0 0 100%; order: 2; }
+      .job-card { padding: 1rem; }
+      .job-card-actions .btn-row { flex: 1; justify-content: center; }
     }
   </style>
 </head>
@@ -483,7 +395,7 @@
           <option value="processing">สถานะ: กำลังประมวลผล</option>
           <option value="failed">สถานะ: ล้มเหลว</option>
         </select>
-        <select id="sortSelect" class="filter-select sort-mobile" aria-label="จัดเรียง">
+        <select id="sortSelect" class="filter-select" aria-label="จัดเรียง">
           <option value="created_at:desc">ใหม่สุดก่อน</option>
           <option value="created_at:asc">เก่าสุดก่อน</option>
           <option value="filename:asc">ชื่อไฟล์ A–Z</option>
@@ -497,23 +409,7 @@
         </select>
       </div>
 
-      <div class="table-wrap" id="tableWrap" style="display: none;">
-        <table class="jobs-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="filename">ชื่อไฟล์<span class="sort-ind"></span></th>
-              <th class="sortable" data-sort="status">สถานะ<span class="sort-ind"></span></th>
-              <th class="sortable" data-sort="language">ภาษา<span class="sort-ind"></span></th>
-              <th class="sortable" data-sort="duration_seconds">ความยาว<span class="sort-ind"></span></th>
-              <th class="sortable" data-sort="file_size_bytes">ขนาด<span class="sort-ind"></span></th>
-              <th class="sortable" data-sort="created_at">สร้างเมื่อ<span class="sort-ind"></span></th>
-              <th>ไฟล์ Media</th>
-              <th>จัดการ</th>
-            </tr>
-          </thead>
-          <tbody id="jobsTbody"></tbody>
-        </table>
-      </div>
+      <div class="jobs-cards" id="jobsCards"></div>
 
       <div class="empty-state" id="emptyState" style="display: none;">
         <div class="icon">🗂️</div>
@@ -553,6 +449,6 @@
     </div>
   </div>
 
-  <script src="/static/js/jobs.js?v=5"></script>
+  <script src="/static/js/jobs.js?v=6"></script>
 </body>
 </html>

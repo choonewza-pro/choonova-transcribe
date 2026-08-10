@@ -20,8 +20,8 @@
       {% include 'partials/api_key_settings.html' %}
 
       <!-- Microphone Permission Alert Banner -->
-      <div id="permissionNotice" style="display: none; max-width: 650px; margin: 0 auto 1.5rem auto; padding: 1rem 1.25rem; border-radius: 12px; font-size: 0.95rem; line-height: 1.5; text-align: left; backdrop-filter: blur(10px);">
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+      <div id="permissionNotice" class="perm-banner" style="display: none;">
+        <div class="perm-banner-inner">
           <div id="permissionText">
             ⚠️ <strong>กรุณากดยินยอมการเข้าถึงไมโครโฟน:</strong> เบราว์เซอร์ต้องการสิทธิ์การใช้ไมโครโฟนเพื่ออัดเสียงและสตรีมสด
           </div>
@@ -32,8 +32,8 @@
       </div>
 
       <!-- Microphone Device Selection Dropdown -->
-      <div style="margin-bottom: 1rem; display: flex; justify-content: center; align-items: center; gap: 0.75rem;">
-        <label for="micSelect" style="font-weight: 500; color: var(--accent-cyan);">🎤 เลือกอุปกรณ์ไมโครโฟน:</label>
+      <div class="mic-select-row">
+        <label for="micSelect" class="mic-select-label">🎤 เลือกอุปกรณ์ไมโครโฟน:</label>
         <select id="micSelect" class="form-select">
           <option value="">🎙️ ไมโครโฟนเริ่มต้น (System Default Mic)</option>
         </select>
@@ -46,23 +46,23 @@
         <span id="micIcon">🎙️</span>
       </button>
 
-      <div id="micStatus" style="font-size: 1.1rem; font-weight: 600; color: var(--text-muted); margin-bottom: 1rem;">
+      <div id="micStatus" class="mic-status">
         คลิกปุ่มด้านบนเพื่อเริ่มฟังเสียงพูด
       </div>
 
       <!-- Live Audio Waveform Animation Canvas -->
-      <div style="margin: 0 auto 1.5rem auto; max-width: 600px;">
+      <div class="visualizer-wrap">
         <canvas id="visualizer" width="600" height="70" style="width: 100%; height: 70px; border-radius: 12px; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--card-border);"></canvas>
       </div>
 
-      <div style="max-width: 800px; margin: 0 auto; text-align: left;">
+      <div class="transcript-wrap">
         <h3 style="font-size: 1.2rem; margin-bottom: 0.5rem;">ข้อความสด (Live Real-time Transcript):</h3>
         <div class="result-box" id="liveTranscript" style="min-height: 180px; font-size: 1.2rem;">
           <span style="color: var(--text-muted); font-style: italic;">ข้อความจะปรากฏขึ้นที่นี่เมื่อคุณเริ่มพูด...</span>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
-          <div style="display: flex; gap: 0.5rem;">
+        <div class="transcript-actions">
+          <div class="transcript-buttons">
             <button id="copyLiveBtn" class="nav-link action-btn" style="cursor: pointer;">
               📋 คัดลอกข้อความ
             </button>

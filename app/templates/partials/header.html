@@ -3,7 +3,14 @@
       <span>🌀 ChooNova Transcribe</span>
       <span class="logo-badge">{{ header_badge | default('ChooNova Transcribe') }}</span>
     </a>
-    <nav>
+
+    <button type="button" class="nav-toggle" id="navToggle" aria-label="เปิดเมนู" aria-expanded="false">
+      <span class="nav-toggle-bar"></span>
+      <span class="nav-toggle-bar"></span>
+      <span class="nav-toggle-bar"></span>
+    </button>
+
+    <nav class="nav-links" id="mainNav">
       <a href="/" class="nav-link {% if active_page == 'home' %}active{% endif %}">หน้าแรก</a>
       <a href="/audio/transcribe" class="nav-link {% if active_page == 'upload' %}active{% endif %}">ถอดไฟล์เสียง</a>
       <a href="/realtime/stream" class="nav-link {% if active_page == 'realtime' %}active{% endif %}">Real-time ไมค์</a>
@@ -11,3 +18,34 @@
       <a href="/jobs/history" class="nav-link {% if active_page == 'jobs' %}active{% endif %}">ประวัติการถอดความ</a>
     </nav>
   </header>
+
+  <script>
+    (function () {
+      const toggle = document.getElementById('navToggle');
+      const nav = document.getElementById('mainNav');
+      if (!toggle || !nav) return;
+
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const open = nav.classList.toggle('open');
+        toggle.classList.toggle('open', open);
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+
+      document.addEventListener('click', function (e) {
+        if (nav.classList.contains('open') && !nav.contains(e.target) && !toggle.contains(e.target)) {
+          nav.classList.remove('open');
+          toggle.classList.remove('open');
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      window.addEventListener('resize', function () {
+        if (window.innerWidth > 768 && nav.classList.contains('open')) {
+          nav.classList.remove('open');
+          toggle.classList.remove('open');
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+    })();
+  </script>

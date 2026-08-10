@@ -73,18 +73,59 @@ nav {
   gap: 1rem;
 }
 
+.nav-links {
+  display: flex;
+  gap: 1rem;
+}
+
 .nav-link {
   color: var(--text-muted);
   text-decoration: none;
   padding: 0.5rem 1rem;
   border-radius: 8px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .nav-link.active {
   color: var(--text-main);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid var(--card-border);
+}
+
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 42px;
+  height: 42px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.nav-toggle-bar {
+  display: block;
+  height: 2px;
+  width: 100%;
+  border-radius: 2px;
+  background: var(--text-main);
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+
+.nav-toggle.open .nav-toggle-bar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.nav-toggle.open .nav-toggle-bar:nth-child(2) {
+  opacity: 0;
+}
+
+.nav-toggle.open .nav-toggle-bar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
 }
 
 .action-btn {
@@ -630,6 +671,166 @@ footer {
     text-align: left;
   }
   .btn-clear-key {
+    width: 100%;
+  }
+}
+
+/* ============================================================
+   Responsive Navbar (Mobile / Desktop)
+   ============================================================ */
+@media (max-width: 768px) {
+  header {
+    padding: 0.85rem 1rem;
+    flex-wrap: wrap;
+  }
+
+  .logo {
+    font-size: 1.1rem;
+    gap: 0.5rem;
+  }
+
+  .nav-toggle {
+    display: flex;
+  }
+
+  .nav-links {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    gap: 0.35rem;
+    padding-top: 0.75rem;
+    margin-top: 0.5rem;
+    border-top: 1px solid var(--card-border);
+  }
+
+  .nav-links.open {
+    display: flex;
+    animation: fadeSlideIn 0.2s ease;
+  }
+
+  .nav-links .nav-link {
+    width: 100%;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.95rem;
+  }
+}
+
+/* ============================================================
+   Realtime Page (Responsive Layout)
+   ============================================================ */
+.perm-banner {
+  display: none;
+  max-width: 650px;
+  margin: 0 auto 1.5rem auto;
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  text-align: left;
+  backdrop-filter: blur(10px);
+}
+
+.perm-banner-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.mic-select-row {
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.mic-select-label {
+  font-weight: 500;
+  color: var(--accent-cyan);
+}
+
+.mic-status {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.visualizer-wrap {
+  margin: 0 auto 1.5rem auto;
+  max-width: 600px;
+}
+
+.transcript-wrap {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.transcript-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.transcript-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+@media (max-width: 560px) {
+  .perm-banner-inner {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .perm-banner-inner .btn-primary {
+    align-self: center;
+  }
+
+  .mic-select-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .mic-select-label {
+    align-self: flex-start;
+  }
+
+  .form-select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .btn-mic {
+    width: 100px;
+    height: 100px;
+    font-size: 2.4rem;
+  }
+
+  .transcript-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .transcript-buttons {
+    justify-content: center;
+  }
+
+  .transcript-buttons .nav-link {
+    flex: 1;
+    text-align: center;
+    padding: 0.6rem 0.5rem;
+  }
+
+  .transcript-actions .stats-badge {
+    text-align: center;
     width: 100%;
   }
 }

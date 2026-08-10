@@ -8,10 +8,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const listMeta = document.getElementById('listMeta');
   const btnRefresh = document.getElementById('btnRefresh');
-  const tableWrap = document.getElementById('tableWrap');
-  const jobsTbody = document.getElementById('jobsTbody');
+  const jobsCards = document.getElementById('jobsCards');
   const emptyState = document.getElementById('emptyState');
-  const jobsTableHead = document.querySelector('.jobs-table thead');
   const searchInput = document.getElementById('searchInput');
   const statusFilter = document.getElementById('statusFilter');
   const sortSelect = document.getElementById('sortSelect');
@@ -168,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderJobs();
     } catch (err) {
       listMeta.textContent = `❌ โหลดรายการไม่สำเร็จ: ${err.message || err}`;
-      tableWrap.style.display = 'none';
+      jobsCards.style.display = 'none';
       emptyState.style.display = 'block';
       emptyState.querySelector('p').textContent = `เกิดข้อผิดพลาด: ${err.message || err}`;
     }
@@ -209,40 +207,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function updateSortIndicators() {
-    document.querySelectorAll('.jobs-table th.sortable .sort-ind').forEach(el => {
-      el.textContent = '';
-      el.classList.remove('active');
-    });
-    const ind = document.querySelector(`.jobs-table th.sortable[data-sort="${state.sortKey}"] .sort-ind`);
-    if (ind) {
-      ind.textContent = state.sortDir === 'asc' ? '▲' : '▼';
-      ind.classList.add('active');
-    }
-  }
-
   function renderJobs() {
     const list = applyFiltersAndSort();
-    jobsTbody.innerHTML = '';
+    jobsCards.innerHTML = '';
 
     if (!jobs || jobs.length === 0) {
-      tableWrap.style.display = 'none';
+      jobsCards.style.display = 'none';
       emptyState.style.display = 'block';
       emptyState.querySelector('p').textContent = 'ยังไม่มีรายการถอดความ — เริ่มจากหน้าถอดไฟล์เสียงและวีดีโอก่อนได้เลย';
       return;
     }
     if (list.length === 0) {
-      tableWrap.style.display = 'none';
+      jobsCards.style.display = 'none';
       emptyState.style.display = 'block';
       emptyState.querySelector('p').textContent = '🔍 ไม่พบรายการที่ตรงกับเงื่อนไขการค้นหา/กรอง';
       return;
     }
 
-    tableWrap.style.display = 'block';
+    jobsCards.style.display = 'grid';
     emptyState.style.display = 'none';
 
     list.forEach(job => {
-      const tr = document.createElement('tr');
+      const card = document.createElement('div');
+      card.className = 'job-card';
       const mediaExists = !!job.media_files_exist;
       const canView = job.status === 'completed';
       const processing = isProcessing(job.status);
@@ -259,29 +246,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const fileName = escapeHtml(job.filename || '-');
       const langMap = { th: '🇹🇭 ไทย', en: '🇬🇧 EN', auto: '🌐 อัตโนมัติ' };
       const langBadge = langMap[job.language] || '🇹🇭 ไทย';
-      tr.innerHTML = `
-        <td class="filename-cell"><div class="filename-text" title="${fileName}">${fileName}</div><div class="filename-meta">🆔 ${shortId}…</div></td>
-        <td class="cell-status">${statusBadge(job.status)}</td>
-        <td class="cell-meta" data-label="ภาษา">${langBadge}</td>
-        <td class="cell-meta" data-label="ความยาว">${formatSeconds(job.duration_seconds)}</td>
-        <td class="cell-meta" data-label="ขนาด">${formatBytes(job.file_size_bytes)}</td>
-        <td class="cell-meta" data-label="สร้างเมื่อ">${formatDate(job.created_at)}</td>
-        <td class="cell-meta" data-label="ไฟล์ Media">${mediaBadge}</td>
-        <td class="cell-actions">
-          <div class="row-actions">
-            ${viewBtn}
-            ${deleteMediaBtn}
-            ${deleteRowBtn}
-          </div>
-        </td>
-      `;
 
+      let extra = '';
       if (processing) {
         const pct = Math.min(100, Math.max(0, Math.round(job.progress_pct || 0)));
-        const stage = document.createElement('td');
-        stage.colSpan = 8;
-        stage.className = 'stage-cell';
-        stage.innerHTML = `
+        extra = `
           <div class="job-progress">
             <div class="job-progress-label">
               <span>⏳ ${escapeHtml(job.current_stage || job.status)}</span>
@@ -289,19 +258,34 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="job-progress-track"><div class="job-progress-fill" style="width:${pct}%"></div></div>
           </div>`;
-        tr.appendChild(stage);
       } else if (job.status === 'failed' && job.error_message) {
-        const errTd = document.createElement('td');
-        errTd.colSpan = 8;
-        errTd.className = 'error-cell';
-        errTd.innerHTML = `<div class="job-error">❌ ${escapeHtml(job.error_message)}</div>`;
-        tr.appendChild(errTd);
+        extra = `<div class="job-error">❌ ${escapeHtml(job.error_message)}</div>`;
       }
 
-      jobsTbody.appendChild(tr);
+      card.innerHTML = `
+        <div class="job-card-header">
+          <div class="job-card-title" title="${fileName}">${fileName}</div>
+          ${statusBadge(job.status)}
+        </div>
+        <div class="job-card-id">🆔 ${shortId}…</div>
+        ${extra}
+        <div class="job-card-meta">
+          <span class="job-card-meta-item">🌐 ${langBadge}</span>
+          <span class="job-card-meta-item">⏱️ ${formatSeconds(job.duration_seconds)}</span>
+          <span class="job-card-meta-item">📦 ${formatBytes(job.file_size_bytes)}</span>
+          <span class="job-card-meta-item">📅 ${formatDate(job.created_at)}</span>
+        </div>
+        <div class="job-card-media">${mediaBadge}</div>
+        <div class="job-card-actions">
+          ${viewBtn}
+          ${deleteMediaBtn}
+          ${deleteRowBtn}
+        </div>
+      `;
+
+      jobsCards.appendChild(card);
     });
 
-    updateSortIndicators();
     updateListMeta(list.length);
   }
 
@@ -311,8 +295,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }[m]));
   }
 
-  // --- Row Actions (event delegation) ---
-  jobsTbody.addEventListener('click', async (e) => {
+  // --- Card Actions (event delegation) ---
+  jobsCards.addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-action]');
     if (!btn) return;
     const action = btn.getAttribute('data-action');
@@ -457,22 +441,6 @@ document.addEventListener('DOMContentLoaded', () => {
       renderJobs();
     });
   }
-  if (jobsTableHead) {
-    jobsTableHead.addEventListener('click', (e) => {
-      const th = e.target.closest('th.sortable');
-      if (!th) return;
-      const key = th.dataset.sort;
-      if (state.sortKey === key) {
-        state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
-      } else {
-        state.sortKey = key;
-        state.sortDir = 'desc';
-      }
-      if (sortSelect) sortSelect.value = `${key}:${state.sortDir}`;
-      renderJobs();
-    });
-  }
-
   // --- Refresh ---
   if (btnRefresh) btnRefresh.addEventListener('click', loadJobs);
 
