@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ประวัติการถอดความ - Typhoon ASR</title>
+  <title>ประวัติการถอดความ - ChooNova Transcribe</title>
   <link rel="stylesheet" href="/static/css/style.css">
   <style>
     .table-wrap {
@@ -456,19 +456,9 @@
   </style>
 </head>
 <body>
-  <header>
-    <a href="/" class="logo">
-      <span>🌀 ChooNova Transcribe</span>
-      <span class="logo-badge">Transcription History</span>
-    </a>
-    <nav>
-      <a href="/" class="nav-link">หน้าแรก</a>
-      <a href="/test/upload" class="nav-link">ทดสอบไฟล์เสียง</a>
-      <a href="/test/realtime" class="nav-link">ทดสอบ Real-time ไมค์</a>
-      <a href="/test/media" class="nav-link">ถอดความวีดีโอ (1GB+)</a>
-      <a href="/test/jobs" class="nav-link active">ประวัติการถอดความ</a>
-    </nav>
-  </header>
+  {% set active_page = 'jobs' %}
+  {% set header_badge = 'Transcription History' %}
+  {% include 'partials/header.html' %}
 
   <main>
     <div class="glass-card">
@@ -476,39 +466,7 @@
       <p class="subtitle" style="margin-bottom: 1.5rem;">เรียกดูข้อมูลการถอดเสียงของแต่ละรายการภายหลังได้ พร้อม export เป็นไฟล์ .txt / .srt / .json และจัดการไฟล์ media บนเครื่อง</p>
 
       <!-- API Key Settings Card -->
-      <div class="api-key-card">
-        <div class="api-key-header">
-          <div class="api-key-title">
-            🔑 <span>API Key Settings</span>
-          </div>
-          <span class="key-badge" id="keySavedBadge">✓ Key active in browser</span>
-        </div>
-        <div id="apiKeyInputGroup">
-          <label class="api-key-label">GATEWAY_API_KEY</label>
-          <div class="api-key-input-group">
-            <div class="input-with-eye">
-              <input type="password" id="apiKeyInput" placeholder="Enter API key..." />
-              <button type="button" class="eye-btn" id="toggleApiKeyBtn" title="Show/Hide Key">👁️</button>
-            </div>
-            <button type="button" class="btn-save-key" id="saveApiKeyBtn">💾 Save Key</button>
-          </div>
-          <div class="api-key-footer">
-            <span>🔒 Saved securely in browser localStorage</span>
-          </div>
-        </div>
-
-        <!-- Saved state: input hidden, only Clear Key shown -->
-        <div id="apiKeySavedState" class="api-key-saved" style="display: none;">
-          <div class="api-key-saved-meta">
-            <span class="api-key-saved-icon">🔑</span>
-            <div class="api-key-saved-info">
-              <span class="api-key-saved-label">API Key Active</span>
-              <span class="api-key-saved-mask" id="apiKeyMask">••••••••</span>
-            </div>
-          </div>
-          <button type="button" class="btn-clear-key" id="clearApiKeyLink" title="Remove the saved API key from this browser">🗑️ Clear Key</button>
-        </div>
-      </div>
+      {% include 'partials/api_key_settings.html' %}
 
       <div class="list-actions">
         <span class="list-meta" id="listMeta">กำลังโหลดรายการ...</span>
@@ -559,7 +517,7 @@
 
       <div class="empty-state" id="emptyState" style="display: none;">
         <div class="icon">🗂️</div>
-        <p>ยังไม่มีรายการถอดความ — เริ่มจากหน้าถอดความวีดีโอ (1GB+) ก่อนได้เลย</p>
+        <p>ยังไม่มีรายการถอดความ — เริ่มจากหน้าถอดไฟล์เสียงและวีดีโอก่อนได้เลย</p>
       </div>
     </div>
   </main>
@@ -590,6 +548,6 @@
     </div>
   </div>
 
-  <script src="/static/js/jobs.js?v=3"></script>
+  <script src="/static/js/jobs.js?v=4"></script>
 </body>
 </html>

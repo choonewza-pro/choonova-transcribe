@@ -3,29 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Typhoon ASR Realtime - Dashboard Home</title>
+  <title>ChooNova Transcribe - API Dashboard</title>
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-  <header>
-    <a href="/" class="logo">
-      <span>🌀 ChooNova Transcribe</span>
-      <span class="logo-badge">Real-time Thai ASR</span>
-    </a>
-    <nav>
-      <a href="/" class="nav-link active">หน้าแรก</a>
-      <a href="/test/upload" class="nav-link">ทดสอบไฟล์เสียง</a>
-      <a href="/test/realtime" class="nav-link">ทดสอบ Real-time ไมค์</a>
-      <a href="/test/media" class="nav-link">ถอดความวีดีโอ (1GB+)</a>
-      <a href="/test/jobs" class="nav-link">ประวัติการถอดความ</a>
-    </nav>
-  </header>
+  {% set active_page = 'home' %}
+  {% set header_badge = 'API Dashboard' %}
+  {% include 'partials/header.html' %}
 
   <main>
     <div class="glass-card">
-      <h1>Typhoon ASR Realtime API Service</h1>
+      <h1>ChooNova Transcribe API Service</h1>
       <p class="subtitle">
-        ระบบแปลงเสียงพูดภาษาไทยเป็นข้อความ (Speech-to-Text) ความเร็วสูงพิเศษ ออกแบบมาสำหรับรันบน GPU Local ด้วยสถาปัตยกรรม <strong>FastConformer-Transducer (114M Parameters)</strong> จาก SCB-10X / OpenTyphoon
+        ระบบแปลงเสียงพูดเป็นข้อความ (Speech-to-Text) ความเร็วสูง พร้อมรองรับ 2 ภาษาแบบดูอัล-เอนจิน:<br>
+        <strong>Typhoon ASR Realtime</strong> (FastConformer-Transducer 114M) สำหรับภาษาไทย และ
+        <strong>Faster-Whisper (CTranslate2)</strong> สำหรับภาษาอังกฤษ / ไทย-อังกฤษผสม
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
@@ -41,21 +33,37 @@
           <div style="color: var(--text-muted); font-size: 0.85rem;">ขนาดโมเดล / VRAM</div>
           <div style="font-size: 1.6rem; font-weight: 700; color: #a855f7;">114M (&lt; 1GB VRAM)</div>
         </div>
+        <div style="background: rgba(255,255,255,0.03); padding: 1.2rem; border-radius: 10px; border: 1px solid var(--card-border);">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">ภาษาที่รองรับ</div>
+          <div style="font-size: 1.6rem; font-weight: 700; color: var(--success);">ไทย / อังกฤษ / ผสม</div>
+        </div>
       </div>
 
-      <h2 style="font-size: 1.4rem; margin-bottom: 1rem;">เลือกโหมดทดสอบระบบ (Interactive Testing)</h2>
-      
+      <h2 style="font-size: 1.4rem; margin-bottom: 1rem;">เลือกโหมดใช้งานระบบ (Interactive Tools)</h2>
+
       <div class="nav-cards" style="margin-bottom: 2rem;">
-        <a href="/test/upload" class="card-button">
+        <a href="/audio/transcribe" class="card-button">
           <div class="icon">📁</div>
-          <h3>1. ทดสอบอัปโหลดไฟล์เสียง</h3>
-          <p>ทดสอบส่งไฟล์เสียง WAV, MP3, M4A, OGG หรือ FLAC เพื่อแปลงเป็นข้อความ พร้อมตัวเลือกดู Word Timestamps</p>
+          <h3>1. ถอดไฟล์เสียง</h3>
+          <p>แปลงไฟล์เสียง WAV, MP3, M4A, OGG หรือ FLAC เป็นข้อความ พร้อมตัวเลือก Word Timestamps และเลือกภาษา (ไทย/อังกฤษ/อัตโนมัติ)</p>
         </a>
 
-        <a href="/test/realtime" class="card-button">
+        <a href="/realtime/stream" class="card-button">
           <div class="icon">🎙️</div>
-          <h3>2. ทดสอบ Real-time พูดผ่านไมค์</h3>
-          <p>กดเปิดไมโครโฟน แล้วลองพูดภาษาไทย ระบบจะส่ง Stream ผ่าน WebSocket และถอดความแสดงสดบนหน้าจอทันที</p>
+          <h3>2. Real-time ไมค์</h3>
+          <p>กดเปิดไมโครโฟน แล้วลองพูดภาษาไทยหรืออังกฤษ ระบบจะสตรีมเสียงผ่าน WebSocket และถอดความแสดงสดทันที</p>
+        </a>
+
+        <a href="/media/transcribe" class="card-button">
+          <div class="icon">🎬</div>
+          <h3>3. ถอดไฟล์เสียงและวีดีโอ</h3>
+          <p>อัปโหลดวิดีโอ MP4, MKV, MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง) ประมวลผลเบื้องหลังอัตโนมัติ</p>
+        </a>
+
+        <a href="/jobs/history" class="card-button">
+          <div class="icon">📚</div>
+          <h3>4. ประวัติการถอดความ</h3>
+          <p>เรียกดูงานที่เคยถอดความไว้ทั้งหมด พร้อม export เป็น .txt / .srt / .json และจัดการไฟล์ media</p>
         </a>
       </div>
 
@@ -64,8 +72,8 @@
         <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
           <span style="font-size: 1.8rem;">📊</span>
           <div>
-            <h2 style="font-size: 1.35rem; color: var(--accent-cyan); margin: 0;">ขีดความสามารถและข้อกำหนดของโมเดล (Model Capabilities & Specifications)</h2>
-            <p style="color: var(--text-muted); font-size: 0.88rem; margin: 0.2rem 0 0 0;">สรุปสเปกการรองรับขนาดไฟล์เสียง อัตราสุ่มตัวอย่างเสียง และโหมดการประมวลผล</p>
+            <h2 style="font-size: 1.35rem; color: var(--accent-cyan); margin: 0;">ขีดความสามารถและข้อกำหนดของระบบ (Capabilities & Specifications)</h2>
+            <p style="color: var(--text-muted); font-size: 0.88rem; margin: 0.2rem 0 0 0;">สรุปสเปกการรองรับขนาดไฟล์ รูปแบบ อัตราสุ่มตัวอย่างเสียง และการเลือกเอนจิน</p>
           </div>
         </div>
 
@@ -79,15 +87,21 @@
             </thead>
             <tbody>
               <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.05);">⚙️ การเลือกเอนจิน (Engine Routing)</td>
+                <td style="padding: 0.9rem 1.2rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05);">
+                  <code>language=th</code> → <strong>Typhoon ASR</strong> (ไทย) • <code>language=en</code> / <code>auto</code> → <strong>Faster-Whisper</strong> (อังกฤษ / ไทย-อังกฤษผสม)
+                </td>
+              </tr>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                 <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.05);">📦 ขนาดไฟล์สูงสุด (Max Payload)</td>
                 <td style="padding: 0.9rem 1.2rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05);">
-                  <strong>50 MB</strong> ต่อการอัปโหลด 1 ครั้งผ่าน REST API (<code>POST /v1/transcribe</code>)
+                  <strong>50 MB</strong> ต่อการอัปโหลด 1 ครั้งผ่าน REST API (<code>POST /v1/transcribe</code>) — ไฟล์ใหญ่กว่าใช้หน้า/endpoint งานเบื้องหลัง
                 </td>
               </tr>
               <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                 <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.05);">⏱️ ความยาวไฟล์เสียงเดี่ยว (Max Duration)</td>
                 <td style="padding: 0.9rem 1.2rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05);">
-                  <strong>15 - 30 นาที</strong> ต่อไฟล์ (แนะนำเพื่อความเร็วในการประมวลผลบน GPU)
+                  <strong>15 - 30 นาที</strong> ต่อไฟล์ (แนะนำเพื่อความเร็ว) — ไฟล์ยาวใช้ <code>POST /v1/transcribe/jobs</code>
                 </td>
               </tr>
               <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
@@ -103,7 +117,7 @@
                 </td>
               </tr>
               <tr>
-                <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff;">🎵 นามสกุลไฟล์เสียงที่รองรับ (Formats)</td>
+                <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff;">🎵 รูปแบบไฟล์ที่รองรับ (Formats)</td>
                 <td style="padding: 0.9rem 1.2rem; color: var(--text-main);">
                   <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">WAV</span>
                   <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">MP3</span>
@@ -112,6 +126,10 @@
                   <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">FLAC</span>
                   <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">AAC</span>
                   <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">WEBM</span>
+                  <span class="stats-badge" style="color: #ff9d2e; border-color: rgba(255,157,46,0.3);">MP4</span>
+                  <span class="stats-badge" style="color: #ff9d2e; border-color: rgba(255,157,46,0.3);">MKV</span>
+                  <span class="stats-badge" style="color: #ff9d2e; border-color: rgba(255,157,46,0.3);">MOV</span>
+                  <span style="color: var(--text-muted); font-size: 0.82rem;">(MP4/MKV/MOV สำหรับงานเบื้องหลัง)</span>
                 </td>
               </tr>
             </tbody>
@@ -123,7 +141,7 @@
       <hr style="border: 0; border-top: 1px solid var(--card-border); margin: 2rem 0;">
 
       <h2 style="font-size: 1.8rem; margin-bottom: 0.5rem; color: var(--accent-cyan);">📚 วิธีการใช้งาน API Endpoints ทั้งหมด</h2>
-      <p style="color: var(--text-muted); margin-bottom: 2rem;">เอกสารประกอบการเชื่อมต่อบริการ Typhoon ASR สำหรับนักพัฒนา (Developer API Reference)</p>
+      <p style="color: var(--text-muted); margin-bottom: 2rem;">เอกสารประกอบการเชื่อมต่อบริการ ChooNova Transcribe สำหรับนักพัฒนา (Developer API Reference)</p>
 
       <!-- Authentication Rules -->
       <div style="background: rgba(0, 242, 254, 0.05); border: 1px solid rgba(0, 242, 254, 0.2); padding: 1.2rem; border-radius: 10px; margin-bottom: 2rem;">
@@ -166,7 +184,9 @@
           <span class="endpoint-badge badge-post">POST</span> <code>/v1/transcribe</code>
         </h3>
         <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-          แปลงไฟล์เสียงภาษาไทย (WAV, MP3, M4A, OGG, FLAC) เป็นข้อความ พร้อมสถิติเวลาและ Word Timestamps
+          แปลงไฟล์เสียงเป็นข้อความ (สูงสุด 50MB) รองรับการเลือกภาษา
+          <code>th</code> (Typhoon ไทย) / <code>en</code> (Whisper อังกฤษ) / <code>auto</code> (Whisper ตรวจจับอัตโนมัติ),
+          พร้อมสถิติเวลาและ Word Timestamps
         </p>
 
         <div class="code-container">
@@ -174,6 +194,7 @@
           <pre>curl -X POST http://localhost:8830/v1/transcribe \
   -H "x-api-key: change-me-in-production" \
   -F "file=@/path/to/sample_audio.wav" \
+  -F "language=en" \
   -F "with_timestamps=true"</pre>
         </div>
 
@@ -186,28 +207,10 @@ headers = {"x-api-key": "change-me-in-production"}
 
 with open("sample_audio.wav", "rb") as f:
     files = {"file": f}
-    data = {"with_timestamps": "true"}
+    data = {"language": "auto", "with_timestamps": "true"}
     response = requests.post(url, headers=headers, files=files, data=data)
 
 print(response.json())</pre>
-        </div>
-
-        <div class="code-container">
-          <div class="code-header">JavaScript (Fetch API)</div>
-          <pre>const formData = new FormData();
-formData.append('file', fileInput.files[0]);
-formData.append('with_timestamps', 'true');
-
-const response = await fetch('http://localhost:8830/v1/transcribe', {
-  method: 'POST',
-  headers: {
-    'x-api-key': 'change-me-in-production'
-  },
-  body: formData
-});
-
-const result = await response.json();
-console.log(result);</pre>
         </div>
 
         <div class="code-container">
@@ -228,13 +231,181 @@ console.log(result);</pre>
         </div>
       </div>
 
-      <!-- Endpoint 3: WebSocket Streaming -->
+      <!-- Endpoint 3: Create Job (Long-form) -->
+      <div style="margin-bottom: 2.5rem;">
+        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
+          <span class="endpoint-badge badge-post">POST</span> <code>/v1/transcribe/jobs</code>
+        </h3>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+          สร้างงานถอดความแบบเบื้องหลังสำหรับไฟล์วิดีโอ MP4/MKV/MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง)
+          ระบบประมวลผลใน subprocess แยกต่างหาก คืน <code>job_id</code> ทันที (HTTP 202)
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">cURL (Multipart Upload)</div>
+          <pre>curl -X POST http://localhost:8830/v1/transcribe/jobs \
+  -H "x-api-key: change-me-in-production" \
+  -F "file=@/path/to/long_video.mp4" \
+  -F "language=th"</pre>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">Response JSON (202 Accepted)</div>
+          <pre>{
+  "status": "accepted",
+  "job_id": "a1b2c3d4-e5f6-4a5b-9c0d-1e2f3a4b5c6d",
+  "filename": "long_video.mp4",
+  "language": "th",
+  "message": "Job created and enqueued for long-form video transcription"
+}</pre>
+        </div>
+      </div>
+
+      <!-- Endpoint 4: List Jobs -->
+      <div style="margin-bottom: 2.5rem;">
+        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
+          <span class="endpoint-badge badge-get">GET</span> <code>/v1/transcribe/jobs</code>
+        </h3>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+          แสดงรายการงานถอดความล่าสุดตามเวลาสร้าง รองรับ <code>?limit=N</code> และ <code>?include_text=true</code>
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">cURL Request</div>
+          <pre>curl -X GET "http://localhost:8830/v1/transcribe/jobs?limit=10&include_text=true" \
+  -H "x-api-key: change-me-in-production"</pre>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">Response JSON (200 OK)</div>
+          <pre>[
+  {
+    "job_id": "a1b2c3d4-...",
+    "filename": "long_video.mp4",
+    "status": "completed",
+    "progress": 100,
+    "duration_seconds": 1820.4,
+    "language": "th",
+    "created_at": "2026-08-11T08:00:00",
+    "result_text": "...",
+    "media_files_exist": true
+  }
+]</pre>
+        </div>
+      </div>
+
+      <!-- Endpoint 5: Job Status -->
+      <div style="margin-bottom: 2.5rem;">
+        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
+          <span class="endpoint-badge badge-get">GET</span> <code>/v1/transcribe/jobs/{job_id}</code>
+        </h3>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+          ดูสถานะ, ขั้นตอนการทำงาน (stage), ความคืบหน้า (%) และผลลัพธ์การถอดความของงานเดียว
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">cURL Request</div>
+          <pre>curl -X GET http://localhost:8830/v1/transcribe/jobs/a1b2c3d4-... \
+  -H "x-api-key: change-me-in-production"</pre>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">Response JSON (200 OK)</div>
+          <pre>{
+  "job_id": "a1b2c3d4-...",
+  "filename": "long_video.mp4",
+  "status": "completed",
+  "stage": "done",
+  "progress": 100,
+  "duration_seconds": 1820.4,
+  "language": "th",
+  "result_text": "...",
+  "srt_text": "1\n00:00:00,000 --> 00:00:03,000\n...",
+  "timestamps": [],
+  "error_message": null,
+  "created_at": "2026-08-11T08:00:00"
+}</pre>
+        </div>
+      </div>
+
+      <!-- Endpoint 6: Delete Job -->
+      <div style="margin-bottom: 2.5rem;">
+        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
+          <span class="endpoint-badge badge-delete">DELETE</span> <code>/v1/transcribe/jobs/{job_id}</code>
+        </h3>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+          ลบงานถอดความออกจากฐานข้อมูล SQLite และลบไฟล์ชั่วคราวบนดิสก์ทั้งหมดของงานนั้น
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">cURL Request</div>
+          <pre>curl -X DELETE http://localhost:8830/v1/transcribe/jobs/a1b2c3d4-... \
+  -H "x-api-key: change-me-in-production"</pre>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">Response JSON (200 OK)</div>
+          <pre>{
+  "status": "success",
+  "message": "Job a1b2c3d4-... deleted."
+}</pre>
+        </div>
+      </div>
+
+      <!-- Endpoint 7: Delete Job Media -->
+      <div style="margin-bottom: 2.5rem;">
+        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
+          <span class="endpoint-badge badge-delete">DELETE</span> <code>/v1/transcribe/jobs/{job_id}/media</code>
+        </h3>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+          ลบเฉพาะไฟล์ media บนดิสก์เพื่อคืนพื้นที่เครื่อง แต่ยังคงบันทึกข้อความ/SRT/timestamps ไว้ในฐานข้อมูล
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">cURL Request</div>
+          <pre>curl -X DELETE http://localhost:8830/v1/transcribe/jobs/a1b2c3d4-.../media \
+  -H "x-api-key: change-me-in-production"</pre>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">Response JSON (200 OK)</div>
+          <pre>{
+  "status": "success",
+  "media_deleted": true,
+  "message": "Media files deleted. Transcription record kept."
+}</pre>
+        </div>
+      </div>
+
+      <!-- Endpoint 8: Export Job Result -->
+      <div style="margin-bottom: 2.5rem;">
+        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
+          <span class="endpoint-badge badge-get">GET</span> <code>/v1/transcribe/jobs/{job_id}/export/{export_format}</code>
+        </h3>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+          ดาวน์โหลดผลลัพธ์ของงานที่เสร็จสมบูรณ์แล้ว เป็นไฟล์ <code>txt</code>, <code>srt</code> (คำบรรยาย) หรือ <code>json</code> (พร้อม timestamps)
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">cURL Request</div>
+          <pre>curl -X GET http://localhost:8830/v1/transcribe/jobs/a1b2c3d4-.../export/srt \
+  -H "x-api-key: change-me-in-production" \
+  -o transcript.srt</pre>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">Supported Formats</div>
+          <pre>export_format: txt | srt | json</pre>
+        </div>
+      </div>
+
+      <!-- Endpoint 9: WebSocket Streaming -->
       <div style="margin-bottom: 1.5rem;">
         <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
           <span class="endpoint-badge badge-ws">WS</span> <code>/v1/stream</code>
         </h3>
         <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-          สตรีมไฟล์เสียงสดจากไมโครโฟนผ่าน WebSocket เพื่อถอดความเป็นข้อความสดแบบ Real-time
+          สตรีมไฟล์เสียงสดจากไมโครโฟนผ่าน WebSocket เพื่อถอดความเป็นข้อความสดแบบ Real-time (รองรับการส่ง query param <code>?api_key=</code> หรือ subprotocol)
         </p>
 
         <div class="code-container">
@@ -242,8 +413,8 @@ console.log(result);</pre>
           <pre>const socket = new WebSocket("ws://localhost:8830/v1/stream");
 
 socket.onopen = () => {
-  console.log("Connected to Typhoon Realtime WebSocket");
-  
+  console.log("Connected to Realtime WebSocket");
+
   // Stream audio chunks (WebM/Opus or WAV PCM bytes)
   mediaRecorder.ondataavailable = (event) => {
     if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
@@ -273,7 +444,7 @@ socket.onmessage = (event) => {
   </main>
 
   <footer>
-    Choonova AI Stack • Typhoon ASR Service running on Port 8830
+    Choonova AI Stack • ChooNova Transcribe Service running on Port 8830
   </footer>
 </body>
 </html>

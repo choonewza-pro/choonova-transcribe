@@ -230,23 +230,23 @@ async def home_page(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
 
 
-@app.get("/test/upload", response_class=HTMLResponse)
-async def test_upload_page(request: Request):
+@app.get("/audio/transcribe", response_class=HTMLResponse)
+async def audio_transcribe_page(request: Request):
     return templates.TemplateResponse(request=request, name="upload.html")
 
 
-@app.get("/test/realtime", response_class=HTMLResponse)
-async def test_realtime_page(request: Request):
+@app.get("/realtime/stream", response_class=HTMLResponse)
+async def realtime_stream_page(request: Request):
     return templates.TemplateResponse(request=request, name="realtime.html")
 
 
-@app.get("/test/media", response_class=HTMLResponse)
-async def test_media_page(request: Request):
+@app.get("/media/transcribe", response_class=HTMLResponse)
+async def media_transcribe_page(request: Request):
     return templates.TemplateResponse(request=request, name="media.html")
 
 
-@app.get("/test/jobs", response_class=HTMLResponse)
-async def test_jobs_page(request: Request):
+@app.get("/jobs/history", response_class=HTMLResponse)
+async def jobs_history_page(request: Request):
     return templates.TemplateResponse(request=request, name="jobs.html")
 
 

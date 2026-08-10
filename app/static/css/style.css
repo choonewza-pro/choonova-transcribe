@@ -218,6 +218,7 @@ p.subtitle {
 .badge-post { background: rgba(46, 160, 67, 0.2); color: #3fb950; border: 1px solid #2ea043; }
 .badge-get { background: rgba(56, 139, 253, 0.2); color: #58a6ff; border: 1px solid #388bfd; }
 .badge-ws { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid #a855f7; }
+.badge-delete { background: rgba(248, 81, 73, 0.2); color: #f85149; border: 1px solid #f85149; }
 
 .code-container {
   background: #0d1117;
@@ -413,26 +414,6 @@ footer {
   color: var(--text-main);
 }
 
-.key-badge {
-  font-size: 0.82rem;
-  color: var(--success);
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.8rem;
-  border-radius: 20px;
-  background: rgba(46, 160, 67, 0.15);
-  border: 1px solid rgba(46, 160, 67, 0.3);
-  transition: all 0.3s ease;
-}
-
-.key-badge.required {
-  color: #e3b341;
-  background: rgba(227, 179, 65, 0.15);
-  border-color: rgba(227, 179, 65, 0.3);
-}
-
 .api-key-label {
   display: block;
   font-size: 0.78rem;
@@ -566,21 +547,6 @@ footer {
   background: rgba(46, 160, 67, 0.15);
   border: 1px solid rgba(46, 160, 67, 0.3);
   flex-shrink: 0;
-}
-
-.api-key-saved-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  min-width: 0;
-}
-
-.api-key-saved-label {
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: var(--success);
 }
 
 .api-key-saved-mask {

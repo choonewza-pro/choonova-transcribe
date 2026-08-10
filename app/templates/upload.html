@@ -3,23 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ทดสอบอัปโหลดไฟล์เสียง - Typhoon ASR</title>
+  <title>ถอดไฟล์เสียง - ChooNova Transcribe</title>
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-  <header>
-    <a href="/" class="logo">
-      <span>🌀 ChooNova Transcribe</span>
-      <span class="logo-badge">File Upload Tester</span>
-    </a>
-    <nav>
-      <a href="/" class="nav-link">หน้าแรก</a>
-      <a href="/test/upload" class="nav-link active">ทดสอบไฟล์เสียง</a>
-      <a href="/test/realtime" class="nav-link">ทดสอบ Real-time ไมค์</a>
-      <a href="/test/media" class="nav-link">ถอดความวีดีโอ (1GB+)</a>
-      <a href="/test/jobs" class="nav-link">ประวัติการถอดความ</a>
-    </nav>
-  </header>
+  {% set active_page = 'upload' %}
+  {% set header_badge = 'File Upload Tester' %}
+  {% include 'partials/header.html' %}
 
   <main>
     <div class="glass-card">
@@ -27,35 +17,7 @@
       <p class="subtitle" style="margin-bottom: 1.5rem;">รองรับไฟล์เสียงรูปแบบ WAV, MP3, M4A, OGG, FLAC (แนะนำความถี่ 16kHz)</p>
 
       <!-- API Key Settings Card -->
-      <div class="api-key-card">
-        <div id="apiKeyInputGroup">
-          <div class="api-key-header">
-            <div class="api-key-title">
-              🔑 <span>API Key Settings</span>
-            </div>
-          </div>
-          <label class="api-key-label">GATEWAY_API_KEY</label>
-          <div class="api-key-input-group">
-            <div class="input-with-eye">
-              <input type="password" id="apiKeyInput" placeholder="Enter API key..." />
-              <button type="button" class="eye-btn" id="toggleApiKeyBtn" title="Show/Hide Key">👁️</button>
-            </div>
-            <button type="button" class="btn-save-key" id="saveApiKeyBtn">💾 Save Key</button>
-          </div>
-          <div class="api-key-footer">
-            <span>🔒 Saved securely in browser localStorage</span>
-          </div>
-        </div>
-
-        <!-- Saved state: single line, input hidden -->
-        <div id="apiKeySavedState" class="api-key-saved" style="display: none;">
-          <div class="api-key-saved-meta">
-            <span class="api-key-saved-icon">🔑</span>
-            <span class="api-key-saved-mask" id="apiKeyMask">••••••••</span>
-          </div>
-          <button type="button" class="btn-clear-key" id="clearApiKeyLink" title="Remove the saved API key from this browser">🗑️ Clear Key</button>
-        </div>
-      </div>
+      {% include 'partials/api_key_settings.html' %}
 
       <form id="uploadForm">
         <div class="dropzone" id="dropzone">

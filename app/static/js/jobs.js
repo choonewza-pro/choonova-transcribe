@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggleApiKeyBtn = document.getElementById('toggleApiKeyBtn');
   const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
   const clearApiKeyLink = document.getElementById('clearApiKeyLink');
-  const keySavedBadge = document.getElementById('keySavedBadge');
 
   const listMeta = document.getElementById('listMeta');
   const btnRefresh = document.getElementById('btnRefresh');
@@ -52,20 +51,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const apiKeyMask = document.getElementById('apiKeyMask');
     const saved = localStorage.getItem(API_KEY_STORAGE);
     if (saved) {
-      if (keySavedBadge) {
-        keySavedBadge.className = 'key-badge';
-        keySavedBadge.textContent = '✓ Key active in browser';
-      }
       if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'none';
       if (apiKeySavedState) {
         apiKeySavedState.style.display = 'flex';
         if (apiKeyMask) apiKeyMask.textContent = maskApiKey(saved);
       }
     } else {
-      if (keySavedBadge) {
-        keySavedBadge.className = 'key-badge required';
-        keySavedBadge.textContent = '⚠️ API Key required';
-      }
       if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'block';
       if (apiKeySavedState) apiKeySavedState.style.display = 'none';
     }
@@ -237,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!jobs || jobs.length === 0) {
       tableWrap.style.display = 'none';
       emptyState.style.display = 'block';
-      emptyState.querySelector('p').textContent = 'ยังไม่มีรายการถอดความ — เริ่มจากหน้าถอดความวีดีโอ (1GB+) ก่อนได้เลย';
+      emptyState.querySelector('p').textContent = 'ยังไม่มีรายการถอดความ — เริ่มจากหน้าถอดไฟล์เสียงและวีดีโอก่อนได้เลย';
       return;
     }
     if (list.length === 0) {
@@ -371,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
       statDuration.textContent = `⏱️ ความยาว: ${formatSeconds(job.duration_seconds)}`;
       statElapsed.textContent = `⚡ เวลาประมวลผลรวม: ${formatSeconds(job.elapsed_seconds)}`;
 
-      // Export URLs with API key query param (same as /test/media)
+      // Export URLs with API key query param (same pattern as media page)
       const keyParam = apiKey ? `?api_key=${encodeURIComponent(apiKey)}` : '';
       btnDownloadTxt.href = `/v1/transcribe/jobs/${job.job_id}/export/txt${keyParam}`;
       btnDownloadSrt.href = `/v1/transcribe/jobs/${job.job_id}/export/srt${keyParam}`;

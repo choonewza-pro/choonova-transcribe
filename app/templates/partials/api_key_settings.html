@@ -1,0 +1,29 @@
+      <div class="api-key-card" style="text-align: left;">
+        <div id="apiKeyInputGroup">
+          <div class="api-key-header">
+            <div class="api-key-title">
+              🔑 <span>API Key Settings</span>
+            </div>
+          </div>
+          <label class="api-key-label">GATEWAY_API_KEY</label>
+          <div class="api-key-input-group">
+            <div class="input-with-eye">
+              <input type="password" id="apiKeyInput" placeholder="Enter API key..." />
+              <button type="button" class="eye-btn" id="toggleApiKeyBtn" title="Show/Hide Key">👁️</button>
+            </div>
+            <button type="button" class="btn-save-key" id="saveApiKeyBtn">💾 Save Key</button>
+          </div>
+          <div class="api-key-footer">
+            <span>🔒 Saved securely in browser localStorage</span>
+          </div>
+        </div>
+
+        <!-- Saved state: single line, input hidden -->
+        <div id="apiKeySavedState" class="api-key-saved" style="display: none;">
+          <div class="api-key-saved-meta">
+            <span class="api-key-saved-icon">🔑</span>
+            <span class="api-key-saved-mask" id="apiKeyMask">••••••••</span>
+          </div>
+          <button type="button" class="btn-clear-key" id="clearApiKeyLink" title="Remove the saved API key from this browser">🗑️ Clear Key</button>
+        </div>
+      </div>

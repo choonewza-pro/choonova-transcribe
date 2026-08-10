@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggleApiKeyBtn = document.getElementById('toggleApiKeyBtn');
   const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
   const clearApiKeyLink = document.getElementById('clearApiKeyLink');
-  const keySavedBadge = document.getElementById('keySavedBadge');
 
   const micBtn = document.getElementById('micBtn');
   const micIcon = document.getElementById('micIcon');
@@ -49,20 +48,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const apiKeyMask = document.getElementById('apiKeyMask');
     const saved = localStorage.getItem(API_KEY_STORAGE);
     if (saved) {
-      if (keySavedBadge) {
-        keySavedBadge.className = 'key-badge';
-        keySavedBadge.textContent = '✓ Key active in browser';
-      }
       if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'none';
       if (apiKeySavedState) {
         apiKeySavedState.style.display = 'flex';
         if (apiKeyMask) apiKeyMask.textContent = maskApiKey(saved);
       }
     } else {
-      if (keySavedBadge) {
-        keySavedBadge.className = 'key-badge required';
-        keySavedBadge.textContent = '⚠️ API Key required';
-      }
       if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'block';
       if (apiKeySavedState) apiKeySavedState.style.display = 'none';
     }

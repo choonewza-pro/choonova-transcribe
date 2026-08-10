@@ -7,7 +7,7 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 1. **REST API** (`POST /v1/transcribe`) — ถอดความไฟล์เสียงสั้น multipart upload
 2. **WebSocket Real-time** (`/v1/stream`) — ถอดเสียงสดจากไมค์ chunk 250ms
 3. **Long-form Pipeline** (`POST /v1/transcribe/jobs`) — ไฟล์วิดีโอ/เสียงยาวสูงสุด 1GB+ แบบ async
-4. **ประวัติการถอดความ** (`/test/jobs`) — ดู/export/ลบ งานที่เคยถอดความไว้
+4. **ประวัติการถอดความ** (`/jobs/history`) — ดู/export/ลบ งานที่เคยถอดความไว้
 
 ## Tech Stack
 
@@ -104,10 +104,10 @@ Copy `.env.example` to `.env` to customize.
 | Method | Path                                               | Auth | Description                       |
 | ------ | -------------------------------------------------- | ---- | --------------------------------- |
 | GET    | `/`                                                | —    | Dashboard home                    |
-| GET    | `/test/upload`                                     | —    | Upload tester                     |
-| GET    | `/test/realtime`                                   | —    | Real-time mic tester              |
-| GET    | `/test/media`                                      | —    | Long-form video upload            |
-| GET    | `/test/jobs`                                       | —    | Transcription history             |
+| GET    | `/audio/transcribe`                                | —    | Audio file transcribe page        |
+| GET    | `/realtime/stream`                                 | —    | Real-time mic stream page         |
+| GET    | `/media/transcribe`                                | —    | Long-form video/audio transcribe  |
+| GET    | `/jobs/history`                                    | —    | Transcription history page        |
 | GET    | `/healthz`                                         | —    | Health check                      |
 | POST   | `/v1/transcribe`                                   | ✅   | Transcribe audio file             |
 | POST   | `/v1/transcribe/jobs`                              | ✅   | Create long-form job (202, async) |
