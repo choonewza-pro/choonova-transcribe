@@ -64,6 +64,12 @@ from app.job_worker import (
     CUDA_RETRY_BACKOFF_SEC,
 )
 from app.asr_engine import engine
+from app.engine_router import (
+    transcribe_bytes as router_transcribe_bytes,
+    reset_all,
+    cuda_device_reset_all,
+    normalize_language,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("typhoon-asr-main")
@@ -258,20 +264,30 @@ async def health_check():
 async def transcribe_audio(
     file: UploadFile = File(...),
     with_timestamps: bool = Form(False),
+    language: str = Form("th"),
     # Optional auth for API calls, skip if request comes from local dashboard
     authenticated: bool = Depends(verify_api_key),
 ):
     """
-    Transcribe an uploaded audio file (WAV, MP3, M4A, OGG, FLAC) to Thai text.
+    Transcribe an uploaded audio file (WAV, MP3, M4A, OGG, FLAC).
+
+    language: 'th' (default, Typhoon Thai ASR), 'en' (Whisper English), or
+    'auto' (Whisper auto-detect for Thai/English mixed audio).
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="Audio file must be provided.")
 
     try:
+        lang = normalize_language(language)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    try:
         content = await file.read()
-        res = engine.transcribe_bytes(
+        res = router_transcribe_bytes(
             audio_bytes=content,
             filename_hint=file.filename,
+            language=lang,
             with_timestamps=with_timestamps,
         )
 
@@ -302,16 +318,26 @@ async def transcribe_audio(
 
 @app.post("/v1/transcribe/jobs", status_code=202, response_model=JobCreateResponse)
 async def create_transcription_job(
-    file: UploadFile = File(...), authenticated: bool = Depends(verify_api_key)
+    file: UploadFile = File(...),
+    language: str = Form("th"),
+    authenticated: bool = Depends(verify_api_key),
 ):
     """
     Upload a large video/audio file (MP4, MKV, MOV, WAV up to 1GB+) for long-form transcription.
     Returns job_id immediately with 202 Accepted status for async background processing.
+
+    language: 'th' (default, Typhoon Thai ASR), 'en' (Whisper English), or
+    'auto' (Whisper auto-detect for Thai/English mixed audio).
     """
     if not file.filename:
         raise HTTPException(
             status_code=400, detail="Video/Audio file must be provided."
         )
+
+    try:
+        lang = normalize_language(language)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
     if not check_disk_space(TEMP_JOBS_DIR, MIN_FREE_DISK_GB):
         raise HTTPException(
@@ -339,12 +365,17 @@ async def create_transcription_job(
         raise HTTPException(status_code=500, detail=f"Failed to save upload file: {e}")
 
     # Insert job into SQLite
-    create_job(job_id=job_id, filename=file.filename, file_size_bytes=total_bytes)
+    create_job(
+        job_id=job_id,
+        filename=file.filename,
+        file_size_bytes=total_bytes,
+        language=lang,
+    )
 
     # Launch worker in an isolated subprocess so GPU/CPU memory or errors never affect FastAPI web server
     import sys
 
-    cmd = [sys.executable, "-m", "app.run_job", job_id, save_path]
+    cmd = [sys.executable, "-m", "app.run_job", job_id, save_path, lang]
     proc = subprocess.Popen(cmd, cwd=SERVICE_DIR)
     _active_workers[job_id] = proc
 
@@ -352,6 +383,7 @@ async def create_transcription_job(
         status="accepted",
         job_id=job_id,
         filename=file.filename,
+        language=lang,
         message="Job created and enqueued for long-form video transcription",
     )
 
@@ -572,8 +604,7 @@ async def websocket_stream(websocket: WebSocket):
                         f"Realtime transcribe hit CUDA allocator corruption: {ex}; "
                         "performing full CUDA device reset + model reload before one final retry."
                     )
-                    await loop.run_in_executor(None, engine.cuda_device_reset)
-                    await loop.run_in_executor(None, engine.reset)
+                    await loop.run_in_executor(None, cuda_device_reset_all)
                     try:
                         res = await loop.run_in_executor(
                             None, engine.transcribe_bytes, b_data, "stream.webm"
@@ -589,7 +620,7 @@ async def websocket_stream(websocket: WebSocket):
                         f"Realtime transcribe failed {attempt} attempts with CUDA error: {ex}; "
                         "reloading model and retrying once more"
                     )
-                    await loop.run_in_executor(None, engine.reset)
+                    await loop.run_in_executor(None, reset_all)
                     await loop.run_in_executor(None, engine.clear_cuda_cache)
                     try:
                         res = await loop.run_in_executor(

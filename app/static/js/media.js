@@ -206,6 +206,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const formData = new FormData();
     formData.append('file', selectedFile);
+    const languageSelect = document.getElementById('languageSelect');
+    if (languageSelect) {
+      formData.append('language', languageSelect.value);
+    }
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/v1/transcribe/jobs', true);

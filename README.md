@@ -31,13 +31,15 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 │   ├── db.py            # SQLite repository for jobs + retention cleanup
 │   ├── schemas.py       # Pydantic request/response models
 │   ├── asr_engine.py    # Typhoon ASR model singleton wrapper (NeMo)
+│   ├── whisper_engine.py # faster-whisper engine (English / Thai-English mixed)
+│   ├── engine_router.py # Language dispatcher (th -> Typhoon, en/auto -> Whisper)
 │   ├── audio_utils.py   # FFmpeg extract/split, disk-space check, safe_delete helpers
 │   ├── job_worker.py    # Async long-form transcription pipeline (chunking + GPU loop)
 │   ├── run_job.py       # Subprocess entrypoint for isolated job workers
 │   ├── templates/       # HTML pages (index, upload, realtime, media, jobs)
 │   └── static/          # CSS + JS (upload.js, realtime.js, media.js, jobs.js)
 ├── model/               # Model weights (typhoon-asr-realtime.nemo, git-ignored)
-├── data/                # SQLite DB (jobs.db) — persist across containers
+├── data/                # SQLite DB (jobs.db) — optional, baked empty into Docker image
 ├── Dockerfile           # GPU image (CUDA 12.1, PyTorch)
 ├── Dockerfile.cpu       # CPU-only image (also works on Mac M1–M4)
 ├── docker-compose.yml   # GPU compose (requires NVIDIA Docker + km4u-network)
@@ -62,6 +64,8 @@ docker compose -f docker-compose-cpu.yml up -d --build
 
 Service runs on `http://localhost:8830/`
 
+**หมายเหตุเรื่องฐานข้อมูล:** image มี SQLite `jobs.db` ว่างๆ ฝังไว้ในตัวแล้ว (baked) — รันโดยไม่ mount ก็ใช้งานได้ทันที เหมาะสำหรับ export/แจกจ่าย image ส่วนข้อมูลประวัติงานจะอยู่ใน container (หายเมื่อลบ container) ถ้าต้องการเก็บข้อมูลข้าม container ให้เปิดคอมเมนต์ volume `./data:/app/data` ใน docker-compose ไฟล์นั้นๆ
+
 ### Local Development
 
 ```bash
@@ -83,6 +87,7 @@ DEVICE=cpu uvicorn app.main:app --host 0.0.0.0 --port 8830
 | `GATEWAY_API_KEY`           | `change-me-in-production`         | API key (set in production)                       |
 | `MODEL_PATH`                | `model/typhoon-asr-realtime.nemo` | Local model path (fallback: HuggingFace)          |
 | `DEVICE`                    | `cuda`                            | `cuda` / `cpu` (auto-detect if CUDA unavailable)  |
+| `WHISPER_MODEL`             | `medium`                          | faster-whisper size: `tiny/base/small/medium/large-v3` |
 | `LOG_LEVEL`                 | `info`                            | Logging level                                     |
 | `DATA_DIR`                  | `<project>/data`                  | SQLite directory                                  |
 | `TEMP_JOBS_DIR`             | `/tmp/typhoon_jobs`               | Temp job directory                                |
@@ -116,15 +121,30 @@ Copy `.env.example` to `.env` to customize.
 ### cURL Examples
 
 ```bash
-# Transcribe audio file
+# Transcribe audio file (Thai - default)
 curl -X POST http://localhost:8830/v1/transcribe \
   -H "x-api-key: change-me-in-production" \
   -F "file=@audio.mp3" -F "with_timestamps=true"
 
-# Long-form job
+# Transcribe English / Thai-English mixed audio via Whisper
+curl -X POST http://localhost:8830/v1/transcribe \
+  -H "x-api-key: change-me-in-production" \
+  -F "file=@english.mp3" -F "language=en"
+
+# Transcribe with auto language detection (Whisper)
+curl -X POST http://localhost:8830/v1/transcribe \
+  -H "x-api-key: change-me-in-production" \
+  -F "file=@mixed.mp3" -F "language=auto"
+
+# Long-form job (Thai - default)
 curl -X POST http://localhost:8830/v1/transcribe/jobs \
   -H "x-api-key: change-me-in-production" \
   -F "file=@video.mp4"
+
+# Long-form job with English / mixed audio
+curl -X POST http://localhost:8830/v1/transcribe/jobs \
+  -H "x-api-key: change-me-in-production" \
+  -F "file=@video.mp4" -F "language=en"
 
 # Check status
 curl http://localhost:8830/v1/transcribe/jobs/<JOB_ID> \
@@ -133,6 +153,13 @@ curl http://localhost:8830/v1/transcribe/jobs/<JOB_ID> \
 # Export SRT
 curl -o subtitle.srt "http://localhost:8830/v1/transcribe/jobs/<JOB_ID>/export/srt?api_key=change-me-in-production"
 ```
+
+`language` รับค่าได้ 3 แบบ:
+- `th` (default) — ใช้ Typhoon ASR Realtime (ภาษาไทย, เร็ว, เหมาะกับ real-time)
+- `en` — ใช้ faster-whisper (อังกฤษ, output คำอังกฤษเป็นตัวละติน)
+- `auto` — ใช้ faster-whisper ตรวจจับภาษาอัตโนมัติ (รองรับภาษาไทย/อังกฤษผสม หรือ code-switching)
+
+> ⚠️ WebSocket `/v1/stream` (real-time ไมค์) รองรับเฉพาะภาษาไทย (Typhoon) อย่างเดียว — คำอังกฤษในเสียงไทยจะออกเป็นทับศัพท์ตัวไทย โมเดล Whisper ที่โหลดครั้งแรกจะดาวน์โหลดอัตโนมัติจาก HuggingFace (config: `WHISPER_MODEL`, default `medium`)
 
 ### WebSocket
 

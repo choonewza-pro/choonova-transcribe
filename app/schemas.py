@@ -23,12 +23,14 @@ class JobCreateResponse(BaseModel):
     status: str = "accepted"
     job_id: str
     filename: str
+    language: str = "th"
     message: str = "Job created and enqueued for background processing"
 
 class JobStatusResponse(BaseModel):
     job_id: str
     filename: str
     file_size_bytes: int = 0
+    language: str = "th"
     status: str
     progress_pct: float
     current_stage: str

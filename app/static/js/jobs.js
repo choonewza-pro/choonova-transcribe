@@ -250,9 +250,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const shortId = escapeHtml((job.job_id || '').substring(0, 8));
       const fileName = escapeHtml(job.filename || '-');
+      const langMap = { th: '🇹🇭 ไทย', en: '🇬🇧 EN', auto: '🌐 อัตโนมัติ' };
+      const langBadge = langMap[job.language] || '🇹🇭 ไทย';
       tr.innerHTML = `
         <td class="filename-cell"><div class="filename-text" title="${fileName}">${fileName}</div><div class="filename-meta">🆔 ${shortId}…</div></td>
         <td class="cell-status">${statusBadge(job.status)}</td>
+        <td class="cell-meta" data-label="ภาษา">${langBadge}</td>
         <td class="cell-meta" data-label="ความยาว">${formatSeconds(job.duration_seconds)}</td>
         <td class="cell-meta" data-label="ขนาด">${formatBytes(job.file_size_bytes)}</td>
         <td class="cell-meta" data-label="สร้างเมื่อ">${formatDate(job.created_at)}</td>
@@ -269,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (processing) {
         const pct = Math.min(100, Math.max(0, Math.round(job.progress_pct || 0)));
         const stage = document.createElement('td');
-        stage.colSpan = 7;
+        stage.colSpan = 8;
         stage.className = 'stage-cell';
         stage.innerHTML = `
           <div class="job-progress">
@@ -282,7 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.appendChild(stage);
       } else if (job.status === 'failed' && job.error_message) {
         const errTd = document.createElement('td');
-        errTd.colSpan = 7;
+        errTd.colSpan = 8;
         errTd.className = 'error-cell';
         errTd.innerHTML = `<div class="job-error">❌ ${escapeHtml(job.error_message)}</div>`;
         tr.appendChild(errTd);

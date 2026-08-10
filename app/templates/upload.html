@@ -67,10 +67,18 @@
           <audio id="audioPreview" controls style="width: 100%; border-radius: 10px; outline: none; background: rgba(0,0,0,0.5); border: 1px solid var(--card-border);"></audio>
         </div>
 
-        <div style="display: flex; gap: 1.5rem; align-items: center; margin: 1.5rem 0;">
+        <div style="display: flex; gap: 1.5rem; align-items: center; margin: 1.5rem 0; flex-wrap: wrap;">
           <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
             <input type="checkbox" id="timestampsCheck" style="width: 18px; height: 18px;">
             <span>เปิดใช้งาน Word-level Timestamps (ระบุช่วงเวลาของคำ)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem;">
+            <span>🌐 ภาษา:</span>
+            <select id="languageSelect" class="form-select" style="padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(0,0,0,0.25); color: #fff; border: 1px solid var(--card-border);">
+              <option value="th">ไทย (Typhoon)</option>
+              <option value="en">อังกฤษ (Whisper)</option>
+              <option value="auto">อัตโนมัติ / ผสม (Whisper)</option>
+            </select>
           </label>
         </div>
 

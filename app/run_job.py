@@ -17,16 +17,19 @@ logger = logging.getLogger("typhoon-asr-worker-cli")
 
 def main():
     if len(sys.argv) < 3:
-        logger.error("Usage: python -m app.run_job <job_id> <input_file_path>")
+        logger.error(
+            "Usage: python -m app.run_job <job_id> <input_file_path> [language]"
+        )
         sys.exit(1)
 
     job_id = sys.argv[1]
     input_file_path = sys.argv[2]
+    language = sys.argv[3] if len(sys.argv) > 3 else "th"
 
     logger.info(f"🚀 Isolated Worker process starting for job_id={job_id}")
 
     try:
-        asyncio.run(process_transcription_job(job_id, input_file_path))
+        asyncio.run(process_transcription_job(job_id, input_file_path, language))
         logger.info(f"✅ Isolated Worker finished processing for job_id={job_id}")
     except Exception as e:
         logger.error(f"❌ Isolated Worker failed for job_id={job_id}: {e}", exc_info=True)

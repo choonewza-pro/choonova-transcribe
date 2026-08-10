@@ -21,6 +21,11 @@ from app.audio_utils import (
 )
 from app.cuda_utils import is_cuda_error, is_allocator_corruption
 from app.asr_engine import engine
+from app.engine_router import (
+    transcribe_file as router_transcribe_file,
+    reset_all,
+    cuda_device_reset_all,
+)
 
 logger = logging.getLogger("typhoon-asr-job-worker")
 
@@ -56,20 +61,26 @@ async def transcribe_chunk_with_retry(
     chunk_path: str,
     with_timestamps: bool,
     chunk_idx: int,
+    language: str = "th",
 ) -> Dict[str, Any]:
     """
-    Run engine.transcribe_file for a single chunk, retrying on transient CUDA
-    errors with exponential backoff.
+    Run the routed engine's transcribe_file for a single chunk, retrying on
+    transient CUDA errors with exponential backoff.
 
     Two-tier recovery:
     - Tier 1 (transient driver error): backoff + clear_cuda_cache() + retry.
     - Tier 2 (allocator corruption): backoff retries are useless; do a full
-      CUDA device reset (cudaDeviceReset), reload the model, and retry once.
+      CUDA device reset (cudaDeviceReset), reload all models, and retry once.
     """
     for attempt in range(1, CUDA_RETRY_ATTEMPTS + 1):
         try:
             return await loop.run_in_executor(
-                None, engine.transcribe_file, chunk_path, with_timestamps, True
+                None,
+                router_transcribe_file,
+                chunk_path,
+                language,
+                with_timestamps,
+                True,
             )
         except Exception as e:
             if not is_cuda_error(e):
@@ -80,10 +91,14 @@ async def transcribe_chunk_with_retry(
                     f"Chunk {chunk_idx} hit CUDA allocator corruption: {e}. "
                     f"Performing full CUDA device reset + model reload before one final retry."
                 )
-                await loop.run_in_executor(None, engine.cuda_device_reset)
-                await loop.run_in_executor(None, engine.reset)
+                await loop.run_in_executor(None, cuda_device_reset_all)
                 return await loop.run_in_executor(
-                    None, engine.transcribe_file, chunk_path, with_timestamps, True
+                    None,
+                    router_transcribe_file,
+                    chunk_path,
+                    language,
+                    with_timestamps,
+                    True,
                 )
             if is_allocator_corruption(e):
                 # Allocator corruption but device reset disabled: keep reloading
@@ -92,19 +107,28 @@ async def transcribe_chunk_with_retry(
                     f"Chunk {chunk_idx} hit CUDA allocator corruption: {e}. "
                     f"Reloading model and retrying once more (device reset disabled)."
                 )
-                await loop.run_in_executor(None, engine.reset)
+                await loop.run_in_executor(None, reset_all)
                 return await loop.run_in_executor(
-                    None, engine.transcribe_file, chunk_path, with_timestamps, True
+                    None,
+                    router_transcribe_file,
+                    chunk_path,
+                    language,
+                    with_timestamps,
+                    True,
                 )
             if attempt == CUDA_RETRY_ATTEMPTS:
                 logger.warning(
                     f"Chunk {chunk_idx} failed {attempt} attempts with CUDA error: {e}; "
                     f"reloading model and retrying once more"
                 )
-                await loop.run_in_executor(None, engine.reset)
-                await loop.run_in_executor(None, engine.clear_cuda_cache)
+                await loop.run_in_executor(None, reset_all)
                 return await loop.run_in_executor(
-                    None, engine.transcribe_file, chunk_path, with_timestamps, True
+                    None,
+                    router_transcribe_file,
+                    chunk_path,
+                    language,
+                    with_timestamps,
+                    True,
                 )
             backoff = CUDA_RETRY_BACKOFF_SEC * attempt
             logger.warning(
@@ -201,7 +225,9 @@ def build_srt_subtitles(
     return "\n".join(srt_lines)
 
 
-async def process_transcription_job(job_id: str, input_file_path: str) -> None:
+async def process_transcription_job(
+    job_id: str, input_file_path: str, language: str = "th"
+) -> None:
     """
     Asynchronous Background Worker for processing long video/audio transcription jobs.
     """
@@ -273,7 +299,9 @@ async def process_transcription_job(job_id: str, input_file_path: str) -> None:
                 )
 
                 # Run synchronous engine inference in executor, retrying on transient CUDA errors
-                res = await transcribe_chunk_with_retry(loop, chunk_path, True, idx)
+                res = await transcribe_chunk_with_retry(
+                    loop, chunk_path, True, idx, language
+                )
 
                 chunk_text = res.get("text", "").strip()
                 if chunk_text:
@@ -308,8 +336,7 @@ async def process_transcription_job(job_id: str, input_file_path: str) -> None:
                         f"Resetting CUDA context after chunk {idx}/{total_chunks} "
                         "to prevent allocator corruption (next chunk will lazy-reload model)"
                     )
-                    await loop.run_in_executor(None, engine.reset)
-                    await loop.run_in_executor(None, engine.cuda_device_reset)
+                    await loop.run_in_executor(None, cuda_device_reset_all)
 
         # Step 4: Final Cleanup & Result Assembly
         safe_delete_file(extracted_wav)

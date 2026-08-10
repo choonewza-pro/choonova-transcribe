@@ -31,6 +31,7 @@ def init_db() -> None:
                 job_id TEXT PRIMARY KEY,
                 filename TEXT NOT NULL,
                 file_size_bytes INTEGER DEFAULT 0,
+                language TEXT DEFAULT 'th',
                 status TEXT NOT NULL,
                 progress_pct REAL DEFAULT 0.0,
                 current_stage TEXT DEFAULT '',
@@ -46,6 +47,12 @@ def init_db() -> None:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        # Migration for existing databases created before the 'language' column existed.
+        columns = [r["name"] for r in cursor.execute("PRAGMA table_info(jobs)").fetchall()]
+        if "language" not in columns:
+            cursor.execute(
+                "ALTER TABLE jobs ADD COLUMN language TEXT DEFAULT 'th'"
+            )
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
         """)
@@ -56,7 +63,9 @@ def init_db() -> None:
     logger.info(f"SQLite DB initialized at {JOBS_DB_PATH}")
 
 
-def create_job(job_id: str, filename: str, file_size_bytes: int = 0) -> Dict[str, Any]:
+def create_job(
+    job_id: str, filename: str, file_size_bytes: int = 0, language: str = "th"
+) -> Dict[str, Any]:
     """
     Insert a new job record in SQLite with status='queued'.
     """
@@ -66,11 +75,11 @@ def create_job(job_id: str, filename: str, file_size_bytes: int = 0) -> Dict[str
         cursor.execute(
             """
             INSERT INTO jobs (
-                job_id, filename, file_size_bytes, status, progress_pct,
+                job_id, filename, file_size_bytes, language, status, progress_pct,
                 current_stage, created_at, updated_at
-            ) VALUES (?, ?, ?, 'queued', 0.0, 'File Uploaded', ?, ?)
+            ) VALUES (?, ?, ?, ?, 'queued', 0.0, 'File Uploaded', ?, ?)
         """,
-            (job_id, filename, file_size_bytes, now, now),
+            (job_id, filename, file_size_bytes, language, now, now),
         )
         conn.commit()
     return get_job(job_id)

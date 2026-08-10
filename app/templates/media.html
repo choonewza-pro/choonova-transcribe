@@ -156,7 +156,15 @@
           <audio id="audioPreview" controls style="width: 100%; border-radius: 10px; outline: none; background: rgba(0,0,0,0.5); display: none;"></audio>
         </div>
 
-        <div style="margin: 1.5rem 0;">
+        <div style="margin: 1.5rem 0; display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap;">
+          <label style="display: flex; align-items: center; gap: 0.5rem;">
+            <span>🌐 ภาษา:</span>
+            <select id="languageSelect" class="form-select" style="padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(0,0,0,0.25); color: #fff; border: 1px solid var(--card-border);">
+              <option value="th">ไทย (Typhoon)</option>
+              <option value="en">อังกฤษ (Whisper)</option>
+              <option value="auto">อัตโนมัติ / ผสม (Whisper)</option>
+            </select>
+          </label>
           <button type="submit" class="btn-primary" id="startJobBtn" disabled>
             <span>🚀 อัปโหลด & เริ่มกระบวนการถอดความ (Start Pipeline)</span>
           </button>

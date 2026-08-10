@@ -153,6 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const formData = new FormData();
     formData.append('file', selectedFile);
+    const languageSelect = document.getElementById('languageSelect');
+    if (languageSelect) {
+      formData.append('language', languageSelect.value);
+    }
     if (timestampsCheck.checked) {
       formData.append('with_timestamps', 'true');
     }

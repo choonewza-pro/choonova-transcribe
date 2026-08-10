@@ -31,4 +31,9 @@ if requested_device == "cuda" and torch.cuda.is_available():
 else:
     DEVICE = "cpu"
 
+# Whisper secondary engine for English / Thai-English mixed audio
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "medium")
+WHISPER_COMPUTE_TYPE = "float16" if DEVICE == "cuda" else "int8"
+SUPPORTED_LANGUAGES = ("th", "en", "auto")
+
 
