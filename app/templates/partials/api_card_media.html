@@ -155,6 +155,35 @@
               <br>เพดานขนาดไฟล์ตั้งค่าได้ผ่าน env <code>MAX_UPLOAD_SIZE_MB</code> (default 0 = ไม่จำกัด, เกิน → HTTP 413)
             </p>
             <div class="code-container">
+              <div class="code-header">พารามิเตอร์ <code>language</code></div>
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                <thead>
+                  <tr style="color: var(--text-muted); text-align: left;">
+                    <th style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--card-border);">ค่า</th>
+                    <th style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--card-border);">เอนจิน</th>
+                    <th style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--card-border);">คำอธิบาย</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>th</code> <span style="color: var(--text-muted);">(default)</span></td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">Typhoon ASR Realtime</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">ภาษาไทย (เร็ว, ใช้สำหรับเสียงไทยเป็นหลัก)</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>en</code></td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">Faster-Whisper</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">ภาษาอังกฤษ (output เป็นตัวอักษรละติน)</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>auto</code></td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">Faster-Whisper</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">ตรวจจับภาษาอัตโนมัติ (เหมาะกับเสียงไทย/อังกฤษผสม, code-switching)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="code-container">
               <div class="code-header">cURL (Multipart Upload)</div>
               <pre>curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
   -H "x-api-key: change-me-in-production" \
