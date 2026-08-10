@@ -8,6 +8,42 @@ from app.whisper_engine import whisper_engine
 logger = logging.getLogger("engine-router")
 
 
+def get_engines_state() -> Dict[str, str]:
+    """
+    Current residency state of both engines: 'loading' | 'loaded' | 'idle'.
+    """
+    return {
+        "typhoon": engine.get_state(),
+        "whisper": whisper_engine.get_state(),
+    }
+
+
+def apply_model_mode(mode: str) -> Dict[str, str]:
+    """
+    Apply a load-mode change at runtime.
+      - 'always': eagerly load both engines so they are warm and resident.
+      - 'idle':   leave them alone; the idle reaper will unload on timeout.
+    Returns the engines state after applying.
+    """
+    if mode == "always":
+        engine.load_model()
+        whisper_engine.load_model()
+    return get_engines_state()
+
+
+def unload_if_idle_all(timeout_sec: float) -> bool:
+    """
+    Unload any engine that has been idle past timeout_sec. Returns True if at
+    least one model was unloaded (used for logging cadence).
+    """
+    unloaded = False
+    if engine.unload_if_idle(timeout_sec):
+        unloaded = True
+    if whisper_engine.unload_if_idle(timeout_sec):
+        unloaded = True
+    return unloaded
+
+
 def normalize_language(language: str) -> str:
     """
     Validate/normalize the language parameter to one of ('th', 'en', 'auto').

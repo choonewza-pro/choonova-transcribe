@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Literal
 
 class TimestampItem(BaseModel):
     word: str
@@ -18,6 +18,20 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     service: str = "typhoon-asr-service"
     device: str
+    model_load_mode: str = "always"
+    model_idle_timeout_sec: float = 900.0
+    typhoon_model_state: str = "idle"
+    whisper_model_state: str = "idle"
+
+class ModelSettings(BaseModel):
+    mode: Literal["always", "idle"]
+    idle_timeout_sec: float = Field(gt=0, description="Idle timeout in seconds before unloading the model in 'idle' mode")
+
+class ModelSettingsResponse(BaseModel):
+    mode: str
+    idle_timeout_sec: float
+    typhoon_model_state: str
+    whisper_model_state: str
 
 class JobCreateResponse(BaseModel):
     status: str = "accepted"

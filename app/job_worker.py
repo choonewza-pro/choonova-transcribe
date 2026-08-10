@@ -21,6 +21,7 @@ from app.audio_utils import (
 )
 from app.cuda_utils import is_cuda_error, is_allocator_corruption
 from app.asr_engine import engine
+from app.whisper_engine import whisper_engine
 from app.engine_router import (
     transcribe_file as router_transcribe_file,
     reset_all,
@@ -289,6 +290,19 @@ async def process_transcription_job(
             logger.info(
                 f"Acquired GPU Lock for job {job_id} (Processing {total_chunks} chunks)"
             )
+
+            # Load the engine model explicitly so the UI can surface this stage;
+            # otherwise the first chunk hides a 10-60s cold load inside "Transcribing".
+            update_job_status(
+                job_id,
+                status="transcribing",
+                progress_pct=25.0,
+                current_stage="Loading Model onto VRAM",
+            )
+            if language == "th":
+                await loop.run_in_executor(None, engine.load_model)
+            else:
+                await loop.run_in_executor(None, whisper_engine.load_model)
 
             for idx, chunk in enumerate(chunks, 1):
                 pct = 25.0 + (idx / total_chunks) * 65.0

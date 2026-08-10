@@ -1,6 +1,14 @@
 import os
 import torch
 
+from dotenv import load_dotenv
+
+# Load .env BEFORE reading any environment variables so that local runs
+# (uvicorn app.main:app) behave the same as Docker Compose, which already
+# interpolates .env into the container. OS env vars still take precedence
+# (load_dotenv defaults to override=False).
+load_dotenv()
+
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8830"))
 GATEWAY_API_KEY = os.getenv("GATEWAY_API_KEY", "change-me-in-production")
@@ -34,6 +42,14 @@ if requested_device == "cuda" and torch.cuda.is_available():
     DEVICE = "cuda"
 else:
     DEVICE = "cpu"
+
+# Model VRAM residency mode. These env values are ONLY used as the initial
+# default when seeding the `settings` table on first boot (see app/db.py).
+# After that the SQLite DB is the source of truth, editable via the dashboard.
+#   always = model stays resident in VRAM forever (warm, original behavior)
+#   idle   = model is unloaded after MODEL_IDLE_TIMEOUT_SEC of inactivity
+MODEL_LOAD_MODE_DEFAULT = os.getenv("MODEL_LOAD_MODE", "always").lower()
+MODEL_IDLE_TIMEOUT_SEC_DEFAULT = float(os.getenv("MODEL_IDLE_TIMEOUT_SEC", "900"))
 
 # Whisper secondary engine for English / Thai-English mixed audio
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "medium")

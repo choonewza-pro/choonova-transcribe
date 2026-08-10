@@ -49,6 +49,8 @@ from app.schemas import (
     JobCreateResponse,
     JobStatusResponse,
     JobListItem,
+    ModelSettings,
+    ModelSettingsResponse,
 )
 from app.db import (
     init_db,
@@ -59,6 +61,8 @@ from app.db import (
     delete_job,
     cleanup_expired_jobs,
     update_job_status,
+    get_setting,
+    set_setting,
 )
 from app.audio_utils import check_disk_space, safe_delete_dir
 from app.cuda_utils import is_cuda_error, is_allocator_corruption
@@ -73,6 +77,9 @@ from app.engine_router import (
     reset_all,
     cuda_device_reset_all,
     normalize_language,
+    get_engines_state,
+    apply_model_mode,
+    unload_if_idle_all,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -150,6 +157,47 @@ async def periodic_cleanup_task():
             logger.error(f"Error in periodic_cleanup_task: {e}")
 
 
+def current_model_load_mode() -> str:
+    """
+    Runtime model residency mode from the settings DB (seeded from env on first boot).
+    """
+    return (get_setting("MODEL_LOAD_MODE", "always") or "always").strip().lower()
+
+
+def current_idle_timeout_sec() -> float:
+    """
+    Runtime idle timeout (seconds) from the settings DB (seeded from env on first boot).
+    """
+    try:
+        return float(get_setting("MODEL_IDLE_TIMEOUT_SEC", "900") or "900")
+    except (TypeError, ValueError):
+        return 900.0
+
+
+async def model_idle_reaper():
+    """
+    Unload models from VRAM after a configurable idle period in 'idle' mode.
+
+    The mode/timeout are read from the settings DB on every cycle, so switching
+    between 'always' and 'idle' via the dashboard/API takes effect without a
+    restart. No-ops (cheaply) while in 'always' mode.
+    """
+    while True:
+        try:
+            if current_model_load_mode() == "idle":
+                timeout = current_idle_timeout_sec()
+                loop = asyncio.get_running_loop()
+                unloaded = await loop.run_in_executor(None, unload_if_idle_all, timeout)
+                if unloaded:
+                    logger.info("Model idle reaper unloaded one or more models")
+                await asyncio.sleep(max(30.0, timeout / 4.0))
+            else:
+                await asyncio.sleep(30.0)
+        except Exception as e:
+            logger.error(f"Error in model_idle_reaper: {e}")
+            await asyncio.sleep(30.0)
+
+
 async def watchdog_workers():
     """
     Detect worker subprocesses that died (crashed, OOM-killed, or hit C++
@@ -209,7 +257,8 @@ async def watchdog_workers():
 @app.on_event("startup")
 async def startup_event():
     logger.info(f"Starting Typhoon ASR Service on {HOST}:{PORT} (Device: {DEVICE})...")
-    # Initialize SQLite database and recover zombie jobs
+    # Initialize SQLite database and recover zombie jobs (also seeds the
+    # settings table with MODEL_LOAD_MODE / MODEL_IDLE_TIMEOUT_SEC from env).
     init_db()
     recover_zombie_jobs()
     # Start periodic 24-hour retention cleanup worker
@@ -217,11 +266,21 @@ async def startup_event():
     # Start worker crash watchdog (detects subprocess crashes that bypass
     # Python exception handling, e.g. CUDA illegal memory access)
     asyncio.create_task(watchdog_workers())
+    # Start the model VRAM idle reaper (active only in 'idle' mode)
+    asyncio.create_task(model_idle_reaper())
 
-    try:
-        engine.load_model()
-    except Exception as e:
-        logger.warning(f"Engine lazy loading deferred: {e}")
+    mode = current_model_load_mode()
+    if mode == "always":
+        # Warm Typhoon model at boot (original behavior); Whisper loads lazily.
+        try:
+            engine.load_model()
+        except Exception as e:
+            logger.warning(f"Engine lazy loading deferred: {e}")
+    else:
+        logger.info(
+            f"Model load mode is '{mode}' — skipping eager model load; "
+            "models will load on demand"
+        )
 
 
 # =========================================================================
@@ -273,7 +332,69 @@ async def jobs_history_page(request: Request):
 
 @app.get("/healthz", response_model=HealthResponse)
 async def health_check():
-    return HealthResponse(status="ok", service="typhoon-asr-service", device=DEVICE)
+    states = get_engines_state()
+    return HealthResponse(
+        status="ok",
+        service="typhoon-asr-service",
+        device=DEVICE,
+        model_load_mode=current_model_load_mode(),
+        model_idle_timeout_sec=current_idle_timeout_sec(),
+        typhoon_model_state=states["typhoon"],
+        whisper_model_state=states["whisper"],
+    )
+
+
+# =========================================================================
+# Runtime Settings Endpoints (model VRAM residency mode)
+# =========================================================================
+
+
+@app.get("/v1/settings/model", response_model=ModelSettingsResponse)
+async def get_model_settings(authenticated: bool = Depends(verify_api_key)):
+    """Get the current model residency mode, idle timeout, and engine states."""
+    states = get_engines_state()
+    return ModelSettingsResponse(
+        mode=current_model_load_mode(),
+        idle_timeout_sec=current_idle_timeout_sec(),
+        typhoon_model_state=states["typhoon"],
+        whisper_model_state=states["whisper"],
+    )
+
+
+@app.put("/v1/settings/model", response_model=ModelSettingsResponse)
+async def update_model_settings(
+    payload: ModelSettings, authenticated: bool = Depends(verify_api_key)
+):
+    """
+    Change the model residency mode at runtime (no restart required).
+
+    mode:
+      - 'always': models stay resident in VRAM (warm). Eagerly loads engines now.
+      - 'idle':   models are unloaded after idle_timeout_sec of inactivity.
+    """
+    mode = payload.mode
+    timeout = payload.idle_timeout_sec
+
+    set_setting("MODEL_LOAD_MODE", mode)
+    set_setting("MODEL_IDLE_TIMEOUT_SEC", str(timeout))
+    logger.info(
+        f"Model load mode changed to '{mode}' (idle_timeout={timeout:.0f}s) via API"
+    )
+
+    try:
+        states = apply_model_mode(mode)
+    except Exception as e:
+        # Settings are already persisted; if eager loading fails (e.g. model
+        # unavailable), the badge shows it and the next request lazy-loads.
+        logger.error(f"apply_model_mode failed after saving settings: {e}")
+        states = get_engines_state()
+
+    return ModelSettingsResponse(
+        mode=mode,
+        idle_timeout_sec=timeout,
+        typhoon_model_state=states["typhoon"],
+        whisper_model_state=states["whisper"],
+    )
 
 
 @app.post("/v1/audio/transcribe", response_model=TranscribeResponse)

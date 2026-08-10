@@ -2,6 +2,7 @@ import os
 import time
 import tempfile
 import logging
+import threading
 from typing import Dict, Any, Optional
 
 from app.config import DEVICE, WHISPER_MODEL, WHISPER_COMPUTE_TYPE
@@ -24,7 +25,26 @@ class WhisperEngine:
         self.model_name = WHISPER_MODEL
         self.compute_type = WHISPER_COMPUTE_TYPE
         self._is_loaded = False
+        self._is_loading = False
         self._model = None
+        # Idle-unload bookkeeping (monotonic clock, survives clock changes).
+        self._last_used = 0.0
+        self._in_flight = 0
+        self._lifecycle_lock = threading.RLock()
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._is_loaded and self._model is not None
+
+    def get_state(self) -> str:
+        """
+        Model residency state for UI/dashboard: 'loading' | 'loaded' | 'idle'.
+        """
+        if self._is_loading:
+            return "loading"
+        if self.is_loaded:
+            return "loaded"
+        return "idle"
 
     def load_model(self):
         if self._is_loaded and self._model is not None:
@@ -35,6 +55,7 @@ class WhisperEngine:
             f"{self.device.upper()} (compute_type={self.compute_type})..."
         )
         start_time = time.time()
+        self._is_loading = True
 
         try:
             from faster_whisper import WhisperModel
@@ -50,6 +71,8 @@ class WhisperEngine:
         except Exception as e:
             logger.error(f"❌ Failed to load Whisper model: {e}")
             raise
+        finally:
+            self._is_loading = False
 
     def reset(self) -> None:
         """
@@ -57,9 +80,35 @@ class WhisperEngine:
         Required after a full CUDA device reset (cudaDeviceReset) which
         invalidates all CUDA context in the process.
         """
-        self._model = None
-        self._is_loaded = False
+        with self._lifecycle_lock:
+            self._model = None
+            self._is_loaded = False
+            self._is_loading = False
         logger.warning("Whisper model reset; will reload on next transcribe.")
+
+    def unload_if_idle(self, timeout_sec: float) -> bool:
+        """
+        Unload the model from VRAM if it has been idle longer than timeout_sec.
+        Only safe when no transcribe is currently in-flight; guarded by the
+        lifecycle lock. Returns True if the model was unloaded.
+        """
+        with self._lifecycle_lock:
+            if not self.is_loaded:
+                return False
+            if self._in_flight > 0:
+                return False
+            idle_sec = time.monotonic() - self._last_used
+            if idle_sec < timeout_sec:
+                return False
+            self._model = None
+            self._is_loaded = False
+            self._is_loading = False
+        # CTranslate2 releases GPU memory when the model object is freed.
+        logger.info(
+            f"Whisper model unloaded after {idle_sec:.0f}s idle "
+            f"(timeout {timeout_sec:.0f}s); VRAM released"
+        )
+        return True
 
     def clear_cuda_cache(self) -> None:
         """
@@ -86,14 +135,18 @@ class WhisperEngine:
         (handles Thai, English, and Thai-English mixed content, emitting English
         words in Latin script).
         """
-        if not self._is_loaded or self._model is None:
-            self.load_model()
+        with self._lifecycle_lock:
+            self._last_used = time.monotonic()
+            self._in_flight += 1
+            if not self._is_loaded or self._model is None:
+                self.load_model()
+            model = self._model
 
         start_time = time.time()
         try:
             whisper_lang = "en" if language == "en" else None
 
-            segments, info = self._model.transcribe(
+            segments, info = model.transcribe(
                 audio_path,
                 language=whisper_lang,
                 word_timestamps=with_timestamps,
@@ -129,6 +182,9 @@ class WhisperEngine:
         except Exception as e:
             logger.error(f"Whisper transcribe failed: {e}")
             raise
+        finally:
+            with self._lifecycle_lock:
+                self._in_flight -= 1
 
     def transcribe_bytes(
         self,

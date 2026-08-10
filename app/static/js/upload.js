@@ -180,6 +180,22 @@ document.addEventListener('DOMContentLoaded', () => {
       formData.append('with_timestamps', 'true');
     }
 
+    // If the target engine is not resident on VRAM yet, surface the cold-start
+    // load progress so the user knows why the first request takes longer.
+    if (window.ModelStatus) {
+      const lang = (languageSelect && languageSelect.value) || 'th';
+      const engine = lang === 'th' ? 'typhoon' : 'whisper';
+      const st = window.ModelStatus.getLast();
+      if (st && st[engine + '_model_state'] && st[engine + '_model_state'] !== 'loaded') {
+        statusMessage.textContent = '⏳ กำลังโหลดโมเดลขึ้น VRAM (ครั้งแรกอาจใช้เวลา 10–60 วินาที)...';
+        statusMessage.style.color = 'var(--accent-cyan)';
+        window.ModelStatus.waitForReady(engine, () => {
+          statusMessage.textContent = '✅ โมเดลพร้อมแล้ว กำลังแปลงเสียง...';
+          statusMessage.style.color = 'var(--success)';
+        });
+      }
+    }
+
     const headers = {};
     const apiKey = getApiKey();
     if (apiKey) {

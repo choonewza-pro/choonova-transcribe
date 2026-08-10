@@ -30,6 +30,10 @@ services:
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
       - WATCHDOG_DELETE_ON_CRASH=false
       - CUDA_RESET_BETWEEN_CHUNKS=true
+      # Model VRAM residency mode: always | idle. Seeded into the settings DB on first boot;
+      # afterwards it is editable at runtime via the dashboard / PUT /v1/settings/model.
+      - MODEL_LOAD_MODE=${MODEL_LOAD_MODE:-always}
+      - MODEL_IDLE_TIMEOUT_SEC=${MODEL_IDLE_TIMEOUT_SEC:-900}
     volumes:
       - ./data/jobs:/tmp/typhoon_jobs
       # - ./data:/app/data   # Enable to persist the jobs DB on the host (baked empty DB is used otherwise)

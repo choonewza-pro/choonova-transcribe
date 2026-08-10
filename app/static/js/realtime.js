@@ -406,6 +406,16 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // Surface Typhoon model cold-load progress before connecting, so the user
+    // knows the first frames will be slow until the model is on VRAM.
+    if (window.ModelStatus) {
+      const st = window.ModelStatus.getLast();
+      if (st && st.typhoon_model_state !== 'loaded') {
+        micStatus.textContent = '⏳ กำลังโหลดโมเดลขึ้น VRAM (ครั้งแรก 10–60 วิ)... รอสักครู่';
+        micStatus.style.color = 'var(--accent-cyan)';
+      }
+    }
+
     // Connect WebSocket
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const apiKey = getApiKey();
@@ -447,8 +457,26 @@ document.addEventListener('DOMContentLoaded', () => {
       isRecording = true;
       micBtn.classList.add('recording');
       micIcon.textContent = '⏹️';
-      micStatus.textContent = '🔴 กำลังฟังและถอดความสด... (พูดได้เลย)';
-      micStatus.style.color = '#ff416c';
+
+      const setReadyMessage = () => {
+        micStatus.textContent = '🔴 กำลังฟังและถอดความสด... (พูดได้เลย)';
+        micStatus.style.color = '#ff416c';
+      };
+
+      if (window.ModelStatus) {
+        const st = window.ModelStatus.getLast();
+        if (st && st.typhoon_model_state === 'loaded') {
+          setReadyMessage();
+        } else {
+          micStatus.textContent = '⏳ กำลังโหลดโมเดลขึ้น VRAM (ครั้งแรก 10–60 วิ)...';
+          micStatus.style.color = 'var(--accent-cyan)';
+          window.ModelStatus.waitForReady('typhoon', () => {
+            if (isRecording) setReadyMessage();
+          });
+        }
+      } else {
+        setReadyMessage();
+      }
 
       if (liveTranscript.querySelector('span')) {
         liveTranscript.textContent = '';

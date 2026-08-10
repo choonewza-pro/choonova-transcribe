@@ -25,19 +25,19 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 
 ```
 ├── app/
-│   ├── main.py          # FastAPI app, route registration, WebSocket, periodic cleanup
+│   ├── main.py          # FastAPI app, route registration, WebSocket, periodic cleanup + idle reaper
 │   ├── config.py        # Environment configuration & defaults
 │   ├── auth.py          # API key verification (Bearer / x-api-key / ?api_key=)
-│   ├── db.py            # SQLite repository for jobs + retention cleanup
+│   ├── db.py            # SQLite repository for jobs + runtime settings + retention cleanup
 │   ├── schemas.py       # Pydantic request/response models
-│   ├── asr_engine.py    # Typhoon ASR model singleton wrapper (NeMo)
-│   ├── whisper_engine.py # faster-whisper engine (English / Thai-English mixed)
+│   ├── asr_engine.py    # Typhoon ASR model singleton wrapper (NeMo) with idle-unload
+│   ├── whisper_engine.py # faster-whisper engine (English / Thai-English mixed) with idle-unload
 │   ├── engine_router.py # Language dispatcher (th -> Typhoon, en/auto -> Whisper)
 │   ├── audio_utils.py   # FFmpeg extract/split, disk-space check, safe_delete helpers
 │   ├── job_worker.py    # Async long-form transcription pipeline (chunking + GPU loop)
 │   ├── run_job.py       # Subprocess entrypoint for isolated job workers
 │   ├── templates/       # HTML pages (index, upload, realtime, media, jobs)
-│   └── static/          # CSS + JS (upload.js, realtime.js, media.js, jobs.js)
+│   └── static/          # CSS + JS (upload.js, realtime.js, media.js, jobs.js, model_status.js, settings.js)
 ├── model/               # Model weights (typhoon-asr-realtime.nemo, git-ignored)
 ├── data/                # SQLite DB (jobs.db) — optional, baked empty into Docker image
 ├── Dockerfile           # GPU image (CUDA 12.1, PyTorch)
@@ -98,8 +98,26 @@ DEVICE=cpu uvicorn app.main:app --host 0.0.0.0 --port 8830
 | `MAX_CHUNK_DURATION_SEC`    | `60.0`                            | Max chunk duration (hard cut fallback)            |
 | `CLEANUP_RETENTION_HOURS`   | `24`                              | Job retention before periodic cleanup             |
 | `PYTORCH_CUDA_ALLOC_CONF`   | `expandable_segments:True`        | PyTorch CUDA allocator config                     |
+| `MODEL_LOAD_MODE`           | `always`                          | Model VRAM residency mode: `always` / `idle` (seed value only, see below) |
+| `MODEL_IDLE_TIMEOUT_SEC`    | `900`                             | Seconds of inactivity before unloading models in `idle` mode (seed value only) |
 
 Copy `.env.example` to `.env` to customize.
+
+## Model VRAM Residency Mode
+
+The service can control how long the ASR models (Typhoon + Whisper) stay loaded in GPU memory:
+
+- **`always` (default)** — models stay resident in VRAM once loaded (warm). Original behavior.
+- **`idle`** — models are unloaded from VRAM after `MODEL_IDLE_TIMEOUT_SEC` of inactivity, then reload on demand (first request after idle pays a cold-start cost of ~10–60s).
+
+The mode and idle timeout are stored in the SQLite `settings` table. On **first boot** the values are seeded from the environment (`MODEL_LOAD_MODE` / `MODEL_IDLE_TIMEOUT_SEC`). After that the **DB is the source of truth** — you can change the mode at runtime without restarting:
+
+- **Dashboard homepage** (`/`): "ตั้งค่าโมเดล (VRAM)" card — select mode + idle timeout, save.
+- **API**: `GET` / `PUT /v1/settings/model` (auth required).
+
+Every page header shows a live status badge: 🟢 model on VRAM / 🟡 loading / ⚪ idle (unloaded), plus the active mode — and pages show "กำลังโหลดโมเดลขึ้น VRAM..." progress when a cold load is triggered.
+
+> 💡 **Docker note:** with the default compose (DB volume not mounted), the settings DB lives inside the container — any mode change made via the UI is lost when the container is recreated, and the mode resets to the `.env` default. Enable `./data:/app/data` in docker-compose to persist the DB (and job history) across restarts.
 
 ## API
 
@@ -110,7 +128,9 @@ Copy `.env.example` to `.env` to customize.
 | GET    | `/realtime/stream`                                          | —    | Real-time mic stream page         |
 | GET    | `/media/transcribe`                                         | —    | Long-form video/audio transcribe  |
 | GET    | `/jobs/history`                                             | —    | Transcription history page        |
-| GET    | `/healthz`                                                  | —    | Health check                      |
+| GET    | `/healthz`                                                  | —    | Health check (+ model state / mode) |
+| GET    | `/v1/settings/model`                                        | ✅   | Get model VRAM mode + engine states |
+| PUT    | `/v1/settings/model`                                        | ✅   | Change model VRAM mode at runtime   |
 | POST   | `/v1/audio/transcribe`                                      | ✅   | Transcribe audio file             |
 | POST   | `/v1/media/transcribe/jobs`                                 | ✅   | Create long-form job (202, async) |
 | GET    | `/v1/media/transcribe/jobs`                                 | ✅   | List jobs                         |
@@ -159,6 +179,12 @@ curl http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID> \
 
 # Export SRT
 curl -o subtitle.srt "http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID>/export/srt?api_key=change-me-in-production"
+
+# Switch model to 'idle' mode (unload VRAM after 10 min of inactivity)
+curl -X PUT http://localhost:8830/v1/settings/model \
+  -H "x-api-key: change-me-in-production" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"idle","idle_timeout_sec":600}'
 ```
 
 `language` รับค่าได้ 3 แบบ:
@@ -203,7 +229,7 @@ job_worker.py (isolated subprocess)
 No formal test suite. Manual verification via:
 
 - Dashboard: `http://localhost:8830/`
-- Syntax check: `python -m py_compile app/main.py app/db.py app/config.py app/audio_utils.py`
+- Syntax check: `python -m py_compile app/main.py app/db.py app/config.py app/audio_utils.py app/asr_engine.py app/whisper_engine.py app/engine_router.py app/schemas.py app/job_worker.py`
 - cURL examples above
 
 ## Model

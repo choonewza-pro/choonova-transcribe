@@ -2,6 +2,7 @@ import os
 import time
 import tempfile
 import logging
+import threading
 from typing import Dict, Any, Optional
 import torch
 import librosa
@@ -26,7 +27,27 @@ class TyphoonASREngine:
         self.device = DEVICE
         self.model_path = MODEL_PATH
         self._is_loaded = False
+        self._is_loading = False
         self._model = None
+        # Idle-unload bookkeeping (monotonic clock, survives clock changes).
+        self._last_used = 0.0
+        self._in_flight = 0
+        # RLock so the recursive transcribe_file (auto-chunking) can re-enter.
+        self._lifecycle_lock = threading.RLock()
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._is_loaded and self._model is not None
+
+    def get_state(self) -> str:
+        """
+        Model residency state for UI/dashboard: 'loading' | 'loaded' | 'idle'.
+        """
+        if self._is_loading:
+            return "loading"
+        if self.is_loaded:
+            return "loaded"
+        return "idle"
 
     def load_model(self):
         if self._is_loaded and self._model is not None:
@@ -34,6 +55,7 @@ class TyphoonASREngine:
 
         logger.info(f"🌪️ Loading Typhoon ASR model on device: {self.device.upper()}...")
         start_time = time.time()
+        self._is_loading = True
 
         try:
             import nemo.collections.asr as nemo_asr
@@ -67,6 +89,8 @@ class TyphoonASREngine:
             except Exception as ex:
                 logger.error(f"Fallback typhoon_asr failed: {ex}")
                 raise e
+        finally:
+            self._is_loading = False
 
     def clear_cuda_cache(self) -> None:
         """
@@ -116,9 +140,41 @@ class TyphoonASREngine:
         Force re-initialization of the model on the next transcribe call.
         Used as a last-resort recovery when a CUDA driver error leaves the model context unusable.
         """
-        self._model = None
-        self._is_loaded = False
+        with self._lifecycle_lock:
+            self._model = None
+            self._is_loaded = False
+            self._is_loading = False
         logger.warning("Typhoon ASR model reset; will reload on next transcribe.")
+
+    def unload_if_idle(self, timeout_sec: float) -> bool:
+        """
+        Unload the model from VRAM if it has been idle longer than timeout_sec.
+        Only safe when no transcribe is currently in-flight; guarded by the
+        lifecycle lock. Returns True if the model was unloaded.
+        """
+        with self._lifecycle_lock:
+            if not self.is_loaded:
+                return False
+            if self._in_flight > 0:
+                return False
+            idle_sec = time.monotonic() - self._last_used
+            if idle_sec < timeout_sec:
+                return False
+            self._model = None
+            self._is_loaded = False
+            self._is_loading = False
+        # Model fully dropped -> CUDA graphs destroyed, so empty_cache is safe here
+        # (unlike between consecutive transcribe() calls, see clear_cuda_cache docstring).
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception as e:
+            logger.warning(f"empty_cache after idle unload failed: {e}")
+        logger.info(
+            f"Typhoon ASR model unloaded after {idle_sec:.0f}s idle "
+            f"(timeout {timeout_sec:.0f}s); VRAM released"
+        )
+        return True
 
     def prepare_audio(
         self, input_path: str, target_sr: int = 16000
@@ -175,8 +231,12 @@ class TyphoonASREngine:
         Transcribes an audio file path using Typhoon ASR model.
         Automatically chunks long audio exceeding MAX_CHUNK_DURATION_SEC.
         """
-        if not self._is_loaded or self._model is None:
-            self.load_model()
+        with self._lifecycle_lock:
+            self._last_used = time.monotonic()
+            self._in_flight += 1
+            if not self._is_loaded or self._model is None:
+                self.load_model()
+            model = self._model
 
         start_time = time.time()
         processed_file, audio_duration = self.prepare_audio(audio_path)
@@ -234,9 +294,9 @@ class TyphoonASREngine:
                 finally:
                     safe_delete_dir(chunks_dir)
 
-            if self._model is not None:
+            if model is not None:
                 with torch.inference_mode():
-                    transcriptions = self._model.transcribe(
+                    transcriptions = model.transcribe(
                         audio=[processed_file], return_hypotheses=False
                     )
                 # Surface any deferred device-side CUDA fault NOW as a catchable
@@ -289,6 +349,8 @@ class TyphoonASREngine:
         finally:
             if os.path.exists(processed_file):
                 os.remove(processed_file)
+            with self._lifecycle_lock:
+                self._in_flight -= 1
             self.clear_cuda_cache()
 
 

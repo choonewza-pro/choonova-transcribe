@@ -10,6 +10,8 @@ from app.config import (
     CLEANUP_RETENTION_HOURS,
     TARGET_CHUNK_DURATION_SEC,
     MAX_CHUNK_DURATION_SEC,
+    MODEL_LOAD_MODE_DEFAULT,
+    MODEL_IDLE_TIMEOUT_SEC_DEFAULT,
 )
 
 logger = logging.getLogger("typhoon-asr-db")
@@ -73,6 +75,24 @@ def init_db() -> None:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
         """)
+        # Runtime settings key-value store (e.g. MODEL_LOAD_MODE). Seeded from
+        # env defaults on first boot only; afterwards the DB is the source of
+        # truth and can be changed at runtime via the dashboard / API.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        cursor.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("MODEL_LOAD_MODE", MODEL_LOAD_MODE_DEFAULT),
+        )
+        cursor.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("MODEL_IDLE_TIMEOUT_SEC", str(MODEL_IDLE_TIMEOUT_SEC_DEFAULT)),
+        )
         conn.commit()
     logger.info(f"SQLite DB initialized at {JOBS_DB_PATH}")
 
@@ -271,3 +291,43 @@ def recover_zombie_jobs() -> int:
                 f"Recovered {recovered_count} zombie jobs stuck in processing state"
             )
         return recovered_count
+
+
+def get_setting(key: str, default: Optional[str] = None) -> Optional[str]:
+    """
+    Read a runtime setting from the `settings` table. Falls back to the
+    provided default (typically the env-derived default) if the key is absent.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        if row:
+            return row["value"]
+    return default
+
+
+def set_setting(key: str, value: str) -> None:
+    """
+    Upsert a runtime setting into the `settings` table.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+            """,
+            (key, value),
+        )
+        conn.commit()
+
+
+def get_all_settings() -> Dict[str, str]:
+    """
+    Return all runtime settings as a dict.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT key, value FROM settings")
+        return {r["key"]: r["value"] for r in cursor.fetchall()}
