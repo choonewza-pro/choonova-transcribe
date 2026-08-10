@@ -57,7 +57,12 @@ from app.db import (
     update_job_status,
 )
 from app.audio_utils import check_disk_space, safe_delete_dir
-from app.job_worker import process_transcription_job
+from app.cuda_utils import is_cuda_error, is_allocator_corruption
+from app.job_worker import (
+    process_transcription_job,
+    CUDA_RETRY_ATTEMPTS,
+    CUDA_RETRY_BACKOFF_SEC,
+)
 from app.asr_engine import engine
 
 logging.basicConfig(level=logging.INFO)
@@ -545,15 +550,66 @@ async def websocket_stream(websocket: WebSocket):
     async def _transcribe_bytes_async(b_data: bytes) -> str:
         if len(b_data) < 4096:
             return ""
-        try:
-            loop = asyncio.get_event_loop()
-            res = await loop.run_in_executor(
-                None, engine.transcribe_bytes, b_data, "stream.webm"
-            )
-            return res.get("text", "")
-        except Exception as ex:
-            logger.debug(f"Transcribe frame error (handled safely): {ex}")
-            return ""
+        loop = asyncio.get_event_loop()
+        # Two-tier CUDA recovery mirroring the long-form job worker:
+        # - Tier 1 (transient driver error): backoff + clear_cuda_cache() + retry.
+        # - Tier 2 (allocator corruption / illegal memory access): full CUDA
+        #   device reset (cudaDeviceReset) + model reload, then one final retry.
+        # Any residual failure degrades gracefully to "" so the WebSocket keeps
+        # serving instead of letting a CUDA fault kill the whole process.
+        for attempt in range(1, CUDA_RETRY_ATTEMPTS + 1):
+            try:
+                res = await loop.run_in_executor(
+                    None, engine.transcribe_bytes, b_data, "stream.webm"
+                )
+                return res.get("text", "")
+            except Exception as ex:
+                if not is_cuda_error(ex):
+                    logger.debug(f"Transcribe frame error (handled safely): {ex}")
+                    return ""
+                if is_allocator_corruption(ex):
+                    logger.warning(
+                        f"Realtime transcribe hit CUDA allocator corruption: {ex}; "
+                        "performing full CUDA device reset + model reload before one final retry."
+                    )
+                    await loop.run_in_executor(None, engine.cuda_device_reset)
+                    await loop.run_in_executor(None, engine.reset)
+                    try:
+                        res = await loop.run_in_executor(
+                            None, engine.transcribe_bytes, b_data, "stream.webm"
+                        )
+                        return res.get("text", "")
+                    except Exception as ex2:
+                        logger.debug(
+                            f"Realtime transcribe retry failed (handled safely): {ex2}"
+                        )
+                        return ""
+                if attempt == CUDA_RETRY_ATTEMPTS:
+                    logger.warning(
+                        f"Realtime transcribe failed {attempt} attempts with CUDA error: {ex}; "
+                        "reloading model and retrying once more"
+                    )
+                    await loop.run_in_executor(None, engine.reset)
+                    await loop.run_in_executor(None, engine.clear_cuda_cache)
+                    try:
+                        res = await loop.run_in_executor(
+                            None, engine.transcribe_bytes, b_data, "stream.webm"
+                        )
+                        return res.get("text", "")
+                    except Exception as ex2:
+                        logger.debug(
+                            f"Realtime transcribe retry failed (handled safely): {ex2}"
+                        )
+                        return ""
+                backoff = CUDA_RETRY_BACKOFF_SEC * attempt
+                logger.warning(
+                    f"Realtime transcribe CUDA error "
+                    f"(attempt {attempt}/{CUDA_RETRY_ATTEMPTS}): {ex}; "
+                    f"retrying in {backoff:.0f}s"
+                )
+                await loop.run_in_executor(None, engine.clear_cuda_cache)
+                await asyncio.sleep(backoff)
+        return ""
 
     try:
         while True:

@@ -23,7 +23,18 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 # Download model weights into Docker image layer (Option 1: Docker Build-time Caching)
-RUN python3 -c "from huggingface_hub import hf_hub_download; hf_hub_download(repo_id='typhoon-ai/typhoon-asr-realtime', filename='typhoon-asr-realtime.nemo', local_dir='/app/model')"
+RUN python3 -c "\
+from huggingface_hub import hf_hub_download; \
+import os; \
+p = hf_hub_download(repo_id='typhoon-ai/typhoon-asr-realtime', filename='typhoon-asr-realtime.nemo', local_dir='/app/model'); \
+size = os.path.getsize(p) / (1024**3); \
+print(); \
+print('=' * 70); \
+print('  ✅ MODEL DOWNLOAD COMPLETE — Typhoon ASR Realtime'); \
+print(f'  📁 {p}'); \
+print(f'  💾 {size:.2f} GB'); \
+print('=' * 70); \
+print()"
 
 COPY app /app/app
 

@@ -12,3 +12,6 @@ model/*.nemo
 .agents/skills/
 skills-lock.json
 .serena/
+
+# --- Typhoon ASR temp job files (mapped to host via docker-compose) ---
+services/typhoon-asr-service/data/jobs/

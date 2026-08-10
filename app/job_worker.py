@@ -19,6 +19,7 @@ from app.audio_utils import (
     safe_delete_dir,
     get_audio_duration_ffmpeg,
 )
+from app.cuda_utils import is_cuda_error, is_allocator_corruption
 from app.asr_engine import engine
 
 logger = logging.getLogger("typhoon-asr-job-worker")
@@ -48,38 +49,6 @@ CUDA_RESET_BETWEEN_CHUNKS = os.getenv("CUDA_RESET_BETWEEN_CHUNKS", "true").lower
     "true",
     "yes",
 )
-_CUDA_ERROR_KEYWORDS = (
-    "cuda",
-    "device not ready",
-    "driver error",
-    "nvidia",
-    "cublas",
-    "cudnn",
-    "out of memory",
-    "illegal memory access",
-    "device-side assert",
-)
-# PyTorch CUDACachingAllocator internal-state corruption (stale handle in the
-# allocator's tracking map) cannot be fixed with empty_cache(); it requires a
-# full CUDA context rebuild via cudaDeviceReset().
-_ALLOCATOR_CORRUPTION_KEYWORDS = (
-    "internal assert",
-    "cudacachingallocator",
-    "handles_",
-    "allocator",
-    "illegal memory access",
-    "device-side assert",
-)
-
-
-def _is_cuda_error(exc: Exception) -> bool:
-    msg = str(exc).lower()
-    return any(k in msg for k in _CUDA_ERROR_KEYWORDS)
-
-
-def _is_allocator_corruption(exc: Exception) -> bool:
-    msg = str(exc).lower()
-    return any(k in msg for k in _ALLOCATOR_CORRUPTION_KEYWORDS)
 
 
 async def transcribe_chunk_with_retry(
@@ -103,9 +72,9 @@ async def transcribe_chunk_with_retry(
                 None, engine.transcribe_file, chunk_path, with_timestamps, True
             )
         except Exception as e:
-            if not _is_cuda_error(e):
+            if not is_cuda_error(e):
                 raise
-            if _is_allocator_corruption(e) and CUDA_RESET_ON_ALLOCATOR_ERROR:
+            if is_allocator_corruption(e) and CUDA_RESET_ON_ALLOCATOR_ERROR:
                 # Allocator corruption: skip incremental retries, nuke context.
                 logger.warning(
                     f"Chunk {chunk_idx} hit CUDA allocator corruption: {e}. "
@@ -116,7 +85,7 @@ async def transcribe_chunk_with_retry(
                 return await loop.run_in_executor(
                     None, engine.transcribe_file, chunk_path, with_timestamps, True
                 )
-            if _is_allocator_corruption(e):
+            if is_allocator_corruption(e):
                 # Allocator corruption but device reset disabled: keep reloading
                 # the model so the next chunk starts from a fresh context.
                 logger.warning(

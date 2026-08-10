@@ -72,13 +72,19 @@ class TyphoonASREngine:
         """
         Synchronize and release cached CUDA memory.
         Used to recover from transient CUDA driver errors between chunk transcriptions.
+
+        NOTE: torch.cuda.empty_cache() must NOT be called here. Calling it between
+        consecutive NeMo model.transcribe() calls is a documented crash trigger
+        ("CUDA error: an illegal memory access" on the NEXT transcribe) because the
+        FastConformer-Transducer decoder uses CUDA graphs that still reference the
+        freed memory (NVIDIA-NeMo/NeMo issue #14727). PYTORCH_CUDA_ALLOC_CONF with
+        expandable_segments:True already returns VRAM to the OS without it.
         """
         try:
             import gc
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
-                torch.cuda.empty_cache()
         except Exception as e:
             logger.warning(f"Failed to clear CUDA cache: {e}")
 
@@ -233,6 +239,13 @@ class TyphoonASREngine:
                     transcriptions = self._model.transcribe(
                         audio=[processed_file], return_hypotheses=False
                     )
+                # Surface any deferred device-side CUDA fault NOW as a catchable
+                # Python exception in this request thread, instead of letting it
+                # fire asynchronously during a later tensor destructor (which
+                # escalates to an uncatchable C++ std::terminate that kills the
+                # whole process).
+                if self.device == "cuda" and torch.cuda.is_available():
+                    torch.cuda.synchronize()
                 processing_time = time.time() - start_time
 
                 transcription = ""
