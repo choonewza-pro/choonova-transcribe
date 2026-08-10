@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Typhoon ASR Realtime - Dashboard Home</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <header>
+    <a href="/" class="logo">
+      <span>🌀 Typhoon ASR</span>
+      <span class="logo-badge">Real-time Thai ASR</span>
+    </a>
+    <nav>
+      <a href="/" class="nav-link active">หน้าแรก</a>
+      <a href="/test/upload" class="nav-link">ทดสอบไฟล์เสียง</a>
+      <a href="/test/realtime" class="nav-link">ทดสอบ Real-time ไมค์</a>
+      <a href="/test/media" class="nav-link">ถอดความวีดีโอ (1GB+)</a>
+      <a href="/test/jobs" class="nav-link">ประวัติการถอดความ</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="glass-card">
+      <h1>Typhoon ASR Realtime API Service</h1>
+      <p class="subtitle">
+        ระบบแปลงเสียงพูดภาษาไทยเป็นข้อความ (Speech-to-Text) ความเร็วสูงพิเศษ ออกแบบมาสำหรับรันบน GPU Local ด้วยสถาปัตยกรรม <strong>FastConformer-Transducer (114M Parameters)</strong> จาก SCB-10X / OpenTyphoon
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+        <div style="background: rgba(255,255,255,0.03); padding: 1.2rem; border-radius: 10px; border: 1px solid var(--card-border);">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">ความเร็วประมวลผล (RTFx)</div>
+          <div style="font-size: 1.6rem; font-weight: 700; color: var(--accent-cyan);">4,000x+ RTFx</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.03); padding: 1.2rem; border-radius: 10px; border: 1px solid var(--card-border);">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">อัตราความผิดพลาด (CER)</div>
+          <div style="font-size: 1.6rem; font-weight: 700; color: var(--accent-blue);">0.0984 (90.1%+)</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.03); padding: 1.2rem; border-radius: 10px; border: 1px solid var(--card-border);">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">ขนาดโมเดล / VRAM</div>
+          <div style="font-size: 1.6rem; font-weight: 700; color: #a855f7;">114M (&lt; 1GB VRAM)</div>
+        </div>
+      </div>
+
+      <h2 style="font-size: 1.4rem; margin-bottom: 1rem;">เลือกโหมดทดสอบระบบ (Interactive Testing)</h2>
+      
+      <div class="nav-cards" style="margin-bottom: 2rem;">
+        <a href="/test/upload" class="card-button">
+          <div class="icon">📁</div>
+          <h3>1. ทดสอบอัปโหลดไฟล์เสียง</h3>
+          <p>ทดสอบส่งไฟล์เสียง WAV, MP3, M4A, OGG หรือ FLAC เพื่อแปลงเป็นข้อความ พร้อมตัวเลือกดู Word Timestamps</p>
+        </a>
+
+        <a href="/test/realtime" class="card-button">
+          <div class="icon">🎙️</div>
+          <h3>2. ทดสอบ Real-time พูดผ่านไมค์</h3>
+          <p>กดเปิดไมโครโฟน แล้วลองพูดภาษาไทย ระบบจะส่ง Stream ผ่าน WebSocket และถอดความแสดงสดบนหน้าจอทันที</p>
+        </a>
+      </div>
+
+      <!-- Model Capabilities & Specifications Table -->
+      <div style="margin: 2.5rem 0; padding: 1.5rem 1.75rem; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--card-border); border-radius: 16px; backdrop-filter: blur(10px);">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+          <span style="font-size: 1.8rem;">📊</span>
+          <div>
+            <h2 style="font-size: 1.35rem; color: var(--accent-cyan); margin: 0;">ขีดความสามารถและข้อกำหนดของโมเดล (Model Capabilities & Specifications)</h2>
+            <p style="color: var(--text-muted); font-size: 0.88rem; margin: 0.2rem 0 0 0;">สรุปสเปกการรองรับขนาดไฟล์เสียง อัตราสุ่มตัวอย่างเสียง และโหมดการประมวลผล</p>
+          </div>
+        </div>
+
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 0.95rem; margin-top: 0.75rem;">
+            <thead>
+              <tr style="background: rgba(0, 242, 254, 0.08); color: var(--accent-cyan);">
+                <th style="padding: 0.9rem 1.2rem; border-top-left-radius: 8px; border-bottom: 1px solid var(--card-border); width: 35%;">รายการสเปก (Specification)</th>
+                <th style="padding: 0.9rem 1.2rem; border-top-right-radius: 8px; border-bottom: 1px solid var(--card-border);">ขีดความสามารถและคำแนะนำ (Capabilities & Recommendations)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.05);">📦 ขนาดไฟล์สูงสุด (Max Payload)</td>
+                <td style="padding: 0.9rem 1.2rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05);">
+                  <strong>50 MB</strong> ต่อการอัปโหลด 1 ครั้งผ่าน REST API (<code>POST /v1/transcribe</code>)
+                </td>
+              </tr>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.05);">⏱️ ความยาวไฟล์เสียงเดี่ยว (Max Duration)</td>
+                <td style="padding: 0.9rem 1.2rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05);">
+                  <strong>15 - 30 นาที</strong> ต่อไฟล์ (แนะนำเพื่อความเร็วในการประมวลผลบน GPU)
+                </td>
+              </tr>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.05);">♾️ ความยาวสตรีมมิ่ง (WebSocket Limit)</td>
+                <td style="padding: 0.9rem 1.2rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05);">
+                  <strong style="color: var(--success);">ไม่จำกัดความยาว (Unlimited)</strong> อัดสตรีมสดผ่าน <code>WS /v1/stream</code> ได้ต่อเนื่องตลอดเวลา
+                </td>
+              </tr>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.05);">🎛️ ความถี่สัญญาณเสียง (Sample Rate)</td>
+                <td style="padding: 0.9rem 1.2rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05);">
+                  แนะนำ <strong>16,000 Hz (16kHz)</strong>, 16-bit Mono <span style="color: var(--text-muted); font-size: 0.85rem;">(ระบบมี Auto-Resampling หากเป็น 44.1kHz / 48kHz)</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff;">🎵 นามสกุลไฟล์เสียงที่รองรับ (Formats)</td>
+                <td style="padding: 0.9rem 1.2rem; color: var(--text-main);">
+                  <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">WAV</span>
+                  <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">MP3</span>
+                  <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">M4A</span>
+                  <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">OGG</span>
+                  <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">FLAC</span>
+                  <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">AAC</span>
+                  <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">WEBM</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- API Endpoints Documentation -->
+      <hr style="border: 0; border-top: 1px solid var(--card-border); margin: 2rem 0;">
+
+      <h2 style="font-size: 1.8rem; margin-bottom: 0.5rem; color: var(--accent-cyan);">📚 วิธีการใช้งาน API Endpoints ทั้งหมด</h2>
+      <p style="color: var(--text-muted); margin-bottom: 2rem;">เอกสารประกอบการเชื่อมต่อบริการ Typhoon ASR สำหรับนักพัฒนา (Developer API Reference)</p>
+
+      <!-- Authentication Rules -->
+      <div style="background: rgba(0, 242, 254, 0.05); border: 1px solid rgba(0, 242, 254, 0.2); padding: 1.2rem; border-radius: 10px; margin-bottom: 2rem;">
+        <h4 style="color: var(--accent-cyan); margin-bottom: 0.5rem;">🔑 การยืนยันตัวตน (Authentication)</h4>
+        <p style="font-size: 0.95rem; color: var(--text-main); line-height: 1.6;">
+          บริการนี้ใช้ API Key ร่วมกับระบบ ChooNova AI โดยส่ง Header อย่างใดอย่างหนึ่งดังนี้:<br>
+          • <code>Authorization: Bearer &lt;GATEWAY_API_KEY&gt;</code><br>
+          • <code>x-api-key: &lt;GATEWAY_API_KEY&gt;</code><br>
+          <span style="color: var(--text-muted); font-size: 0.85rem;">(ค่าเริ่มต้นช่วงพัฒนา: <code>change-me-in-production</code>)</span>
+        </p>
+      </div>
+
+      <!-- Endpoint 1: Healthz -->
+      <div style="margin-bottom: 2.5rem;">
+        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
+          <span class="endpoint-badge badge-get">GET</span> <code>/healthz</code>
+        </h3>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+          ตรวจสอบสถานะการทำงานของบริการ (Health Check) และอุปกรณ์การประมวลผล (CUDA/CPU)
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">cURL Request</div>
+          <pre>curl -X GET http://localhost:8830/healthz</pre>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">Response JSON (200 OK)</div>
+          <pre>{
+  "status": "ok",
+  "service": "typhoon-asr-service",
+  "device": "cuda"
+}</pre>
+        </div>
+      </div>
+
+      <!-- Endpoint 2: Transcribe File -->
+      <div style="margin-bottom: 2.5rem;">
+        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
+          <span class="endpoint-badge badge-post">POST</span> <code>/v1/transcribe</code>
+        </h3>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+          แปลงไฟล์เสียงภาษาไทย (WAV, MP3, M4A, OGG, FLAC) เป็นข้อความ พร้อมสถิติเวลาและ Word Timestamps
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">cURL (Multipart Upload)</div>
+          <pre>curl -X POST http://localhost:8830/v1/transcribe \
+  -H "x-api-key: change-me-in-production" \
+  -F "file=@/path/to/sample_audio.wav" \
+  -F "with_timestamps=true"</pre>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">Python (requests)</div>
+          <pre>import requests
+
+url = "http://localhost:8830/v1/transcribe"
+headers = {"x-api-key": "change-me-in-production"}
+
+with open("sample_audio.wav", "rb") as f:
+    files = {"file": f}
+    data = {"with_timestamps": "true"}
+    response = requests.post(url, headers=headers, files=files, data=data)
+
+print(response.json())</pre>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">JavaScript (Fetch API)</div>
+          <pre>const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+formData.append('with_timestamps', 'true');
+
+const response = await fetch('http://localhost:8830/v1/transcribe', {
+  method: 'POST',
+  headers: {
+    'x-api-key': 'change-me-in-production'
+  },
+  body: formData
+});
+
+const result = await response.json();
+console.log(result);</pre>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">Response JSON (200 OK)</div>
+          <pre>{
+  "status": "success",
+  "text": "สวัสดีครับ นี่คือการทดสอบแปลงเสียงพูดเป็นข้อความด้วยไต้ฝุ่นเอเอสอาร์",
+  "duration_seconds": 3.42,
+  "elapsed_seconds": 0.082,
+  "rtf": 0.024,
+  "timestamps": [
+    { "word": "สวัสดีครับ", "start": 0.0, "end": 0.85 },
+    { "word": "นี่คือการทดสอบ", "start": 0.86, "end": 1.75 },
+    { "word": "แปลงเสียงพูดเป็นข้อความ", "start": 1.76, "end": 2.8 },
+    { "word": "ด้วยไต้ฝุ่นเอเอสอาร์", "start": 2.81, "end": 3.42 }
+  ]
+}</pre>
+        </div>
+      </div>
+
+      <!-- Endpoint 3: WebSocket Streaming -->
+      <div style="margin-bottom: 1.5rem;">
+        <h3 style="display: flex; align-items: center; font-size: 1.3rem; margin-bottom: 0.5rem;">
+          <span class="endpoint-badge badge-ws">WS</span> <code>/v1/stream</code>
+        </h3>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+          สตรีมไฟล์เสียงสดจากไมโครโฟนผ่าน WebSocket เพื่อถอดความเป็นข้อความสดแบบ Real-time
+        </p>
+
+        <div class="code-container">
+          <div class="code-header">JavaScript Browser WebSocket Example</div>
+          <pre>const socket = new WebSocket("ws://localhost:8830/v1/stream");
+
+socket.onopen = () => {
+  console.log("Connected to Typhoon Realtime WebSocket");
+  
+  // Stream audio chunks (WebM/Opus or WAV PCM bytes)
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
+      socket.send(event.data);
+    }
+  };
+  mediaRecorder.start(500); // Send chunk every 500ms
+};
+
+socket.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log("Live Transcript:", data.text);
+};</pre>
+        </div>
+
+        <div class="code-container">
+          <div class="code-header">WebSocket Server Frame Output (JSON)</div>
+          <pre>{
+  "type": "partial",
+  "text": "กำลังทดสอบพูดภาษาไทย...",
+  "is_final": false
+}</pre>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <footer>
+    Choonova AI Stack • Typhoon ASR Service running on Port 8830
+  </footer>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ทดสอบ Real-time ไมโครโฟน - Typhoon ASR</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <header>
+    <a href="/" class="logo">
+      <span>🌀 Typhoon ASR</span>
+      <span class="logo-badge">Real-time Mic Tester</span>
+    </a>
+    <nav>
+      <a href="/" class="nav-link">หน้าแรก</a>
+      <a href="/test/upload" class="nav-link">ทดสอบไฟล์เสียง</a>
+      <a href="/test/realtime" class="nav-link active">ทดสอบ Real-time ไมค์</a>
+      <a href="/test/media" class="nav-link">ถอดความวีดีโอ (1GB+)</a>
+      <a href="/test/jobs" class="nav-link">ประวัติการถอดความ</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="glass-card" style="text-align: center;">
+      <h1>🎙️ ทดสอบพูดผ่านไมโครโฟนแบบ Real-time</h1>
+      <p class="subtitle" style="margin-bottom: 1.5rem;">เลือกไมโครโฟน กดปุ่มไมค์เพื่อเริ่มพูด ระบบจะสตรีมเสียงผ่าน WebSocket และถอดความเป็นข้อความสดทันที</p>
+
+      <!-- API Key Settings Card -->
+      <div class="api-key-card" style="text-align: left;">
+        <div class="api-key-header">
+          <div class="api-key-title">
+            🔑 <span>API Key Settings</span>
+          </div>
+          <span class="key-badge" id="keySavedBadge">✓ Key active in browser</span>
+        </div>
+        <div>
+          <label class="api-key-label">GATEWAY_API_KEY</label>
+          <div class="api-key-input-group">
+            <div class="input-with-eye">
+              <input type="password" id="apiKeyInput" placeholder="Enter API key..." />
+              <button type="button" class="eye-btn" id="toggleApiKeyBtn" title="Show/Hide Key">👁️</button>
+            </div>
+            <button type="button" class="btn-save-key" id="saveApiKeyBtn">Save Key</button>
+          </div>
+          <div class="api-key-footer">
+            <span>Saved securely in browser localStorage</span>
+            <a class="clear-key-link" id="clearApiKeyLink">Clear Key</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Microphone Permission Alert Banner -->
+      <div id="permissionNotice" style="display: none; max-width: 650px; margin: 0 auto 1.5rem auto; padding: 1rem 1.25rem; border-radius: 12px; font-size: 0.95rem; line-height: 1.5; text-align: left; backdrop-filter: blur(10px);">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+          <div id="permissionText">
+            ⚠️ <strong>กรุณากดยินยอมการเข้าถึงไมโครโฟน:</strong> เบราว์เซอร์ต้องการสิทธิ์การใช้ไมโครโฟนเพื่ออัดเสียงและสตรีมสด
+          </div>
+          <button id="grantPermBtn" class="btn-primary" style="padding: 0.5rem 1rem; font-size: 0.85rem; white-space: nowrap;">
+            🔑 อนุญาตไมค์
+          </button>
+        </div>
+      </div>
+
+      <!-- Microphone Device Selection Dropdown -->
+      <div style="margin-bottom: 1rem; display: flex; justify-content: center; align-items: center; gap: 0.75rem;">
+        <label for="micSelect" style="font-weight: 500; color: var(--accent-cyan);">🎤 เลือกอุปกรณ์ไมโครโฟน:</label>
+        <select id="micSelect" class="form-select">
+          <option value="">🎙️ ไมโครโฟนเริ่มต้น (System Default Mic)</option>
+        </select>
+        <button id="refreshMicsBtn" class="nav-link" style="border: 1px solid var(--card-border); cursor: pointer; padding: 0.7rem 1rem;" title="รีเฟรชรายชื่อไมค์">
+          🔄
+        </button>
+      </div>
+
+      <button id="micBtn" class="btn-mic">
+        <span id="micIcon">🎙️</span>
+      </button>
+
+      <div id="micStatus" style="font-size: 1.1rem; font-weight: 600; color: var(--text-muted); margin-bottom: 1rem;">
+        คลิกปุ่มด้านบนเพื่อเริ่มฟังเสียงพูด
+      </div>
+
+      <!-- Live Audio Waveform Animation Canvas -->
+      <div style="margin: 0 auto 1.5rem auto; max-width: 600px;">
+        <canvas id="visualizer" width="600" height="70" style="width: 100%; height: 70px; border-radius: 12px; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--card-border);"></canvas>
+      </div>
+
+      <div style="max-width: 800px; margin: 0 auto; text-align: left;">
+        <h3 style="font-size: 1.2rem; margin-bottom: 0.5rem;">ข้อความสด (Live Real-time Transcript):</h3>
+        <div class="result-box" id="liveTranscript" style="min-height: 180px; font-size: 1.2rem;">
+          <span style="color: var(--text-muted); font-style: italic;">ข้อความจะปรากฏขึ้นที่นี่เมื่อคุณเริ่มพูด...</span>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
+          <div style="display: flex; gap: 0.5rem;">
+            <button id="copyLiveBtn" class="nav-link" style="border: 1px solid var(--card-border); cursor: pointer;">
+              📋 คัดลอกข้อความ
+            </button>
+            <button id="clearBtn" class="nav-link" style="border: 1px solid var(--card-border); cursor: pointer;">
+              🗑️ ล้างข้อความ
+            </button>
+          </div>
+          <div id="wsConnectionBadge" class="stats-badge" style="color: var(--text-muted);">
+            🔌 สถานะการเชื่อมต่อ: Disconnected
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/js/realtime.js"></script>
+</body>
+</html>

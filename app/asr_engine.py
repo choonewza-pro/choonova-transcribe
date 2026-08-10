@@ -1,0 +1,304 @@
+import os
+import time
+import tempfile
+import logging
+from typing import Dict, Any, Optional
+import torch
+import librosa
+import soundfile as sf
+from app.config import (
+    MODEL_PATH,
+    DEVICE,
+    TARGET_CHUNK_DURATION_SEC,
+    MAX_CHUNK_DURATION_SEC,
+)
+
+logger = logging.getLogger("typhoon-asr-engine")
+logging.basicConfig(level=logging.INFO)
+
+
+class TyphoonASREngine:
+    """
+    Singleton wrapper for Typhoon ASR inference model matching the official SCB-10X implementation.
+    """
+
+    def __init__(self):
+        self.device = DEVICE
+        self.model_path = MODEL_PATH
+        self._is_loaded = False
+        self._model = None
+
+    def load_model(self):
+        if self._is_loaded and self._model is not None:
+            return
+
+        logger.info(f"🌪️ Loading Typhoon ASR model on device: {self.device.upper()}...")
+        start_time = time.time()
+
+        try:
+            import nemo.collections.asr as nemo_asr
+
+            # Check if local .nemo file exists, otherwise load from HuggingFace hub
+            if os.path.exists(self.model_path) and os.path.isfile(self.model_path):
+                logger.info(
+                    f"Restoring Typhoon model from local file: {self.model_path}"
+                )
+                self._model = nemo_asr.models.ASRModel.restore_from(
+                    restore_path=self.model_path, map_location=torch.device(self.device)
+                )
+            else:
+                model_name = "scb10x/typhoon-asr-realtime"
+                logger.info(f"Loading Typhoon model from HuggingFace Hub: {model_name}")
+                self._model = nemo_asr.models.ASRModel.from_pretrained(
+                    model_name=model_name, map_location=torch.device(self.device)
+                )
+
+            self._is_loaded = True
+            elapsed = time.time() - start_time
+            logger.info(f"✅ Typhoon ASR model loaded successfully in {elapsed:.2f}s.")
+        except Exception as e:
+            logger.error(f"❌ Failed to load Typhoon ASR model: {e}")
+            # Fallback to typhoon_asr package if available
+            try:
+                import typhoon_asr
+
+                self._is_loaded = True
+                logger.info("Using typhoon_asr package as fallback loader.")
+            except Exception as ex:
+                logger.error(f"Fallback typhoon_asr failed: {ex}")
+                raise e
+
+    def clear_cuda_cache(self) -> None:
+        """
+        Synchronize and release cached CUDA memory.
+        Used to recover from transient CUDA driver errors between chunk transcriptions.
+        """
+        try:
+            import gc
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+                torch.cuda.empty_cache()
+        except Exception as e:
+            logger.warning(f"Failed to clear CUDA cache: {e}")
+
+    def cuda_device_reset(self) -> None:
+        """
+        Fully destroy and rebuild the CUDA context for this process.
+
+        This is the only recovery that resets PyTorch's CUDACachingAllocator
+        internal state (e.g. after `!handles_.at(i) INTERNAL ASSERT FAILED at
+        CUDACachingAllocator.cpp` corruption from many back-to-back NeMo
+        transcribe() calls). It invalidates ALL CUDA tensors/streams/handles in
+        this process, so the model MUST be reloaded afterwards.
+        """
+        if not torch.cuda.is_available():
+            return
+        try:
+            logger.warning("Performing full CUDA device reset (cudaDeviceReset)...")
+            torch.cuda.cudart().cudaDeviceReset()
+        except Exception as e:
+            logger.warning(f"cudaDeviceReset raised: {e}")
+        try:
+            torch.cuda.init()
+        except Exception as e:
+            logger.warning(f"torch.cuda.init after device reset raised: {e}")
+        logger.warning("CUDA device reset complete.")
+
+    def reset(self) -> None:
+        """
+        Force re-initialization of the model on the next transcribe call.
+        Used as a last-resort recovery when a CUDA driver error leaves the model context unusable.
+        """
+        self._model = None
+        self._is_loaded = False
+        logger.warning("Typhoon ASR model reset; will reload on next transcribe.")
+
+    def prepare_audio(
+        self, input_path: str, target_sr: int = 16000
+    ) -> tuple[str, float]:
+        """
+        Prepares audio file matching developer's official prepare_audio logic:
+        1. Loads audio via librosa
+        2. Resamples to 16kHz
+        3. Normalizes peak amplitude
+        4. Writes processed WAV
+        """
+        y, sr = librosa.load(input_path, sr=None)
+        if y is None or len(y) == 0:
+            raise ValueError("Failed to load audio file or file is empty.")
+
+        duration = len(y) / float(sr)
+
+        if sr != target_sr:
+            y = librosa.resample(y, orig_sr=sr, target_sr=target_sr)
+
+        # Peak normalization
+        max_val = max(abs(y)) if len(y) > 0 else 1.0
+        y = y / (max_val + 1e-8)
+
+        processed_fd, processed_path = tempfile.mkstemp(
+            suffix=".wav", prefix="processed_"
+        )
+        os.close(processed_fd)
+
+        sf.write(processed_path, y, target_sr)
+        return processed_path, duration
+
+    def _extract_text(self, obj: Any) -> str:
+        """
+        Helper method to extract plain string text from NeMo Hypothesis or tuple objects.
+        """
+        if obj is None:
+            return ""
+        if isinstance(obj, str):
+            return obj
+        if hasattr(obj, "text"):
+            return str(obj.text)
+        if isinstance(obj, (list, tuple)) and len(obj) > 0:
+            return self._extract_text(obj[0])
+        return str(obj)
+
+    def transcribe_file(
+        self,
+        audio_path: str,
+        with_timestamps: bool = False,
+        is_chunk: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Transcribes an audio file path using Typhoon ASR model.
+        Automatically chunks long audio exceeding MAX_CHUNK_DURATION_SEC.
+        """
+        if not self._is_loaded or self._model is None:
+            self.load_model()
+
+        start_time = time.time()
+        processed_file, audio_duration = self.prepare_audio(audio_path)
+
+        try:
+            # Auto-chunk long audio to avoid PyTorch CUDA Caching Allocator memory assertion errors.
+            # Guarded by is_chunk flag to prevent infinite recursion.
+            if not is_chunk and audio_duration > MAX_CHUNK_DURATION_SEC:
+                logger.info(
+                    f"Audio duration ({audio_duration:.1f}s) exceeds max chunk limit ({MAX_CHUNK_DURATION_SEC}s). "
+                    f"Auto-chunking audio..."
+                )
+                from app.audio_utils import split_audio_silence, safe_delete_dir
+
+                chunks_dir = tempfile.mkdtemp(prefix="auto_chunks_")
+                try:
+                    chunks = split_audio_silence(
+                        processed_file,
+                        chunks_dir,
+                        target_chunk_sec=TARGET_CHUNK_DURATION_SEC,
+                        max_chunk_sec=MAX_CHUNK_DURATION_SEC,
+                    )
+                    combined_texts = []
+                    combined_timestamps = []
+
+                    for chunk in chunks:
+                        c_res = self.transcribe_file(
+                            chunk["path"], with_timestamps=with_timestamps, is_chunk=True
+                        )
+                        c_text = c_res.get("text", "").strip()
+                        if c_text:
+                            combined_texts.append(c_text)
+                        c_ts = c_res.get("timestamps", [])
+                        c_offset = chunk.get("start_sec", 0.0)
+                        for item in c_ts:
+                            combined_timestamps.append(
+                                {
+                                    "word": item.get("word", ""),
+                                    "start": round(
+                                        float(item.get("start", 0.0)) + c_offset, 2
+                                    ),
+                                    "end": round(
+                                        float(item.get("end", 0.0)) + c_offset, 2
+                                    ),
+                                }
+                            )
+
+                    processing_time = time.time() - start_time
+                    return {
+                        "text": " ".join(combined_texts),
+                        "elapsed": processing_time,
+                        "duration": audio_duration,
+                        "timestamps": combined_timestamps,
+                    }
+                finally:
+                    safe_delete_dir(chunks_dir)
+
+            if self._model is not None:
+                with torch.inference_mode():
+                    transcriptions = self._model.transcribe(
+                        audio=[processed_file], return_hypotheses=False
+                    )
+                processing_time = time.time() - start_time
+
+                transcription = ""
+                if transcriptions and len(transcriptions) > 0:
+                    transcription = self._extract_text(transcriptions[0])
+
+                timestamps = []
+                if with_timestamps and transcription and audio_duration > 0:
+                    words = transcription.split()
+                    if words:
+                        avg_dur = audio_duration / len(words)
+                        for i, word in enumerate(words):
+                            timestamps.append(
+                                {
+                                    "word": word,
+                                    "start": round(i * avg_dur, 2),
+                                    "end": round((i + 1) * avg_dur, 2),
+                                }
+                            )
+
+                return {
+                    "text": transcription,
+                    "elapsed": processing_time,
+                    "duration": audio_duration,
+                    "timestamps": timestamps,
+                }
+            else:
+                # Fallback to typhoon_asr package
+                import typhoon_asr
+
+                res = typhoon_asr.transcribe(
+                    processed_file, with_timestamps=with_timestamps, device=self.device
+                )
+                processing_time = time.time() - start_time
+                return {
+                    "text": res.get("text", ""),
+                    "elapsed": processing_time,
+                    "duration": audio_duration,
+                    "timestamps": res.get("timestamps", []),
+                }
+        finally:
+            if os.path.exists(processed_file):
+                os.remove(processed_file)
+            self.clear_cuda_cache()
+
+
+    def transcribe_bytes(
+        self,
+        audio_bytes: bytes,
+        filename_hint: str = "audio.wav",
+        with_timestamps: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Transcribes raw audio bytes.
+        """
+        suffix = os.path.splitext(filename_hint)[1] or ".wav"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
+
+        try:
+            return self.transcribe_file(tmp_path, with_timestamps=with_timestamps)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+
+# Global singleton instance
+engine = TyphoonASREngine()

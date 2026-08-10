@@ -1,0 +1,30 @@
+# =========================================================================
+# CPU Dockerfile for Typhoon ASR Realtime Service (Python 3.12 Slim)
+# =========================================================================
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libsndfile1 \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements-cpu.txt .
+RUN python3 -m pip install --no-cache-dir --upgrade pip \
+    && python3 -m pip install --no-cache-dir -r requirements-cpu.txt
+
+# Download model weights into Docker image layer (Option 1: Docker Build-time Caching)
+RUN python3 -c "from huggingface_hub import hf_hub_download; hf_hub_download(repo_id='typhoon-ai/typhoon-asr-realtime', filename='typhoon-asr-realtime.nemo', local_dir='/app/model')"
+
+COPY app /app/app
+
+EXPOSE 8830
+
+CMD ["python3", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8830"]

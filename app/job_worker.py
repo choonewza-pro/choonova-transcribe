@@ -1,0 +1,374 @@
+import os
+import json
+import time
+import asyncio
+import logging
+from typing import List, Dict, Any
+from datetime import timedelta
+
+from app.config import (
+    TEMP_JOBS_DIR,
+    TARGET_CHUNK_DURATION_SEC,
+    MAX_CHUNK_DURATION_SEC,
+)
+from app.db import update_job_status, get_job
+from app.audio_utils import (
+    extract_audio_ffmpeg,
+    split_audio_silence,
+    safe_delete_file,
+    safe_delete_dir,
+    get_audio_duration_ffmpeg,
+)
+from app.asr_engine import engine
+
+logger = logging.getLogger("typhoon-asr-job-worker")
+
+# Global PyTorch GPU VRAM Concurrency Lock
+gpu_lock = asyncio.Lock()
+
+# Transient CUDA driver errors (e.g. "CUDA driver error: device not ready")
+# can hit long-running jobs after many consecutive transcribe calls. Retry with
+# backoff + CUDA context recovery so a single driver hiccup doesn't discard the job.
+CUDA_RETRY_ATTEMPTS = int(os.getenv("CUDA_RETRY_ATTEMPTS", "3"))
+CUDA_RETRY_BACKOFF_SEC = float(os.getenv("CUDA_RETRY_BACKOFF_SEC", "5"))
+CUDA_RESET_ON_ALLOCATOR_ERROR = os.getenv(
+    "CUDA_RESET_ON_ALLOCATOR_ERROR", "false"
+).lower() in (
+    "1",
+    "true",
+    "yes",
+)
+# Reset the CUDA context (cudaDeviceReset + model reload) after each chunk to
+# prevent CUDACachingAllocator corruption that accumulates across consecutive
+# model.transcribe() calls. The canonical symptom is "CUDA error: an illegal
+# memory access was encountered" terminating the worker on chunk 2/2. Costs
+# ~6s of model reload per chunk but eliminates the crash class entirely.
+CUDA_RESET_BETWEEN_CHUNKS = os.getenv("CUDA_RESET_BETWEEN_CHUNKS", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+_CUDA_ERROR_KEYWORDS = (
+    "cuda",
+    "device not ready",
+    "driver error",
+    "nvidia",
+    "cublas",
+    "cudnn",
+    "out of memory",
+    "illegal memory access",
+    "device-side assert",
+)
+# PyTorch CUDACachingAllocator internal-state corruption (stale handle in the
+# allocator's tracking map) cannot be fixed with empty_cache(); it requires a
+# full CUDA context rebuild via cudaDeviceReset().
+_ALLOCATOR_CORRUPTION_KEYWORDS = (
+    "internal assert",
+    "cudacachingallocator",
+    "handles_",
+    "allocator",
+    "illegal memory access",
+    "device-side assert",
+)
+
+
+def _is_cuda_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(k in msg for k in _CUDA_ERROR_KEYWORDS)
+
+
+def _is_allocator_corruption(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(k in msg for k in _ALLOCATOR_CORRUPTION_KEYWORDS)
+
+
+async def transcribe_chunk_with_retry(
+    loop: asyncio.AbstractEventLoop,
+    chunk_path: str,
+    with_timestamps: bool,
+    chunk_idx: int,
+) -> Dict[str, Any]:
+    """
+    Run engine.transcribe_file for a single chunk, retrying on transient CUDA
+    errors with exponential backoff.
+
+    Two-tier recovery:
+    - Tier 1 (transient driver error): backoff + clear_cuda_cache() + retry.
+    - Tier 2 (allocator corruption): backoff retries are useless; do a full
+      CUDA device reset (cudaDeviceReset), reload the model, and retry once.
+    """
+    for attempt in range(1, CUDA_RETRY_ATTEMPTS + 1):
+        try:
+            return await loop.run_in_executor(
+                None, engine.transcribe_file, chunk_path, with_timestamps, True
+            )
+        except Exception as e:
+            if not _is_cuda_error(e):
+                raise
+            if _is_allocator_corruption(e) and CUDA_RESET_ON_ALLOCATOR_ERROR:
+                # Allocator corruption: skip incremental retries, nuke context.
+                logger.warning(
+                    f"Chunk {chunk_idx} hit CUDA allocator corruption: {e}. "
+                    f"Performing full CUDA device reset + model reload before one final retry."
+                )
+                await loop.run_in_executor(None, engine.cuda_device_reset)
+                await loop.run_in_executor(None, engine.reset)
+                return await loop.run_in_executor(
+                    None, engine.transcribe_file, chunk_path, with_timestamps, True
+                )
+            if _is_allocator_corruption(e):
+                # Allocator corruption but device reset disabled: keep reloading
+                # the model so the next chunk starts from a fresh context.
+                logger.warning(
+                    f"Chunk {chunk_idx} hit CUDA allocator corruption: {e}. "
+                    f"Reloading model and retrying once more (device reset disabled)."
+                )
+                await loop.run_in_executor(None, engine.reset)
+                return await loop.run_in_executor(
+                    None, engine.transcribe_file, chunk_path, with_timestamps, True
+                )
+            if attempt == CUDA_RETRY_ATTEMPTS:
+                logger.warning(
+                    f"Chunk {chunk_idx} failed {attempt} attempts with CUDA error: {e}; "
+                    f"reloading model and retrying once more"
+                )
+                await loop.run_in_executor(None, engine.reset)
+                await loop.run_in_executor(None, engine.clear_cuda_cache)
+                return await loop.run_in_executor(
+                    None, engine.transcribe_file, chunk_path, with_timestamps, True
+                )
+            backoff = CUDA_RETRY_BACKOFF_SEC * attempt
+            logger.warning(
+                f"Chunk {chunk_idx} CUDA error (attempt {attempt}/{CUDA_RETRY_ATTEMPTS}): {e}; "
+                f"retrying in {backoff:.0f}s"
+            )
+            await loop.run_in_executor(None, engine.clear_cuda_cache)
+            await asyncio.sleep(backoff)
+
+    raise RuntimeError(
+        "Unreachable: transcribe_chunk_with_retry exhausted all attempts"
+    )
+
+
+def format_timestamp_srt(seconds: float) -> str:
+    """
+    Format seconds (e.g. 12.345) to SRT timestamp string: 00:00:12,345
+    """
+    if seconds < 0:
+        seconds = 0.0
+    td = timedelta(seconds=seconds)
+    total_seconds = int(td.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    secs = total_seconds % 60
+    millis = int((seconds - int(seconds)) * 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+
+def build_srt_subtitles(
+    timestamps: List[Dict[str, Any]],
+    max_words_per_cue: int = 8,
+    max_gap_sec: float = 1.0,
+) -> str:
+    """
+    Group continuous word timestamps into SRT subtitle cues.
+    """
+    if not timestamps:
+        return ""
+
+    cues = []
+    current_cue_words = []
+    current_cue_start = None
+    last_word_end = 0.0
+
+    for item in timestamps:
+        word = item.get("word", "").strip()
+        start = float(item.get("start", 0.0))
+        end = float(item.get("end", 0.0))
+
+        if not word:
+            continue
+
+        if current_cue_start is None:
+            current_cue_start = start
+
+        # Check if we should finalize current cue
+        is_long_gap = (
+            (start - last_word_end) > max_gap_sec if last_word_end > 0 else False
+        )
+        is_max_words = len(current_cue_words) >= max_words_per_cue
+
+        if current_cue_words and (is_long_gap or is_max_words):
+            cues.append(
+                {
+                    "start": current_cue_start,
+                    "end": last_word_end,
+                    "text": " ".join(current_cue_words),
+                }
+            )
+            current_cue_words = [word]
+            current_cue_start = start
+        else:
+            current_cue_words.append(word)
+
+        last_word_end = end
+
+    if current_cue_words and current_cue_start is not None:
+        cues.append(
+            {
+                "start": current_cue_start,
+                "end": last_word_end,
+                "text": " ".join(current_cue_words),
+            }
+        )
+
+    # Render SRT string
+    srt_lines = []
+    for idx, cue in enumerate(cues, 1):
+        start_str = format_timestamp_srt(cue["start"])
+        end_str = format_timestamp_srt(cue["end"])
+        srt_lines.append(f"{idx}\n{start_str} --> {end_str}\n{cue['text']}\n")
+
+    return "\n".join(srt_lines)
+
+
+async def process_transcription_job(job_id: str, input_file_path: str) -> None:
+    """
+    Asynchronous Background Worker for processing long video/audio transcription jobs.
+    """
+    logger.info(f"Starting job worker for job_id={job_id} ({input_file_path})")
+    start_time = time.time()
+    job_dir = os.path.dirname(input_file_path)
+
+    try:
+        # Step 1: Extract Audio (MP4 -> 16kHz WAV)
+        update_job_status(
+            job_id,
+            status="extracting",
+            progress_pct=10.0,
+            current_stage="Extracting Audio",
+        )
+        extracted_wav = os.path.join(job_dir, "extracted_audio.wav")
+
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None, extract_audio_ffmpeg, input_file_path, extracted_wav
+        )
+
+        total_duration = get_audio_duration_ffmpeg(extracted_wav)
+        update_job_status(job_id, duration_seconds=total_duration)
+
+        # Step 2: Silence-Aware Audio Chunking
+        update_job_status(
+            job_id, status="chunking", progress_pct=20.0, current_stage="Chunking Audio"
+        )
+        chunks_dir = os.path.join(job_dir, "chunks")
+        chunks = await loop.run_in_executor(
+            None,
+            split_audio_silence,
+            extracted_wav,
+            chunks_dir,
+            TARGET_CHUNK_DURATION_SEC,
+            MAX_CHUNK_DURATION_SEC,
+        )
+
+        total_chunks = len(chunks)
+        update_job_status(job_id, total_chunks=total_chunks, progress_pct=25.0)
+
+        combined_text_parts = []
+        global_timestamps = []
+
+        # Step 3: GPU Transcription Loop (Protected by asyncio.Lock)
+        async with gpu_lock:
+            logger.info(
+                f"Acquired GPU Lock for job {job_id} (Processing {total_chunks} chunks)"
+            )
+
+            for idx, chunk in enumerate(chunks, 1):
+                pct = 25.0 + (idx / total_chunks) * 65.0
+                stage_msg = f"Transcribing Chunk {idx}/{total_chunks}"
+                update_job_status(
+                    job_id,
+                    status="transcribing",
+                    progress_pct=pct,
+                    completed_chunks=idx - 1,
+                    current_stage=stage_msg,
+                )
+
+                chunk_path = chunk["path"]
+                chunk_start_sec = chunk["start_sec"]
+                chunk_duration = chunk.get("duration_sec", 0.0)
+                logger.info(
+                    f"Transcribing chunk {idx}/{total_chunks} "
+                    f"(start={chunk_start_sec:.1f}s, duration={chunk_duration:.1f}s)"
+                )
+
+                # Run synchronous engine inference in executor, retrying on transient CUDA errors
+                res = await transcribe_chunk_with_retry(loop, chunk_path, True, idx)
+
+                chunk_text = res.get("text", "").strip()
+                if chunk_text:
+                    combined_text_parts.append(chunk_text)
+
+                chunk_ts = res.get("timestamps", [])
+                for ts_item in chunk_ts:
+                    word = ts_item.get("word", "")
+                    w_start = float(ts_item.get("start", 0.0)) + chunk_start_sec
+                    w_end = float(ts_item.get("end", 0.0)) + chunk_start_sec
+                    global_timestamps.append(
+                        {
+                            "word": word,
+                            "start": round(w_start, 3),
+                            "end": round(w_end, 3),
+                        }
+                    )
+
+                # ⚡ Immediate Intermediate Cleanup: Delete chunk WAV file after inference & clear VRAM
+                safe_delete_file(chunk_path)
+                engine.clear_cuda_cache()
+                update_job_status(job_id, completed_chunks=idx)
+
+                # 🔧 Prevent CUDACachingAllocator corruption from consecutive
+                # transcribe() calls — the canonical failure mode is "CUDA error:
+                # an illegal memory access was encountered" on chunk 2/2, which
+                # raises a C++ std::terminate that bypasses Python exception
+                # handling entirely (the worker just dies, leaving a zombie job).
+                # Skip on the final chunk since there's nothing left to process.
+                if CUDA_RESET_BETWEEN_CHUNKS and idx < total_chunks:
+                    logger.info(
+                        f"Resetting CUDA context after chunk {idx}/{total_chunks} "
+                        "to prevent allocator corruption (next chunk will lazy-reload model)"
+                    )
+                    await loop.run_in_executor(None, engine.reset)
+                    await loop.run_in_executor(None, engine.cuda_device_reset)
+
+        # Step 4: Final Cleanup & Result Assembly
+        safe_delete_file(extracted_wav)
+        safe_delete_file(input_file_path)
+        safe_delete_dir(chunks_dir)
+        safe_delete_dir(job_dir)
+
+        full_text = " ".join(combined_text_parts)
+        srt_subtitles = build_srt_subtitles(global_timestamps)
+        elapsed = time.time() - start_time
+
+        update_job_status(
+            job_id,
+            status="completed",
+            progress_pct=100.0,
+            current_stage="Completed",
+            result_text=full_text,
+            timestamps_json=json.dumps(global_timestamps),
+            srt_text=srt_subtitles,
+            elapsed_seconds=elapsed,
+        )
+        logger.info(
+            f"Job {job_id} completed successfully in {elapsed:.2f}s (Duration: {total_duration:.2f}s)"
+        )
+
+    except Exception as e:
+        logger.error(f"Job {job_id} failed with error: {e}", exc_info=True)
+        safe_delete_dir(job_dir)
+        update_job_status(
+            job_id, status="failed", current_stage="Failed", error_message=str(e)
+        )

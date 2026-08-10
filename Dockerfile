@@ -1,0 +1,32 @@
+# =========================================================================
+# GPU Dockerfile for Typhoon ASR Realtime Service (Python 3.12 Slim + CUDA 12.1)
+# =========================================================================
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libsndfile1 \
+    curl \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Upgrade pip and install all Python requirements with CUDA 12.1 index
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+# Download model weights into Docker image layer (Option 1: Docker Build-time Caching)
+RUN python3 -c "from huggingface_hub import hf_hub_download; hf_hub_download(repo_id='typhoon-ai/typhoon-asr-realtime', filename='typhoon-asr-realtime.nemo', local_dir='/app/model')"
+
+COPY app /app/app
+
+EXPOSE 8830
+
+CMD ["python3", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8830"]

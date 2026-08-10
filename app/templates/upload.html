@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ทดสอบอัปโหลดไฟล์เสียง - Typhoon ASR</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <header>
+    <a href="/" class="logo">
+      <span>🌀 Typhoon ASR</span>
+      <span class="logo-badge">File Upload Tester</span>
+    </a>
+    <nav>
+      <a href="/" class="nav-link">หน้าแรก</a>
+      <a href="/test/upload" class="nav-link active">ทดสอบไฟล์เสียง</a>
+      <a href="/test/realtime" class="nav-link">ทดสอบ Real-time ไมค์</a>
+      <a href="/test/media" class="nav-link">ถอดความวีดีโอ (1GB+)</a>
+      <a href="/test/jobs" class="nav-link">ประวัติการถอดความ</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="glass-card">
+      <h1>📁 ทดสอบแปลงไฟล์เสียงเป็นข้อความ</h1>
+      <p class="subtitle" style="margin-bottom: 1.5rem;">รองรับไฟล์เสียงรูปแบบ WAV, MP3, M4A, OGG, FLAC (แนะนำความถี่ 16kHz)</p>
+
+      <!-- API Key Settings Card -->
+      <div class="api-key-card">
+        <div class="api-key-header">
+          <div class="api-key-title">
+            🔑 <span>API Key Settings</span>
+          </div>
+          <span class="key-badge" id="keySavedBadge">✓ Key active in browser</span>
+        </div>
+        <div>
+          <label class="api-key-label">GATEWAY_API_KEY</label>
+          <div class="api-key-input-group">
+            <div class="input-with-eye">
+              <input type="password" id="apiKeyInput" placeholder="Enter API key..." />
+              <button type="button" class="eye-btn" id="toggleApiKeyBtn" title="Show/Hide Key">👁️</button>
+            </div>
+            <button type="button" class="btn-save-key" id="saveApiKeyBtn">Save Key</button>
+          </div>
+          <div class="api-key-footer">
+            <span>Saved securely in browser localStorage</span>
+            <a class="clear-key-link" id="clearApiKeyLink">Clear Key</a>
+          </div>
+        </div>
+      </div>
+
+      <form id="uploadForm">
+        <div class="dropzone" id="dropzone">
+          <div class="icon">☁️</div>
+          <h3 id="fileName">ลากไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์</h3>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">ขนาดไฟล์ไม่เกิน 50MB</p>
+          <input type="file" id="audioFileInput" accept="audio/*" style="display: none;">
+        </div>
+
+        <!-- Audio Player Preview Container (Shown when file is selected) -->
+        <div id="audioPlayerContainer" style="display: none; margin-top: 1.25rem; text-align: left; background: rgba(0, 0, 0, 0.25); padding: 1rem 1.25rem; border-radius: 12px; border: 1px solid var(--card-border);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h4 style="font-size: 0.95rem; color: var(--accent-cyan);">🎧 ตัวเล่นไฟล์เสียง (Audio Preview):</h4>
+            <span id="playerStatus" style="font-size: 0.85rem; color: var(--text-muted);"></span>
+          </div>
+          <audio id="audioPreview" controls style="width: 100%; border-radius: 10px; outline: none; background: rgba(0,0,0,0.5); border: 1px solid var(--card-border);"></audio>
+        </div>
+
+        <div style="display: flex; gap: 1.5rem; align-items: center; margin: 1.5rem 0;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="timestampsCheck" style="width: 18px; height: 18px;">
+            <span>เปิดใช้งาน Word-level Timestamps (ระบุช่วงเวลาของคำ)</span>
+          </label>
+        </div>
+
+        <button type="submit" class="btn-primary" id="transcribeBtn" disabled>
+          <span>🚀 เริ่มแปลงไฟล์เสียง (Transcribe)</span>
+        </button>
+      </form>
+
+      <div id="statusMessage" style="margin-top: 1.5rem; font-weight: 500;"></div>
+
+      <div style="margin-top: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h3 style="font-size: 1.2rem;">ข้อความที่ถอดได้ (Result Text):</h3>
+          <button id="copyResultBtn" class="nav-link" style="border: 1px solid var(--card-border); cursor: pointer; padding: 0.4rem 0.8rem; font-size: 0.9rem;">
+            📋 คัดลอกข้อความ
+          </button>
+        </div>
+        <div class="result-box" id="resultText">ผลลัพธ์ข้อความภาษาไทยจะแสดงตรงนี้...</div>
+        
+        <div class="stats-bar" id="statsBar" style="display: none;">
+          <div class="stats-badge" id="statElapsed">⏱️ เวลาประมวลผล: -</div>
+          <div class="stats-badge" id="statDuration">🎵 ความยาวไฟล์เสียง: -</div>
+          <div class="stats-badge" id="statRtf">⚡ RTF Multiplier: -</div>
+        </div>
+
+        <div id="timestampsBox" style="margin-top: 1.5rem; display: none;">
+          <h4 style="margin-bottom: 0.5rem; color: var(--accent-cyan);">รายละเอียด Timestamps:</h4>
+          <pre id="timestampsJson" style="background: rgba(0,0,0,0.5); padding: 1rem; border-radius: 8px; font-size: 0.85rem; max-height: 200px; overflow-y: auto;"></pre>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/js/upload.js?v=2"></script>
+</body>
+</html>

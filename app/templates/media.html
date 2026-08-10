@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ถอดความวีดีโอ & ไฟล์ยาว (1GB+) - Typhoon ASR</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    .stepper {
+      display: flex;
+      justify-content: space-between;
+      margin: 1.5rem 0;
+      position: relative;
+    }
+    .stepper::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      z-index: 1;
+      transform: translateY(-50%);
+    }
+    .step-item {
+      position: relative;
+      z-index: 2;
+      background: var(--bg-card, #1a1e2e);
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      border: 1px solid var(--card-border, rgba(255, 255, 255, 0.1));
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.3s ease;
+    }
+    .step-item.active {
+      border-color: var(--accent-cyan, #00f2fe);
+      color: var(--accent-cyan, #00f2fe);
+      box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+    }
+    .step-item.completed {
+      border-color: var(--accent-green, #40c057);
+      color: var(--accent-green, #40c057);
+    }
+    .progress-bar-container {
+      width: 100%;
+      height: 12px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 1rem 0;
+      border: 1px solid var(--card-border);
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00f2fe, #4facfe, #00f2fe);
+      background-size: 200% 100%;
+      animation: gradientShift 2s linear infinite;
+      transition: width 0.3s ease;
+    }
+    @keyframes gradientShift {
+      0% { background-position: 0% 0%; }
+      100% { background-position: 200% 0%; }
+    }
+    .export-toolbar {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+    .btn-export {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-main, #fff);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn-export:hover {
+      background: rgba(0, 242, 254, 0.15);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/" class="logo">
+      <span>🌀 Typhoon ASR</span>
+      <span class="logo-badge">Long-Form Video Pipeline</span>
+    </a>
+    <nav>
+      <a href="/" class="nav-link">หน้าแรก</a>
+      <a href="/test/upload" class="nav-link">ทดสอบไฟล์เสียง</a>
+      <a href="/test/realtime" class="nav-link">ทดสอบ Real-time ไมค์</a>
+      <a href="/test/media" class="nav-link active">ถอดความวีดีโอ (1GB+)</a>
+      <a href="/test/jobs" class="nav-link">ประวัติการถอดความ</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="glass-card">
+      <h1>🎬 ระบบถอดความวีดีโอ & ไฟล์ขนาดยาว (Long-Form Media)</h1>
+      <p class="subtitle" style="margin-bottom: 1.5rem;">รองรับไฟล์วิดีโอ MP4, MKV, MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง) ทำงานเบื้องหลังอัตโนมัติ</p>
+
+      <!-- API Key Settings Card -->
+      <div class="api-key-card">
+        <div class="api-key-header">
+          <div class="api-key-title">
+            🔑 <span>API Key Settings</span>
+          </div>
+          <span class="key-badge" id="keySavedBadge">✓ Key active in browser</span>
+        </div>
+        <div>
+          <label class="api-key-label">GATEWAY_API_KEY</label>
+          <div class="api-key-input-group">
+            <div class="input-with-eye">
+              <input type="password" id="apiKeyInput" placeholder="Enter API key..." />
+              <button type="button" class="eye-btn" id="toggleApiKeyBtn" title="Show/Hide Key">👁️</button>
+            </div>
+            <button type="button" class="btn-save-key" id="saveApiKeyBtn">Save Key</button>
+          </div>
+          <div class="api-key-footer">
+            <span>Saved securely in browser localStorage</span>
+            <a class="clear-key-link" id="clearApiKeyLink">Clear Key</a>
+          </div>
+        </div>
+      </div>
+
+      <form id="mediaUploadForm">
+        <div class="dropzone" id="mediaDropzone">
+          <div class="icon">📹</div>
+          <h3 id="mediaFileName">ลากไฟล์วิดีโอ/ไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์</h3>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">รองรับ MP4, MKV, MOV, WAV, MP3 ขนาดสูงสุด 1 GB+</p>
+          <input type="file" id="mediaFileInput" accept="video/*,audio/*" style="display: none;">
+        </div>
+
+        <!-- Media Preview Box -->
+        <div id="mediaPreviewContainer" style="display: none; margin-top: 1.25rem; text-align: left; background: rgba(0, 0, 0, 0.25); padding: 1rem; border-radius: 12px; border: 1px solid var(--card-border);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h4 style="font-size: 0.95rem; color: var(--accent-cyan);">🎥 ตัวเล่นวิดีโอ/เสียง (Media Preview):</h4>
+            <span id="mediaFileSize" style="font-size: 0.85rem; color: var(--text-muted);"></span>
+          </div>
+          <video id="videoPreview" controls style="width: 100%; max-height: 360px; border-radius: 10px; outline: none; background: #000; display: none;"></video>
+          <audio id="audioPreview" controls style="width: 100%; border-radius: 10px; outline: none; background: rgba(0,0,0,0.5); display: none;"></audio>
+        </div>
+
+        <div style="margin: 1.5rem 0;">
+          <button type="submit" class="btn-primary" id="startJobBtn" disabled>
+            <span>🚀 อัปโหลด & เริ่มกระบวนการถอดความ (Start Pipeline)</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Processing Stepper & Status -->
+      <div id="jobProgressSection" style="display: none; margin-top: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="font-size: 1.1rem; color: var(--accent-cyan);" id="currentStageText">⚙️ กำลังประมวลผล...</h3>
+          <span id="progressPctText" style="font-weight: bold; font-size: 1.1rem;">0%</span>
+        </div>
+
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" id="progressBarFill"></div>
+        </div>
+
+        <div class="stepper">
+          <div class="step-item" id="step1"><span>1</span> อัปโหลดไฟล์</div>
+          <div class="step-item" id="step2"><span>2</span> สกัดเสียง (FFmpeg)</div>
+          <div class="step-item" id="step3"><span>3</span> ตัดแบ่งช่วงเงียบ</div>
+          <div class="step-item" id="step4"><span>4</span> GPU ถอดความ</div>
+          <div class="step-item" id="step5"><span>5</span> เสร็จสมบูรณ์</div>
+        </div>
+      </div>
+
+      <!-- Result Box & Export Toolbar -->
+      <div id="resultSection" style="margin-top: 2rem; display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h3 style="font-size: 1.2rem;">ข้อความถอดความฉบับเต็ม (Full Transcript):</h3>
+          <div class="export-toolbar">
+            <button id="btnCopy" class="btn-export">📋 คัดลอก</button>
+            <a id="btnDownloadTxt" class="btn-export" href="#" target="_blank">📄 ดาวน์โหลด .txt</a>
+            <a id="btnDownloadSrt" class="btn-export" href="#" target="_blank">🎬 ดาวน์โหลด .srt ซับไตเติล</a>
+            <a id="btnDownloadJson" class="btn-export" href="#" target="_blank">📊 ดาวน์โหลด .json</a>
+          </div>
+        </div>
+
+        <div class="result-box" id="resultText" style="min-height: 180px; max-height: 400px; overflow-y: auto;">
+          ข้อความจะปรากฏขึ้นที่นี่เมื่อถอดความเสร็จสิ้น...
+        </div>
+
+        <div class="stats-bar" id="statsBar" style="display: flex; margin-top: 1rem;">
+          <div class="stats-badge" id="statJobId">🆔 Job ID: -</div>
+          <div class="stats-badge" id="statDuration">⏱️ ความยาววิดีโอ: -</div>
+          <div class="stats-badge" id="statElapsed">⚡ เวลาประมวลผลรวม: -</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/js/media.js?v=1"></script>
+</body>
+</html>

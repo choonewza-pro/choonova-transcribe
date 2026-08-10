@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ประวัติการถอดความ - Typhoon ASR</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 1.25rem;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+    }
+    table.jobs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      min-width: 820px;
+    }
+    .jobs-table th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      border-bottom: 1px solid var(--card-border);
+      white-space: nowrap;
+    }
+    .jobs-table th.sortable {
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.2s ease;
+    }
+    .jobs-table th.sortable:hover { color: var(--text-main); }
+    .sort-ind {
+      margin-left: 0.35rem;
+      font-size: 0.68rem;
+      opacity: 0.75;
+    }
+    .sort-ind.active { color: var(--accent-cyan); opacity: 1; }
+    .jobs-table td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      vertical-align: middle;
+    }
+    .filename-cell .filename-text {
+      display: block;
+      max-width: 280px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .jobs-table tr:last-child td {
+      border-bottom: none;
+    }
+    .jobs-table tr:hover td {
+      background: rgba(0, 242, 254, 0.03);
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.25rem 0.7rem;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .status-badge::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 6px currentColor;
+      flex-shrink: 0;
+    }
+    .status-completed { color: #3fb950; background: rgba(46, 160, 67, 0.15); border-color: rgba(46, 160, 67, 0.35); }
+    .status-failed { color: #f85149; background: rgba(218, 54, 51, 0.15); border-color: rgba(218, 54, 51, 0.35); }
+    .status-processing { color: #d29922; background: rgba(210, 153, 34, 0.15); border-color: rgba(210, 153, 34, 0.35); }
+    .status-queued { color: #58a6ff; background: rgba(56, 139, 253, 0.15); border-color: rgba(56, 139, 253, 0.35); }
+    .media-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.25rem 0.7rem;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .media-exists { color: var(--success); background: rgba(46, 160, 67, 0.15); border-color: rgba(46, 160, 67, 0.35); }
+    .media-gone { color: var(--text-muted); background: rgba(139, 148, 158, 0.12); border-color: rgba(139, 148, 158, 0.3); }
+    .row-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .btn-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .btn-row:hover {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 242, 254, 0.12);
+      color: var(--accent-cyan);
+    }
+    .btn-row.btn-danger { border-color: rgba(218, 54, 51, 0.4); color: #f85149; }
+    .btn-row.btn-danger:hover {
+      background: rgba(218, 54, 51, 0.15);
+      border-color: var(--danger);
+      color: #ff6b6b;
+    }
+    .btn-row:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+    }
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+    .list-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+    .btn-refresh {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 0.5rem 1.1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+    }
+    .btn-refresh:hover {
+      background: rgba(0, 242, 254, 0.12);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+    .list-meta { font-size: 0.85rem; color: var(--text-muted); }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1.5rem;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 820px;
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .modal-header h3 { font-size: 1.15rem; }
+    .modal-close {
+      background: none;
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+    }
+    .modal-close:hover { border-color: var(--danger); color: #ff6b6b; }
+    .modal-body { padding: 1.25rem 1.5rem 1.5rem; overflow-y: auto; }
+    .export-toolbar {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .btn-export {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn-export:hover {
+      background: rgba(0, 242, 254, 0.15);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+    .result-box {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      font-size: 1.05rem;
+      line-height: 1.7;
+      min-height: 140px;
+      max-height: 46vh;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      color: #e6edf3;
+    }
+    .stats-bar {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .stats-badge {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      border: 1px solid var(--card-border);
+      white-space: nowrap;
+    }
+    .error-box {
+      margin-top: 1rem;
+      background: rgba(218, 54, 51, 0.1);
+      border: 1px solid rgba(218, 54, 51, 0.35);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      color: #f85149;
+      font-size: 0.85rem;
+    }
+
+    /* Filename secondary line */
+    .filename-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+      font-family: 'Fira Code', monospace;
+    }
+
+    /* Search / Filter / Sort toolbar */
+    .filter-bar {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      margin: 1.25rem 0 0.25rem;
+    }
+    .search-box { flex: 1; min-width: 200px; }
+    .search-box input {
+      width: 100%;
+      padding: 0.6rem 1rem;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.9rem;
+      outline: none;
+      transition: all 0.25s ease;
+    }
+    .search-box input::placeholder { color: var(--text-muted); }
+    .search-box input:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.2);
+    }
+    .filter-select {
+      background: rgba(13, 17, 23, 0.9);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+      padding: 0.6rem 1rem;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-family: inherit;
+      outline: none;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.25s ease;
+    }
+    .filter-select:hover, .filter-select:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 10px rgba(0, 242, 254, 0.15);
+    }
+    .sort-mobile { display: none; }
+
+    /* Inline progress bar (processing rows) */
+    .job-progress { padding: 0.25rem 0 0.4rem; }
+    .job-progress-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+      gap: 1rem;
+    }
+    .job-progress-label .pct {
+      font-weight: 600;
+      color: var(--accent-cyan);
+      font-family: 'Fira Code', monospace;
+    }
+    .job-progress-track {
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .job-progress-fill {
+      height: 100%;
+      border-radius: 6px;
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+      box-shadow: 0 0 8px rgba(0, 242, 254, 0.5);
+      transition: width 0.4s ease;
+    }
+
+    /* Error strip (failed rows) */
+    .job-error {
+      background: rgba(218, 54, 51, 0.1);
+      border: 1px solid rgba(218, 54, 51, 0.3);
+      border-radius: 8px;
+      padding: 0.5rem 0.85rem;
+      font-size: 0.82rem;
+      color: #f85149;
+    }
+
+    /* ============================================================
+       Responsive: desktop table  ->  mobile stacked cards
+       ============================================================ */
+    @media (max-width: 819px) {
+      .filter-bar { flex-wrap: wrap; }
+      .search-box { flex: 1 1 100%; order: 1; min-width: 0; }
+      .filter-select { flex: 1; order: 2; min-width: 0; }
+      .sort-mobile { display: block; }
+
+      .table-wrap {
+        overflow: visible;
+        border: none;
+        background: none;
+        border-radius: 0;
+        margin-top: 1.25rem;
+      }
+      .jobs-table, .jobs-table tbody { display: block; }
+      .jobs-table thead { display: none; }
+
+      .jobs-table tr {
+        display: flex;
+        flex-wrap: wrap;
+        position: relative;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 14px;
+        padding: 1.15rem 1.15rem 1.1rem;
+        margin-bottom: 1rem;
+      }
+      .jobs-table tr:hover td { background: transparent; }
+      .jobs-table td {
+        display: block;
+        padding: 0.4rem 0;
+        border: none;
+        vertical-align: top;
+      }
+      .jobs-table td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: var(--text-muted);
+        margin-bottom: 0.25rem;
+      }
+
+      /* filename = card title */
+      .filename-cell {
+        flex: 0 0 100%;
+        order: 1;
+        padding: 0 0 0.6rem;
+      }
+      .filename-cell .filename-text {
+        max-width: 100%;
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        word-break: break-word;
+        font-size: 1.02rem;
+        font-weight: 600;
+        padding-right: 120px;
+      }
+      .filename-meta { margin-top: 0.35rem; }
+
+      /* status pill -> top-right corner */
+      .cell-status {
+        position: absolute;
+        top: 1.05rem;
+        right: 1.05rem;
+        width: auto;
+        padding: 0;
+      }
+
+      /* meta 2-col grid */
+      .cell-meta { flex: 0 0 50%; order: 3; }
+      .cell-meta:nth-child(odd) { padding-right: 0.75rem; }
+
+      /* actions full width */
+      .cell-actions { flex: 0 0 100%; order: 4; padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+      .cell-actions .row-actions { display: grid; grid-template-columns: 1fr; gap: 0.5rem; }
+
+      /* progress / error under the title */
+      .stage-cell, .error-cell { flex: 0 0 100%; order: 2; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/" class="logo">
+      <span>🌀 Typhoon ASR</span>
+      <span class="logo-badge">Transcription History</span>
+    </a>
+    <nav>
+      <a href="/" class="nav-link">หน้าแรก</a>
+      <a href="/test/upload" class="nav-link">ทดสอบไฟล์เสียง</a>
+      <a href="/test/realtime" class="nav-link">ทดสอบ Real-time ไมค์</a>
+      <a href="/test/media" class="nav-link">ถอดความวีดีโอ (1GB+)</a>
+      <a href="/test/jobs" class="nav-link active">ประวัติการถอดความ</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="glass-card">
+      <h1>📚 ประวัติการถอดความ (Transcription History)</h1>
+      <p class="subtitle" style="margin-bottom: 1.5rem;">เรียกดูข้อมูลการถอดเสียงของแต่ละรายการภายหลังได้ พร้อม export เป็นไฟล์ .txt / .srt / .json และจัดการไฟล์ media บนเครื่อง</p>
+
+      <!-- API Key Settings Card -->
+      <div class="api-key-card">
+        <div class="api-key-header">
+          <div class="api-key-title">
+            🔑 <span>API Key Settings</span>
+          </div>
+          <span class="key-badge" id="keySavedBadge">✓ Key active in browser</span>
+        </div>
+        <div>
+          <label class="api-key-label">GATEWAY_API_KEY</label>
+          <div class="api-key-input-group">
+            <div class="input-with-eye">
+              <input type="password" id="apiKeyInput" placeholder="Enter API key..." />
+              <button type="button" class="eye-btn" id="toggleApiKeyBtn" title="Show/Hide Key">👁️</button>
+            </div>
+            <button type="button" class="btn-save-key" id="saveApiKeyBtn">Save Key</button>
+          </div>
+          <div class="api-key-footer">
+            <span>Saved securely in browser localStorage</span>
+            <a class="clear-key-link" id="clearApiKeyLink">Clear Key</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="list-actions">
+        <span class="list-meta" id="listMeta">กำลังโหลดรายการ...</span>
+        <button type="button" class="btn-refresh" id="btnRefresh">🔄 รีเฟรชรายการ</button>
+      </div>
+
+      <div class="filter-bar">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="🔍 ค้นหาชื่อไฟล์..." autocomplete="off" />
+        </div>
+        <select id="statusFilter" class="filter-select" aria-label="กรองตามสถานะ">
+          <option value="all">สถานะ: ทั้งหมด</option>
+          <option value="completed">สถานะ: เสร็จสมบูรณ์</option>
+          <option value="processing">สถานะ: กำลังประมวลผล</option>
+          <option value="failed">สถานะ: ล้มเหลว</option>
+        </select>
+        <select id="sortSelect" class="filter-select sort-mobile" aria-label="จัดเรียง">
+          <option value="created_at:desc">ใหม่สุดก่อน</option>
+          <option value="created_at:asc">เก่าสุดก่อน</option>
+          <option value="filename:asc">ชื่อไฟล์ A–Z</option>
+          <option value="filename:desc">ชื่อไฟล์ Z–A</option>
+          <option value="status:asc">สถานะ A–Z</option>
+          <option value="status:desc">สถานะ Z–A</option>
+          <option value="duration_seconds:desc">ยาวที่สุดก่อน</option>
+          <option value="duration_seconds:asc">สั้นที่สุดก่อน</option>
+          <option value="file_size_bytes:desc">ใหญ่สุดก่อน</option>
+          <option value="file_size_bytes:asc">เล็กสุดก่อน</option>
+        </select>
+      </div>
+
+      <div class="table-wrap" id="tableWrap" style="display: none;">
+        <table class="jobs-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="filename">ชื่อไฟล์<span class="sort-ind"></span></th>
+              <th class="sortable" data-sort="status">สถานะ<span class="sort-ind"></span></th>
+              <th class="sortable" data-sort="duration_seconds">ความยาว<span class="sort-ind"></span></th>
+              <th class="sortable" data-sort="file_size_bytes">ขนาด<span class="sort-ind"></span></th>
+              <th class="sortable" data-sort="created_at">สร้างเมื่อ<span class="sort-ind"></span></th>
+              <th>ไฟล์ Media</th>
+              <th>จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="jobsTbody"></tbody>
+        </table>
+      </div>
+
+      <div class="empty-state" id="emptyState" style="display: none;">
+        <div class="icon">🗂️</div>
+        <p>ยังไม่มีรายการถอดความ — เริ่มจากหน้าถอดความวีดีโอ (1GB+) ก่อนได้เลย</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- View Transcript Modal -->
+  <div class="modal-overlay" id="viewModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalTitle">📄 ดูข้อมูลการถอดความ</h3>
+        <button type="button" class="modal-close" id="modalCloseBtn" title="ปิด">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="export-toolbar">
+          <button id="btnCopy" class="btn-export">📋 คัดลอก</button>
+          <a id="btnDownloadTxt" class="btn-export" href="#" target="_blank">📄 ดาวน์โหลด .txt</a>
+          <a id="btnDownloadSrt" class="btn-export" href="#" target="_blank">🎬 ดาวน์โหลด .srt ซับไตเติล</a>
+          <a id="btnDownloadJson" class="btn-export" href="#" target="_blank">📊 ดาวน์โหลด .json</a>
+        </div>
+        <div class="result-box" id="modalResultText">กำลังโหลดข้อความถอดความ...</div>
+        <div class="error-box" id="modalErrorBox" style="display: none;"></div>
+        <div class="stats-bar">
+          <div class="stats-badge" id="statJobId">🆔 Job ID: -</div>
+          <div class="stats-badge" id="statStatus">📌 สถานะ: -</div>
+          <div class="stats-badge" id="statDuration">⏱️ ความยาว: -</div>
+          <div class="stats-badge" id="statElapsed">⚡ เวลาประมวลผลรวม: -</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/jobs.js?v=3"></script>
+</body>
+</html>
