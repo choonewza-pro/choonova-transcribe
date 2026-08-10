@@ -9,7 +9,7 @@
 <body>
   <header>
     <a href="/" class="logo">
-      <span>🌀 Typhoon ASR</span>
+      <span>🌀 ChooNova Transcribe</span>
       <span class="logo-badge">File Upload Tester</span>
     </a>
     <nav>
@@ -23,30 +23,37 @@
 
   <main>
     <div class="glass-card">
-      <h1>📁 ทดสอบแปลงไฟล์เสียงเป็นข้อความ</h1>
+      <h1>📁 แปลงไฟล์เสียงเป็นข้อความ</h1>
       <p class="subtitle" style="margin-bottom: 1.5rem;">รองรับไฟล์เสียงรูปแบบ WAV, MP3, M4A, OGG, FLAC (แนะนำความถี่ 16kHz)</p>
 
       <!-- API Key Settings Card -->
       <div class="api-key-card">
-        <div class="api-key-header">
-          <div class="api-key-title">
-            🔑 <span>API Key Settings</span>
+        <div id="apiKeyInputGroup">
+          <div class="api-key-header">
+            <div class="api-key-title">
+              🔑 <span>API Key Settings</span>
+            </div>
           </div>
-          <span class="key-badge" id="keySavedBadge">✓ Key active in browser</span>
-        </div>
-        <div>
           <label class="api-key-label">GATEWAY_API_KEY</label>
           <div class="api-key-input-group">
             <div class="input-with-eye">
               <input type="password" id="apiKeyInput" placeholder="Enter API key..." />
               <button type="button" class="eye-btn" id="toggleApiKeyBtn" title="Show/Hide Key">👁️</button>
             </div>
-            <button type="button" class="btn-save-key" id="saveApiKeyBtn">Save Key</button>
+            <button type="button" class="btn-save-key" id="saveApiKeyBtn">💾 Save Key</button>
           </div>
           <div class="api-key-footer">
-            <span>Saved securely in browser localStorage</span>
-            <a class="clear-key-link" id="clearApiKeyLink">Clear Key</a>
+            <span>🔒 Saved securely in browser localStorage</span>
           </div>
+        </div>
+
+        <!-- Saved state: single line, input hidden -->
+        <div id="apiKeySavedState" class="api-key-saved" style="display: none;">
+          <div class="api-key-saved-meta">
+            <span class="api-key-saved-icon">🔑</span>
+            <span class="api-key-saved-mask" id="apiKeyMask">••••••••</span>
+          </div>
+          <button type="button" class="btn-clear-key" id="clearApiKeyLink" title="Remove the saved API key from this browser">🗑️ Clear Key</button>
         </div>
       </div>
 
@@ -92,7 +99,7 @@
       <div style="margin-top: 2rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
           <h3 style="font-size: 1.2rem;">ข้อความที่ถอดได้ (Result Text):</h3>
-          <button id="copyResultBtn" class="nav-link" style="border: 1px solid var(--card-border); cursor: pointer; padding: 0.4rem 0.8rem; font-size: 0.9rem;">
+          <button id="copyResultBtn" class="nav-link action-btn" style="cursor: pointer; padding: 0.4rem 0.8rem; font-size: 0.9rem;">
             📋 คัดลอกข้อความ
           </button>
         </div>
@@ -112,6 +119,6 @@
     </div>
   </main>
 
-  <script src="/static/js/upload.js?v=2"></script>
+  <script src="/static/js/upload.js?v=3"></script>
 </body>
 </html>

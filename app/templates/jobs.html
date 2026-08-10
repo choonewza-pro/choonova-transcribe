@@ -458,7 +458,7 @@
 <body>
   <header>
     <a href="/" class="logo">
-      <span>🌀 Typhoon ASR</span>
+      <span>🌀 ChooNova Transcribe</span>
       <span class="logo-badge">Transcription History</span>
     </a>
     <nav>
@@ -483,19 +483,30 @@
           </div>
           <span class="key-badge" id="keySavedBadge">✓ Key active in browser</span>
         </div>
-        <div>
+        <div id="apiKeyInputGroup">
           <label class="api-key-label">GATEWAY_API_KEY</label>
           <div class="api-key-input-group">
             <div class="input-with-eye">
               <input type="password" id="apiKeyInput" placeholder="Enter API key..." />
               <button type="button" class="eye-btn" id="toggleApiKeyBtn" title="Show/Hide Key">👁️</button>
             </div>
-            <button type="button" class="btn-save-key" id="saveApiKeyBtn">Save Key</button>
+            <button type="button" class="btn-save-key" id="saveApiKeyBtn">💾 Save Key</button>
           </div>
           <div class="api-key-footer">
-            <span>Saved securely in browser localStorage</span>
-            <a class="clear-key-link" id="clearApiKeyLink">Clear Key</a>
+            <span>🔒 Saved securely in browser localStorage</span>
           </div>
+        </div>
+
+        <!-- Saved state: input hidden, only Clear Key shown -->
+        <div id="apiKeySavedState" class="api-key-saved" style="display: none;">
+          <div class="api-key-saved-meta">
+            <span class="api-key-saved-icon">🔑</span>
+            <div class="api-key-saved-info">
+              <span class="api-key-saved-label">API Key Active</span>
+              <span class="api-key-saved-mask" id="apiKeyMask">••••••••</span>
+            </div>
+          </div>
+          <button type="button" class="btn-clear-key" id="clearApiKeyLink" title="Remove the saved API key from this browser">🗑️ Clear Key</button>
         </div>
       </div>
 

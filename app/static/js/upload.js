@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggleApiKeyBtn = document.getElementById('toggleApiKeyBtn');
   const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
   const clearApiKeyLink = document.getElementById('clearApiKeyLink');
-  const keySavedBadge = document.getElementById('keySavedBadge');
 
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('audioFileInput');
@@ -32,18 +31,26 @@ document.addEventListener('DOMContentLoaded', () => {
     return (apiKeyInput && apiKeyInput.value.trim()) || localStorage.getItem(API_KEY_STORAGE) || '';
   }
 
+  function maskApiKey(key) {
+    if (!key) return '••••••••';
+    if (key.length <= 8) return '•'.repeat(key.length);
+    return `${key.slice(0, 4)}••••${key.slice(-4)}`;
+  }
+
   function initApiKeyUI() {
+    const apiKeyInputGroup = document.getElementById('apiKeyInputGroup');
+    const apiKeySavedState = document.getElementById('apiKeySavedState');
+    const apiKeyMask = document.getElementById('apiKeyMask');
     const saved = localStorage.getItem(API_KEY_STORAGE);
     if (saved) {
-      if (keySavedBadge) {
-        keySavedBadge.className = 'key-badge';
-        keySavedBadge.textContent = '✓ Key active in browser';
+      if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'none';
+      if (apiKeySavedState) {
+        apiKeySavedState.style.display = 'flex';
+        if (apiKeyMask) apiKeyMask.textContent = maskApiKey(saved);
       }
     } else {
-      if (keySavedBadge) {
-        keySavedBadge.className = 'key-badge required';
-        keySavedBadge.textContent = '⚠️ API Key required';
-      }
+      if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'block';
+      if (apiKeySavedState) apiKeySavedState.style.display = 'none';
     }
   }
 
