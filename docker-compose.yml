@@ -31,8 +31,6 @@ x-logging: &default-logging
     volumes:
       - ./data:/app/data
       - ./data/jobs:/tmp/typhoon_jobs
-    networks:
-      - km4u-network
     deploy:
       resources:
         reservations:
@@ -46,9 +44,3 @@ x-logging: &default-logging
       timeout: 5s
       retries: 3
       start_period: 15s
-
-networks:
-  km4u-network:
-    name: "km4u-network"
-    driver: bridge
-    external: true
