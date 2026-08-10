@@ -38,6 +38,8 @@ class JobStatusResponse(BaseModel):
     completed_chunks: int = 0
     duration_seconds: float = 0.0
     elapsed_seconds: float = 0.0
+    target_chunk_sec: float = 30.0
+    max_chunk_sec: float = 60.0
     result_text: Optional[str] = None
     srt_text: Optional[str] = None
     timestamps: Optional[List[TimestampItem]] = None

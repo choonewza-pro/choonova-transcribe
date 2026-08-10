@@ -37,6 +37,8 @@ from app.config import (
     TEMP_JOBS_DIR,
     MIN_FREE_DISK_GB,
     CLEANUP_RETENTION_HOURS,
+    TARGET_CHUNK_DURATION_SEC,
+    MAX_CHUNK_DURATION_SEC,
 )
 from app.auth import verify_api_key
 from app.schemas import (
@@ -320,6 +322,8 @@ async def transcribe_audio(
 async def create_transcription_job(
     file: UploadFile = File(...),
     language: str = Form("th"),
+    target_chunk_sec: float = Form(TARGET_CHUNK_DURATION_SEC),
+    max_chunk_sec: float = Form(MAX_CHUNK_DURATION_SEC),
     authenticated: bool = Depends(verify_api_key),
 ):
     """
@@ -328,10 +332,19 @@ async def create_transcription_job(
 
     language: 'th' (default, Typhoon Thai ASR), 'en' (Whisper English), or
     'auto' (Whisper auto-detect for Thai/English mixed audio).
+
+    target_chunk_sec / max_chunk_sec: chunk duration bounds for silence-based splitting.
+    Defaults come from env (TARGET_CHUNK_DURATION_SEC / MAX_CHUNK_DURATION_SEC).
     """
     if not file.filename:
         raise HTTPException(
             status_code=400, detail="Video/Audio file must be provided."
+        )
+
+    if not (0 < target_chunk_sec <= max_chunk_sec):
+        raise HTTPException(
+            status_code=422,
+            detail="target_chunk_sec must be greater than 0 and not exceed max_chunk_sec.",
         )
 
     try:
@@ -370,6 +383,8 @@ async def create_transcription_job(
         filename=file.filename,
         file_size_bytes=total_bytes,
         language=lang,
+        target_chunk_sec=target_chunk_sec,
+        max_chunk_sec=max_chunk_sec,
     )
 
     # Launch worker in an isolated subprocess so GPU/CPU memory or errors never affect FastAPI web server

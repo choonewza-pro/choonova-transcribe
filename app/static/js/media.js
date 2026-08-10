@@ -273,6 +273,15 @@ document.addEventListener('DOMContentLoaded', () => {
       formData.append('language', languageSelect.value);
     }
 
+    const targetChunkInput = document.getElementById('targetChunkSec');
+    if (targetChunkInput && targetChunkInput.value && parseFloat(targetChunkInput.value) > 0) {
+      formData.append('target_chunk_sec', targetChunkInput.value);
+    }
+    const maxChunkInput = document.getElementById('maxChunkSec');
+    if (maxChunkInput && maxChunkInput.value && parseFloat(maxChunkInput.value) > 0) {
+      formData.append('max_chunk_sec', maxChunkInput.value);
+    }
+
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/v1/media/transcribe/jobs', true);
 

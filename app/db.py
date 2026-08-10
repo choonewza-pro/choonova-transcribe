@@ -4,7 +4,13 @@ import json
 import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from app.config import DATA_DIR, JOBS_DB_PATH, CLEANUP_RETENTION_HOURS
+from app.config import (
+    DATA_DIR,
+    JOBS_DB_PATH,
+    CLEANUP_RETENTION_HOURS,
+    TARGET_CHUNK_DURATION_SEC,
+    MAX_CHUNK_DURATION_SEC,
+)
 
 logger = logging.getLogger("typhoon-asr-db")
 
@@ -47,11 +53,19 @@ def init_db() -> None:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
-        # Migration for existing databases created before the 'language' column existed.
+        # Migrations for existing databases created before newer columns existed.
         columns = [r["name"] for r in cursor.execute("PRAGMA table_info(jobs)").fetchall()]
         if "language" not in columns:
             cursor.execute(
                 "ALTER TABLE jobs ADD COLUMN language TEXT DEFAULT 'th'"
+            )
+        if "target_chunk_sec" not in columns:
+            cursor.execute(
+                f"ALTER TABLE jobs ADD COLUMN target_chunk_sec REAL DEFAULT {TARGET_CHUNK_DURATION_SEC}"
+            )
+        if "max_chunk_sec" not in columns:
+            cursor.execute(
+                f"ALTER TABLE jobs ADD COLUMN max_chunk_sec REAL DEFAULT {MAX_CHUNK_DURATION_SEC}"
             )
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
@@ -64,7 +78,12 @@ def init_db() -> None:
 
 
 def create_job(
-    job_id: str, filename: str, file_size_bytes: int = 0, language: str = "th"
+    job_id: str,
+    filename: str,
+    file_size_bytes: int = 0,
+    language: str = "th",
+    target_chunk_sec: float = TARGET_CHUNK_DURATION_SEC,
+    max_chunk_sec: float = MAX_CHUNK_DURATION_SEC,
 ) -> Dict[str, Any]:
     """
     Insert a new job record in SQLite with status='queued'.
@@ -76,10 +95,10 @@ def create_job(
             """
             INSERT INTO jobs (
                 job_id, filename, file_size_bytes, language, status, progress_pct,
-                current_stage, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, 'queued', 0.0, 'File Uploaded', ?, ?)
+                current_stage, target_chunk_sec, max_chunk_sec, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, 'queued', 0.0, 'File Uploaded', ?, ?, ?, ?)
         """,
-            (job_id, filename, file_size_bytes, language, now, now),
+            (job_id, filename, file_size_bytes, language, target_chunk_sec, max_chunk_sec, now, now),
         )
         conn.commit()
     return get_job(job_id)

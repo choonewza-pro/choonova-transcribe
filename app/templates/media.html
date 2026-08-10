@@ -134,6 +134,14 @@
               <option value="auto">อัตโนมัติ / ผสม (Whisper)</option>
             </select>
           </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem;">
+            <span>⏱️ เป้าหมาย (วินาที/chunk):</span>
+            <input type="number" id="targetChunkSec" class="form-select" min="1" step="1" placeholder="30" title="ความยาวเป้าหมายต่อ chunk (ค่าแนะนำ: 30)" style="width: 90px; padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(0,0,0,0.25); color: #fff; border: 1px solid var(--card-border);">
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem;">
+            <span>⏰ สูงสุด (วินาที/chunk):</span>
+            <input type="number" id="maxChunkSec" class="form-select" min="1" step="1" placeholder="60" title="ความยาวสูงสุดต่อ chunk (ค่าแนะนำ: 60)" style="width: 90px; padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(0,0,0,0.25); color: #fff; border: 1px solid var(--card-border);">
+          </label>
           <button type="submit" class="btn-primary" id="startJobBtn" disabled>
             <span>🚀 เริ่มการถอดความ</span>
           </button>

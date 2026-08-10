@@ -151,13 +151,16 @@
             <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
               สร้างงานถอดความแบบเบื้องหลังสำหรับไฟล์วิดีโอ MP4/MKV/MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง)
               ระบบประมวลผลใน subprocess แยกต่างหาก คืน <code>job_id</code> ทันที (HTTP 202)
+              <br><code>target_chunk_sec</code> / <code>max_chunk_sec</code> (ไม่บังคับ) กำหนดความยาวเป้าหมาย/สูงสุดต่อ chunk — default จาก env 30/60 วินาที
             </p>
             <div class="code-container">
               <div class="code-header">cURL (Multipart Upload)</div>
               <pre>curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
   -H "x-api-key: change-me-in-production" \
   -F "file=@/path/to/long_video.mp4" \
-  -F "language=th"</pre>
+  -F "language=th" \
+  -F "target_chunk_sec=30" \
+  -F "max_chunk_sec=60"</pre>
             </div>
             <div class="code-container">
               <div class="code-header">Response JSON (202 Accepted)</div>

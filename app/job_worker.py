@@ -243,6 +243,17 @@ async def process_transcription_job(
             progress_pct=10.0,
             current_stage="Extracting Audio",
         )
+
+        # Chunk settings: prefer per-job values stored in DB at creation time,
+        # fall back to env defaults for jobs created before the columns existed.
+        job = get_job(job_id)
+        target_chunk_sec = (
+            job.get("target_chunk_sec") if job and job.get("target_chunk_sec") else TARGET_CHUNK_DURATION_SEC
+        )
+        max_chunk_sec = (
+            job.get("max_chunk_sec") if job and job.get("max_chunk_sec") else MAX_CHUNK_DURATION_SEC
+        )
+
         extracted_wav = os.path.join(job_dir, "extracted_audio.wav")
 
         loop = asyncio.get_running_loop()
@@ -263,8 +274,8 @@ async def process_transcription_job(
             split_audio_silence,
             extracted_wav,
             chunks_dir,
-            TARGET_CHUNK_DURATION_SEC,
-            MAX_CHUNK_DURATION_SEC,
+            target_chunk_sec,
+            max_chunk_sec,
         )
 
         total_chunks = len(chunks)

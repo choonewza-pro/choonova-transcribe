@@ -146,6 +146,11 @@ curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
   -H "x-api-key: change-me-in-production" \
   -F "file=@video.mp4" -F "language=en"
 
+# Long-form job with custom chunk settings (optional; defaults 30/60s from env)
+curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
+  -H "x-api-key: change-me-in-production" \
+  -F "file=@video.mp4" -F "target_chunk_sec=45" -F "max_chunk_sec=90"
+
 # Check status
 curl http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID> \
   -H "x-api-key: change-me-in-production"
@@ -158,6 +163,8 @@ curl -o subtitle.srt "http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID>/ex
 - `th` (default) — ใช้ Typhoon ASR Realtime (ภาษาไทย, เร็ว, เหมาะกับ real-time)
 - `en` — ใช้ faster-whisper (อังกฤษ, output คำอังกฤษเป็นตัวละติน)
 - `auto` — ใช้ faster-whisper ตรวจจับภาษาอัตโนมัติ (รองรับภาษาไทย/อังกฤษผสม หรือ code-switching)
+
+`target_chunk_sec` / `max_chunk_sec` (ไม่บังคับ) — กำหนดช่วงความยาวต่อ chunk ในการตัดแบ่งตามช่วงเงียบ (ค่า default จาก env `TARGET_CHUNK_DURATION_SEC`=30 และ `MAX_CHUNK_DURATION_SEC`=60) ต้องผ่านเงื่อนไข `0 < target_chunk_sec <= max_chunk_sec`; ค่าที่ใช้จริงจะถูกบันทึกในตาราง `jobs` (คอลัมน์ `target_chunk_sec`, `max_chunk_sec`) และโผล่ใน response ของ job status
 
 > ⚠️ WebSocket `/v1/realtime/stream` (real-time ไมค์) รองรับเฉพาะภาษาไทย (Typhoon) อย่างเดียว — คำอังกฤษในเสียงไทยจะออกเป็นทับศัพท์ตัวไทย โมเดล Whisper ที่โหลดครั้งแรกจะดาวน์โหลดอัตโนมัติจาก HuggingFace (config: `WHISPER_MODEL`, default `medium`)
 
