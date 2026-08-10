@@ -5,9 +5,10 @@ x-logging: &default-logging
       max-size: "10m"
       max-file: "5"
 
-  # =========================================================================
-  # 1. Typhoon ASR Service: Python 3.12 FastAPI + NeMo Typhoon ASR Realtime
-  # =========================================================================
+# =========================================================================
+# 1. Typhoon ASR Service: Python 3.12 FastAPI + NeMo Typhoon ASR Realtime
+# =========================================================================
+services:
   transcribe:
     build:
       context: .
@@ -44,3 +45,9 @@ x-logging: &default-logging
       timeout: 5s
       retries: 3
       start_period: 15s
+
+networks:
+  km4u-network:
+    name: "km4u-network"
+    driver: bridge
+    external: true

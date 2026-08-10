@@ -5,10 +5,11 @@ x-logging: &default-logging
       max-size: "10m"
       max-file: "5"
 
-  # =========================================================================
-  # Typhoon ASR Service (CPU) — Python 3.12 FastAPI + NeMo Typhoon ASR Realtime
-  # Works on Mac M1–M4 (Apple Silicon) via Docker linux/arm64
-  # =========================================================================
+# =========================================================================
+# Typhoon ASR Service (CPU) — Python 3.12 FastAPI + NeMo Typhoon ASR Realtime
+# Works on Mac M1–M4 (Apple Silicon) via Docker linux/arm64
+# =========================================================================
+services:
   transcribe:
     build:
       context: .
