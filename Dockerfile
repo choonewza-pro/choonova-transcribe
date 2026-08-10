@@ -36,7 +36,27 @@ print(f'  💾 {size:.2f} GB'); \
 print('=' * 70); \
 print()"
 
+# Pre-download Whisper model (for English / Thai-English mixed support via faster-whisper)
+ARG WHISPER_MODEL=medium
+RUN python3 -c "\
+from huggingface_hub import snapshot_download; \
+import os; \
+p = snapshot_download(repo_id='Systran/faster-whisper-' + os.getenv('WHISPER_MODEL', 'medium')); \
+print(); \
+print('=' * 70); \
+print('  ✅ WHISPER MODEL DOWNLOAD COMPLETE — faster-whisper-' + os.getenv('WHISPER_MODEL', 'medium')); \
+print(f'  📁 {p}'); \
+print('=' * 70); \
+print()"
+
 COPY app /app/app
+
+# Create empty SQLite jobs DB inside the image (no volume mount required).
+# At runtime app/db.init_db() runs CREATE TABLE IF NOT EXISTS which is a no-op here.
+RUN python3 -c "\
+from app.db import init_db; \
+init_db(); \
+print('  ✅ EMPTY SQLite JOBS DB CREATED at /app/data/jobs.db')"
 
 EXPOSE 8830
 

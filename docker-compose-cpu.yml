@@ -26,10 +26,11 @@ services:
       - GATEWAY_API_KEY=change-me-in-production
       - MODEL_PATH=/app/model/typhoon-asr-realtime.nemo
       - DEVICE=cpu
+      - WHISPER_MODEL=medium
       - LOG_LEVEL=info
     volumes:
-      - ./data:/app/data
       - ./data/jobs:/tmp/typhoon_jobs
+      # - ./data:/app/data   # Enable to persist the jobs DB on the host (baked empty DB is used otherwise)
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8830/healthz"]
       interval: 30s

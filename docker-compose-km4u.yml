@@ -25,6 +25,7 @@ services:
       - GATEWAY_API_KEY=change-me-in-production
       - MODEL_PATH=/app/model/typhoon-asr-realtime.nemo
       - DEVICE=cuda
+      - WHISPER_MODEL=medium
       - LOG_LEVEL=info
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
       - WATCHDOG_DELETE_ON_CRASH=false
@@ -32,8 +33,8 @@ services:
     networks:
       - km4u-network
     volumes:
-      - ./data:/app/data
       - ./data/jobs:/tmp/typhoon_jobs
+      # - ./data:/app/data   # Enable to persist the jobs DB on the host (baked empty DB is used otherwise)
     deploy:
       resources:
         reservations:

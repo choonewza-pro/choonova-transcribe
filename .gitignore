@@ -15,3 +15,7 @@ skills-lock.json
 
 # --- Typhoon ASR temp job files (mapped to host via docker-compose) ---
 services/typhoon-asr-service/data/jobs/
+
+# --- Local SQLite jobs database (baked empty into the Docker image; mount ./data for persistence) ---
+data/jobs.db
+data/jobs.db-*
