@@ -1180,15 +1180,6 @@ async def delete_compress_job_output(
         logger.error(f"Failed to delete output file for compress job {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete output file: {e}")
 
-    # Also clean up the extracted audio file if present.
-    audio_path = job.get("audio_extract_path")
-    if audio_path and os.path.exists(audio_path):
-        try:
-            os.remove(audio_path)
-        except OSError as e:
-            logger.warning(f"Failed to delete audio file for compress job {job_id}: {e}")
-
-    update_compress_job(job_id, audio_extract_path=None, audio_extract_size_bytes=0)
     logger.info(f"Compress job {job_id}: output file deleted manually (freed {freed} bytes)")
     return {
         "status": "success",

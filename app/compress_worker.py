@@ -284,8 +284,11 @@ async def process_compress_job(
         if not completed_ok:
             safe_delete_file(output_path)
         try:
+            keep = {os.path.basename(output_path)}
+            if completed_ok and audio_extract_path_str:
+                keep.add(os.path.basename(audio_extract_path_str))
             for name in os.listdir(job_dir):
-                if name != os.path.basename(output_path):
+                if name not in keep:
                     safe_delete_file(os.path.join(job_dir, name))
         except OSError:
             pass
