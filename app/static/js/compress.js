@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const crfSlider = document.getElementById('crfSlider');
   const crfValue = document.getElementById('crfValue');
   const presetSelect = document.getElementById('presetSelect');
+  const presetCard = document.getElementById('presetCard');
+  const encoderSelect = document.getElementById('encoderSelect');
 
   const progressSection = document.getElementById('compressProgressSection');
   const queueBanner = document.getElementById('queueBanner');
@@ -40,6 +42,44 @@ document.addEventListener('DOMContentLoaded', () => {
   const resDuration = document.getElementById('resDuration');
   const statJobId = document.getElementById('compressStatJobId');
   const statElapsed = document.getElementById('compressStatElapsed');
+
+  // --- Error Modal ---
+  const errorModal = document.getElementById('errorModal');
+  const errorModalMeta = document.getElementById('errorModalMeta');
+  const errorModalMsg = document.getElementById('errorModalMsg');
+  const errorModalRaw = document.getElementById('errorModalRaw');
+  const errorModalCloseBtn = document.getElementById('errorModalCloseBtn');
+  const errorModalOkBtn = document.getElementById('errorModalOkBtn');
+
+  function openErrorModal(metaText, message, rawError) {
+    if (errorModalMeta) errorModalMeta.textContent = metaText || '';
+    if (errorModalMsg) errorModalMsg.textContent = message || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ';
+    if (errorModalRaw) {
+      errorModalRaw.textContent = rawError || message || '(ไม่มีรายละเอียดเพิ่มเติม)';
+    }
+    if (errorModal) errorModal.classList.add('open');
+  }
+  function closeErrorModal() {
+    if (errorModal) errorModal.classList.remove('open');
+  }
+  if (errorModalCloseBtn) errorModalCloseBtn.addEventListener('click', closeErrorModal);
+  if (errorModalOkBtn) errorModalOkBtn.addEventListener('click', closeErrorModal);
+  if (errorModal) errorModal.addEventListener('click', (e) => {
+    if (e.target === errorModal) closeErrorModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && errorModal && errorModal.classList.contains('open')) closeErrorModal();
+  });
+
+  function compressErrorMessage(raw) {
+    const s = (raw || '').toString();
+    const firstLine = s.split('\n')[0].trim();
+    if (firstLine.includes('exited with code')) return 'FFmpeg ไม่สามารถเข้ารหัสวิดีโอได้ (exit code ไม่เป็น 0) — ดูคำอธิบายโดยละเอียดใน RAW error ด้านล่าง';
+    if (/unknown decoder|encoder '.*' not found|could not find encoder/i.test(s)) return 'ไม่พบตัวเข้ารหัสที่เลือก (encoder) — ตรวจสอบว่า ffmpeg ของคุณรองรับการเข้ารหัสนี้หรือไม่';
+    if (/no such file|cannot open|failed to open/i.test(s)) return 'ไม่สามารถเปิดไฟล์ต้นฉบับได้ — ไฟล์อาจถูกลบหรือถูกใช้งานอยู่';
+    if (/invalid data found when processing input/i.test(s)) return 'ไฟล์วิดีโออาจเสียหาย หรือรูปแบบไฟล์ไม่ตรงกับนามสกุล';
+    return 'การบีบอัดล้มเหลว — ดูคำอธิบายโดยละเอียดใน RAW error ด้านล่าง';
+  }
 
   let selectedFile = null;
   let activeJobId = null;
@@ -164,6 +204,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   crfSlider.addEventListener('input', () => { crfValue.textContent = crfSlider.value; });
 
+  if (encoderSelect && presetCard) {
+    encoderSelect.addEventListener('change', () => {
+      presetCard.style.display = encoderSelect.value === 'nvenc' ? 'none' : 'block';
+    });
+    if (encoderSelect.value === 'nvenc') presetCard.style.display = 'none';
+  }
+
   // --- Progress helpers ---
   function updateProgress(pct, stageTextMsg) {
     const rounded = Math.min(100, Math.max(0, Math.round(pct)));
@@ -237,6 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (bitrateVal) formData.append('bitrate_kbps', bitrateVal);
     formData.append('crf', crfSlider.value);
     formData.append('preset', presetSelect.value);
+    formData.append('encoder', encoderSelect ? encoderSelect.value : 'libx264');
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/v1/media/compress/jobs', true);
@@ -256,18 +304,28 @@ document.addEventListener('DOMContentLoaded', () => {
         updateProgress(5, 'เพิ่มเข้าคิวแล้ว — รอคิวบีบอัด...');
         startPollingJobStatus(activeJobId);
       } else {
+        let detail = '';
         try {
           const errData = JSON.parse(xhr.responseText);
-          alert(`เกิดข้อผิดพลาดในการสร้างงาน: ${errData.detail || 'Unknown error'}`);
+          detail = errData.detail || '';
         } catch (ex) {
-          alert(`เกิดข้อผิดพลาดในการอัปโหลด (${xhr.status})`);
+          detail = `HTTP ${xhr.status}`;
         }
+        openErrorModal(
+          '',
+          'สร้างงานบีบอัดไม่สำเร็จ — เซิร์ฟเวอร์ปฏิเสธคำขอ',
+          detail
+        );
         startCompressBtn.disabled = false;
         showQueueBanner(0, 0);
       }
     };
     xhr.onerror = () => {
-      alert('การเชื่อมต่อเครือข่ายล้มเหลวขณะอัปโหลดไฟล์');
+      openErrorModal(
+        '',
+        'การเชื่อมต่อเครือข่ายล้มเหลวขณะอัปโหลดไฟล์',
+        'Network error — ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่ในภายหลัง'
+      );
       startCompressBtn.disabled = false;
     };
     xhr.send(formData);
@@ -294,8 +352,13 @@ document.addEventListener('DOMContentLoaded', () => {
           handleJobCompleted(job);
         } else if (job.status === 'failed') {
           stopPolling();
-          alert(`การบีบอัดล้มเหลว: ${job.error_message || 'Unknown error'}`);
-          stageText.textContent = `❌ เกิดข้อผิดพลาด: ${job.error_message || 'Failed'}`;
+          const rawErr = job.error_message || '';
+          stageText.textContent = `❌ เกิดข้อผิดพลาด: ${compressErrorMessage(rawErr)}`;
+          openErrorModal(
+            rawErr ? `📁 ไฟล์: ${job.filename || '-'}` : '',
+            compressErrorMessage(rawErr),
+            rawErr
+          );
           startCompressBtn.disabled = false;
           cancelCompressBtn.style.display = 'none';
         }

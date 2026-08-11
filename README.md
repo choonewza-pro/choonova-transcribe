@@ -1,6 +1,6 @@
 # ChooNova Transcribe — Thai Speech-to-Text API
 
-Speech-to-Text API บริการภาษาไทย powered by **Typhoon ASR Realtime** (FastConformer-Transducer 114M parameters) บน **Python 3.12 + FastAPI + NeMo Toolkit** รองรับทั้ง GPU (NVIDIA, CUDA 12.1) และ CPU (Windows, Mac M1–M4, Linux)
+Speech-to-Text API บริการภาษาไทย powered by **Typhoon ASR Realtime** (FastConformer-Transducer 114M parameters) บน **Python 3.12 + FastAPI + NeMo Toolkit** รองรับทั้ง GPU (NVIDIA, CUDA 12.1) และ CPU (Windows, Mac M1–M4, Linux) — ทดสอบบน **Notebook NVIDIA RTX 4080 Laptop GPU 12GB VRAM**
 
 ## Modes
 
@@ -19,6 +19,7 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 | Web Framework    | FastAPI + Uvicorn                                              |
 | ASR Model        | NeMo Toolkit ≥2.0, Typhoon ASR Realtime (`.nemo`)              |
 | Deep Learning    | PyTorch 2.5.1 (CUDA 12.1 / CPU)                                |
+| Tested Hardware  | Notebook NVIDIA RTX 4080 Laptop GPU (12GB VRAM)                |
 | Audio Processing | FFmpeg, librosa, soundfile                                     |
 | Storage          | SQLite (jobs history), filesystem (temp jobs)                  |
 | Frontend         | Vanilla HTML/CSS/JS + Jinja2 templates (glassmorphism dark UI) |
@@ -85,32 +86,32 @@ DEVICE=cpu uvicorn app.main:app --host 0.0.0.0 --port 8830
 
 ## Environment Variables
 
-| Variable                    | Default                           | Description                                       |
-| --------------------------- | --------------------------------- | ------------------------------------------------- |
-| `HOST`                      | `0.0.0.0`                         | Bind address                                      |
-| `PORT`                      | `8830`                            | Service port                                      |
-| `GATEWAY_API_KEY`           | `change-me-in-production`         | API key (set in production)                       |
-| `MODEL_PATH`                | `model/typhoon-asr-realtime.nemo` | Local model path (fallback: HuggingFace)          |
-| `DEVICE`                    | `cuda`                            | `cuda` / `cpu` (auto-detect if CUDA unavailable)  |
-| `WHISPER_MODEL`             | `medium`                          | faster-whisper size: `tiny/base/small/medium/large-v3` |
-| `LOG_LEVEL`                 | `info`                            | Logging level                                     |
-| `DATA_DIR`                  | `<project>/data`                  | SQLite directory                                  |
-| `TEMP_JOBS_DIR`             | `/tmp/choonova-transcribe-jobs`   | Temp job directory                                |
-| `MIN_FREE_DISK_GB`          | `5.0`                             | Min disk space before rejecting uploads           |
-| `MAX_UPLOAD_SIZE_MB`        | `0`                               | Max upload size for long-form media jobs (MB); `0` = unlimited |
-| `MAX_AUDIO_UPLOAD_SIZE_MB`  | `50.0`                            | Max upload size for short audio endpoint (MB); always enforced (> 0) |
-| `TARGET_CHUNK_DURATION_SEC` | `30.0`                            | Target chunk duration for silence-aware splitting |
-| `MAX_CHUNK_DURATION_SEC`    | `60.0`                            | Max chunk duration (hard cut fallback)            |
-| `CLEANUP_RETENTION_HOURS`   | `24`                              | Job retention before periodic cleanup             |
-| `PYTORCH_CUDA_ALLOC_CONF`   | `expandable_segments:True`        | PyTorch CUDA allocator config                     |
-| `MODEL_LOAD_MODE`           | `always`                          | Model VRAM residency mode: `always` / `idle` (seed value only, see below) |
+| Variable                    | Default                           | Description                                                                    |
+| --------------------------- | --------------------------------- | ------------------------------------------------------------------------------ |
+| `HOST`                      | `0.0.0.0`                         | Bind address                                                                   |
+| `PORT`                      | `8830`                            | Service port                                                                   |
+| `GATEWAY_API_KEY`           | `change-me-in-production`         | API key (set in production)                                                    |
+| `MODEL_PATH`                | `model/typhoon-asr-realtime.nemo` | Local model path (fallback: HuggingFace)                                       |
+| `DEVICE`                    | `cuda`                            | `cuda` / `cpu` (auto-detect if CUDA unavailable)                               |
+| `WHISPER_MODEL`             | `medium`                          | faster-whisper size: `tiny/base/small/medium/large-v3`                         |
+| `LOG_LEVEL`                 | `info`                            | Logging level                                                                  |
+| `DATA_DIR`                  | `<project>/data`                  | SQLite directory                                                               |
+| `TEMP_JOBS_DIR`             | `/tmp/choonova-transcribe-jobs`   | Temp job directory                                                             |
+| `MIN_FREE_DISK_GB`          | `5.0`                             | Min disk space before rejecting uploads                                        |
+| `MAX_UPLOAD_SIZE_MB`        | `0`                               | Max upload size for long-form media jobs (MB); `0` = unlimited                 |
+| `MAX_AUDIO_UPLOAD_SIZE_MB`  | `50.0`                            | Max upload size for short audio endpoint (MB); always enforced (> 0)           |
+| `TARGET_CHUNK_DURATION_SEC` | `30.0`                            | Target chunk duration for silence-aware splitting                              |
+| `MAX_CHUNK_DURATION_SEC`    | `60.0`                            | Max chunk duration (hard cut fallback)                                         |
+| `CLEANUP_RETENTION_HOURS`   | `24`                              | Job retention before periodic cleanup                                          |
+| `PYTORCH_CUDA_ALLOC_CONF`   | `expandable_segments:True`        | PyTorch CUDA allocator config                                                  |
+| `MODEL_LOAD_MODE`           | `always`                          | Model VRAM residency mode: `always` / `idle` (seed value only, see below)      |
 | `MODEL_IDLE_TIMEOUT_SEC`    | `900`                             | Seconds of inactivity before unloading models in `idle` mode (seed value only) |
-| `COMPRESS_ENCODER`          | `libx264`                         | Video compressor encoder: `libx264` (software) / `nvenc` (GPU NVENC) |
-| `COMPRESS_PRESET`           | `medium`                          | Default x264 preset (ultrafast..veryslow)         |
-| `COMPRESS_CRF`              | `28`                              | Default encoder quality (1-51; higher = smaller)  |
-| `COMPRESS_MAX_CONCURRENT`   | `1`                               | Max videos compressed at once (1 = strict queue)  |
-| `COMPRESS_MAX_QUEUED`       | `10`                              | Max jobs in queue before new uploads rejected (429) |
-| `COMPRESS_RETENTION_HOURS`  | `24`                              | Retention for compressed output files on disk     |
+| `COMPRESS_ENCODER`          | `libx264`                         | Video compressor encoder: `libx264` (software) / `nvenc` (GPU NVENC)           |
+| `COMPRESS_PRESET`           | `medium`                          | Default x264 preset (ultrafast..veryslow)                                      |
+| `COMPRESS_CRF`              | `28`                              | Default encoder quality (1-51; higher = smaller)                               |
+| `COMPRESS_MAX_CONCURRENT`   | `1`                               | Max videos compressed at once (1 = strict queue)                               |
+| `COMPRESS_MAX_QUEUED`       | `10`                              | Max jobs in queue before new uploads rejected (429)                            |
+| `COMPRESS_RETENTION_HOURS`  | `24`                              | Retention for compressed output files on disk                                  |
 
 Copy `.env.example` to `.env` to customize.
 
@@ -132,32 +133,32 @@ Every page header shows a live status badge: 🟢 model on VRAM / 🟡 loading /
 
 ## API
 
-| Method | Path                                                        | Auth | Description                       |
-| ------ | ----------------------------------------------------------- | ---- | --------------------------------- |
-| GET    | `/`                                                         | —    | Dashboard home                    |
-| GET    | `/audio/transcribe`                                         | —    | Audio file transcribe page        |
-| GET    | `/realtime/stream`                                          | —    | Real-time mic stream page         |
-| GET    | `/media/transcribe`                                         | —    | Long-form video/audio transcribe  |
-| GET    | `/media/compress`                                           | —    | Video compressor page              |
-| GET    | `/media/compress/jobs/history`                              | —    | Compressor history page (ดูผล + ลบไฟล์ output ด้วยตนเอง) |
-| GET    | `/media/transcribe/jobs/history`                            | —    | Transcription history page (เดิม `/jobs/history` redirect) |
-| GET    | `/healthz`                                                  | —    | Health check (+ model state / mode) |
-| GET    | `/v1/settings/model`                                        | ✅   | Get model VRAM mode + engine states |
-| PUT    | `/v1/settings/model`                                        | ✅   | Change model VRAM mode at runtime   |
-| POST   | `/v1/audio/transcribe`                                      | ✅   | Transcribe audio file             |
-| POST   | `/v1/media/transcribe/jobs`                                 | ✅   | Create long-form job (202, async) |
-| GET    | `/v1/media/transcribe/jobs`                                 | ✅   | List jobs                         |
-| GET    | `/v1/media/transcribe/jobs/{id}`                            | ✅   | Job status + result               |
-| DELETE | `/v1/media/transcribe/jobs/{id}`                            | ✅   | Delete job (record + media)       |
-| DELETE | `/v1/media/transcribe/jobs/{id}/media`                      | ✅   | Delete media only (keep record)   |
-| GET    | `/v1/media/transcribe/jobs/{id}/export/{txt\|srt\|json}`    | ✅   | Export result                     |
-| POST   | `/v1/media/compress/jobs`                                   | ✅   | Create video compress job (202, async queue) |
-| GET    | `/v1/media/compress/jobs`                                   | ✅   | List compress jobs                |
-| GET    | `/v1/media/compress/jobs/{id}`                              | ✅   | Compress job status + result      |
-| GET    | `/v1/media/compress/jobs/{id}/download`                     | ✅   | Download compressed MP4           |
-| DELETE | `/v1/media/compress/jobs/{id}`                              | ✅   | Cancel/delete compress job (input + output) |
-| DELETE | `/v1/media/compress/jobs/{id}/output`                       | ✅   | Delete output file ONLY (keep history record) |
-| WS     | `/v1/realtime/stream`                                       | —    | Real-time streaming               |
+| Method | Path                                                     | Auth | Description                                                |
+| ------ | -------------------------------------------------------- | ---- | ---------------------------------------------------------- |
+| GET    | `/`                                                      | —    | Dashboard home                                             |
+| GET    | `/audio/transcribe`                                      | —    | Audio file transcribe page                                 |
+| GET    | `/realtime/stream`                                       | —    | Real-time mic stream page                                  |
+| GET    | `/media/transcribe`                                      | —    | Long-form video/audio transcribe                           |
+| GET    | `/media/compress`                                        | —    | Video compressor page                                      |
+| GET    | `/media/compress/jobs/history`                           | —    | Compressor history page (ดูผล + ลบไฟล์ output ด้วยตนเอง)   |
+| GET    | `/media/transcribe/jobs/history`                         | —    | Transcription history page (เดิม `/jobs/history` redirect) |
+| GET    | `/healthz`                                               | —    | Health check (+ model state / mode)                        |
+| GET    | `/v1/settings/model`                                     | ✅   | Get model VRAM mode + engine states                        |
+| PUT    | `/v1/settings/model`                                     | ✅   | Change model VRAM mode at runtime                          |
+| POST   | `/v1/audio/transcribe`                                   | ✅   | Transcribe audio file                                      |
+| POST   | `/v1/media/transcribe/jobs`                              | ✅   | Create long-form job (202, async)                          |
+| GET    | `/v1/media/transcribe/jobs`                              | ✅   | List jobs                                                  |
+| GET    | `/v1/media/transcribe/jobs/{id}`                         | ✅   | Job status + result                                        |
+| DELETE | `/v1/media/transcribe/jobs/{id}`                         | ✅   | Delete job (record + media)                                |
+| DELETE | `/v1/media/transcribe/jobs/{id}/media`                   | ✅   | Delete media only (keep record)                            |
+| GET    | `/v1/media/transcribe/jobs/{id}/export/{txt\|srt\|json}` | ✅   | Export result                                              |
+| POST   | `/v1/media/compress/jobs`                                | ✅   | Create video compress job (202, async queue)               |
+| GET    | `/v1/media/compress/jobs`                                | ✅   | List compress jobs                                         |
+| GET    | `/v1/media/compress/jobs/{id}`                           | ✅   | Compress job status + result                               |
+| GET    | `/v1/media/compress/jobs/{id}/download`                  | ✅   | Download compressed MP4                                    |
+| DELETE | `/v1/media/compress/jobs/{id}`                           | ✅   | Cancel/delete compress job (input + output)                |
+| DELETE | `/v1/media/compress/jobs/{id}/output`                    | ✅   | Delete output file ONLY (keep history record)              |
+| WS     | `/v1/realtime/stream`                                    | —    | Real-time streaming                                        |
 
 ### cURL Examples
 
@@ -170,7 +171,7 @@ curl -X POST http://localhost:8830/v1/audio/transcribe \
 # Transcribe English / Thai-English mixed audio via Whisper
 curl -X POST http://localhost:8830/v1/audio/transcribe \
   -H "x-api-key: change-me-in-production" \
-  -F "file=@english.mp3" -F "language=en"
+  -F "file=@english.mp3" -F "language=th"
 
 # Transcribe with auto language detection (Whisper)
 curl -X POST http://localhost:8830/v1/audio/transcribe \
@@ -185,7 +186,7 @@ curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
 # Long-form job with English / mixed audio
 curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
   -H "x-api-key: change-me-in-production" \
-  -F "file=@video.mp4" -F "language=en"
+  -F "file=@video.mp4" -F "language=th"
 
 # Long-form job with custom chunk settings (optional; defaults 30/60s from env)
 curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
@@ -220,7 +221,8 @@ curl -X PUT http://localhost:8830/v1/settings/model \
 ```
 
 `language` รับค่าได้ 3 แบบ:
-- `th` (default) — ใช้ Typhoon ASR Realtime (ภาษาไทย, เร็ว, เหมาะกับ real-time)
+
+- `th` (default) — ใช้ Typhoon ASR Realtime (ภาษาไทย, **เร็วกว่า Whisper มาก** เหมาะกับ real-time)
 - `en` — ใช้ faster-whisper (อังกฤษ, output คำอังกฤษเป็นตัวละติน)
 - `auto` — ใช้ faster-whisper ตรวจจับภาษาอัตโนมัติ (รองรับภาษาไทย/อังกฤษผสม หรือ code-switching)
 
@@ -291,3 +293,5 @@ No formal test suite. Manual verification via:
 ## Model
 
 Model weights auto-downloaded from `typhoon-ai/typhoon-asr-realtime` on HuggingFace during Docker build. Local file: `model/typhoon-asr-realtime.nemo` (git-ignored, ~1GB VRAM at FP16).
+
+สำหรับภาษาไทย Typhoon ASR Realtime **เร็วกว่า Whisper อย่างมีนัยสำคัญ** โดยเฉพาะบน GPU — เหมาะกับงาน real-time และถอดไฟล์เสียงยาว

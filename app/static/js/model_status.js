@@ -1,11 +1,14 @@
-// Model VRAM residency status badge (header, all pages) + shared helpers for
+// Model VRAM residency status card (page top, all pages) + shared helpers for
 // page-level "model loading..." progress UI.
 (function () {
   const API_KEY_STORAGE = 'typhoon_asr_api_key';
 
-  const badgeEl = document.getElementById('modelStatusBadge');
   let last = { mode: 'always', typhoon: 'idle', whisper: 'idle' };
   let pollTimer = null;
+
+  function getBadgeEl() {
+    return document.getElementById('modelStatusBadge');
+  }
 
   const STATE_LABEL = { loaded: 'พร้อม', loading: 'กำลังโหลด', idle: 'idle' };
   const STATE_DOT = { loaded: '🟢', loading: '🟡', idle: '⚪' };
@@ -34,14 +37,17 @@
 
   function render(data) {
     last = data;
+    const badgeEl = getBadgeEl();
     if (!badgeEl) return;
     const dot = (s) => `${STATE_DOT[s] || '⚪'} ${STATE_LABEL[s] || s}`;
     const modeLabel = MODE_LABEL[data.model_load_mode] || data.model_load_mode;
     badgeEl.innerHTML =
-      `<span class="badge-dot" title="โหมด: ${modeLabel}">` +
-      `🌀 Typhoon: ${dot(data.typhoon_model_state)} · ` +
-      `🕊️ Whisper: ${dot(data.whisper_model_state)} · ` +
-      `โหมด: ${data.model_load_mode}</span>`;
+      `<div class="model-status-title">🌀 สถานะโมเดลบน VRAM</div>` +
+      `<div class="model-status-body">` +
+      `<span class="model-status-item">🌀 Typhoon: ${dot(data.typhoon_model_state)}</span>` +
+      `<span class="model-status-item">🕊️ Whisper: ${dot(data.whisper_model_state)}</span>` +
+      `<span class="model-status-item">⚙️ โหมด: ${modeLabel}</span>` +
+      `</div>`;
   }
 
   async function refresh() {
@@ -88,7 +94,11 @@
     startPolling: startPolling,
   };
 
-  if (badgeEl) {
+  if (getBadgeEl()) {
     startPolling(3000);
+  } else {
+    document.addEventListener('DOMContentLoaded', function () {
+      if (getBadgeEl()) startPolling(3000);
+    });
   }
 })();

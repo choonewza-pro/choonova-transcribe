@@ -141,6 +141,95 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+
+    /* Error Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1.5rem;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--card-bg);
+      border: 1px solid rgba(255, 107, 107, 0.4);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 620px;
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid rgba(255, 107, 107, 0.25);
+    }
+    .modal-header h3 { font-size: 1.15rem; color: #ff6b6b; }
+    .modal-close {
+      background: none;
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+    }
+    .modal-close:hover { border-color: var(--danger); color: #ff6b6b; }
+    .modal-body { padding: 1.25rem 1.5rem 1.5rem; overflow-y: auto; }
+    .modal-meta { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; word-break: break-all; }
+    .modal-error-msg {
+      background: rgba(255, 107, 107, 0.08);
+      border: 1px solid rgba(255, 107, 107, 0.3);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      color: #ffd7d7;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+      word-break: break-word;
+    }
+    .modal-raw-box {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+    }
+    .modal-raw-box summary {
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      user-select: none;
+    }
+    .modal-raw-box summary:hover { color: var(--accent-cyan); }
+    .modal-raw-text {
+      margin-top: 0.6rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'Fira Code', 'Consolas', monospace;
+      font-size: 0.78rem;
+      color: #ffb4b4;
+      line-height: 1.45;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
   </style>
 </head>
 <body>
@@ -149,6 +238,8 @@
   {% include 'partials/header.html' %}
 
   <main>
+    {% include 'partials/model_status_card.html' %}
+
     <div class="glass-card">
       <h1>🗜️ บีบอัดวิดีโอ</h1>
       <p class="subtitle" style="margin-bottom: 1.5rem;">
@@ -201,6 +292,20 @@
             <span class="option-hint">18 ≈ คุณภาพใกล้ต้นฉบับ • 23 ≈ ดี • 28 ≈ เล็กพอควร (default)</span>
           </div>
           <div class="option-card">
+            <label class="option-label" for="encoderSelect">🖥️ ตัวเข้ารหัสวิดีโอ (Encoder)</label>
+            <select id="encoderSelect" class="option-input">
+              <option value="libx264" {% if encoder != 'nvenc' or device != 'cuda' %}selected{% endif %}>libx264 — ใช้ CPU (default, ใช้ได้ทุกที่)</option>
+              {% if device == 'cuda' %}
+              <option value="nvenc" {% if encoder == 'nvenc' and device == 'cuda' %}selected{% endif %}>nvenc — ใช้ GPU NVENC (เร็วมาก)</option>
+              {% endif %}
+            </select>
+            {% if device == 'cuda' %}
+            <span class="option-hint">💡 ถ้าไม่แน่ใจ: เลือก <strong>libx264</strong> (ใช้ CPU รองรับทุกที่) • แต่ถ้าใช้ GPU NVIDIA ควรเลือก <strong>nvenc</strong> — เร็วกว่าหลายเท่าและใช้ CPU ต่ำ</span>
+            {% else %}
+            <span class="option-hint">เครื่องนี้รันแบบ CPU (ไม่พบ GPU NVENC) — ตัวเข้ารหัสจะใช้ <strong>libx264</strong> เสมอ</span>
+            {% endif %}
+          </div>
+          <div class="option-card" id="presetCard">
             <label class="option-label" for="presetSelect">⚡ ความเร็วประมวลผล (Preset)</label>
             <select id="presetSelect" class="option-input">
               <option value="ultrafast" {% if default_preset == 'ultrafast' %}selected{% endif %}>ultrafast — เร็วสุด (ไฟล์ใหญ่)</option>
@@ -213,7 +318,7 @@
               <option value="slower" {% if default_preset == 'slower' %}selected{% endif %}>slower</option>
               <option value="veryslow" {% if default_preset == 'veryslow' %}selected{% endif %}>veryslow — ไฟล์เล็กสุด (ช้าสุด)</option>
             </select>
-            <span class="option-hint">Encoder: <strong>{{ encoder }}</strong> (เปลี่ยนได้ผ่าน env COMPRESS_ENCODER)</span>
+            <span class="option-hint">เฉพาะ libx264 มี preset เหล่านี้ (nvenc ระบบจะแปลงให้อัตโนมัติ)</span>
           </div>
         </div>
 
@@ -281,6 +386,27 @@
     </div>
   </main>
 
-  <script src="/static/js/compress.js?v=1"></script>
+  <!-- Error Modal -->
+  <div class="modal-overlay" id="errorModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3>❌ การบีบอัดล้มเหลว</h3>
+        <button type="button" class="modal-close" id="errorModalCloseBtn" title="ปิด">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-meta" id="errorModalMeta"></div>
+        <div class="modal-error-msg" id="errorModalMsg"></div>
+        <details class="modal-raw-box">
+          <summary>🛠️ รายละเอียด RAW error (สำหรับนักพัฒนา)</summary>
+          <div class="modal-raw-text" id="errorModalRaw"></div>
+        </details>
+        <div class="modal-actions">
+          <button type="button" class="btn-primary" id="errorModalOkBtn">ตกลง</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/compress.js?v=2"></script>
 </body>
 </html>

@@ -456,6 +456,7 @@ async def media_compress_page(request: Request):
             "default_crf": COMPRESS_CRF,
             "default_preset": COMPRESS_PRESET,
             "encoder": COMPRESS_ENCODER,
+            "device": DEVICE,
             "max_concurrent": COMPRESS_MAX_CONCURRENT,
             "max_queued": COMPRESS_MAX_QUEUED,
         },

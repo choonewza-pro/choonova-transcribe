@@ -12,7 +12,9 @@
   {% include 'partials/header.html' %}
 
   <main>
-    <div class="glass-card" style="text-align: center;">
+    {% include 'partials/model_status_card.html' %}
+
+    <div class="glass-card" style="text-align: left;">
       <h1>🎙️ พูดผ่านไมโครโฟนแบบ Real-time</h1>
       <p class="subtitle" style="margin-bottom: 1.5rem;">เลือกไมโครโฟน กดปุ่มไมค์เพื่อเริ่มพูด ระบบจะสตรีมเสียงผ่าน WebSocket และถอดความเป็นข้อความสดทันที</p>
 
@@ -38,7 +40,7 @@
           <option value="">🎙️ ไมโครโฟนเริ่มต้น (System Default Mic)</option>
         </select>
         <button id="refreshMicsBtn" class="nav-link" style="border: 1px solid var(--card-border); cursor: pointer; padding: 0.7rem 1rem;" title="รีเฟรชรายชื่อไมค์">
-          🔄
+          Refresh Microphone
         </button>
       </div>
 

@@ -100,6 +100,8 @@
   {% include 'partials/header.html' %}
 
   <main>
+    {% include 'partials/model_status_card.html' %}
+
     <div class="glass-card">
       <h1>🎬 ถอดไฟล์เสียงและวีดีโอ</h1>
       {% if max_upload_mb|default(0) > 0 %}

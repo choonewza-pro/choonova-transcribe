@@ -19,3 +19,4 @@ services/typhoon-asr-service/data/jobs/
 # --- Local SQLite jobs database (baked empty into the Docker image; mount ./data for persistence) ---
 data/choonova-transcribe.db
 data/choonova-transcribe.db-*
+data/jobs/

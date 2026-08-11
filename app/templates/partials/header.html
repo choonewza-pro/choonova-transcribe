@@ -10,11 +10,6 @@
       <span class="nav-toggle-bar"></span>
     </button>
 
-    <!-- Model VRAM residency status (updated live by model_status.js) -->
-    <div id="modelStatusBadge" class="model-status-badge" title="สถานะโมเดลบน VRAM">
-      <span class="badge-dot">🌀 Typhoon: ⚪ idle · 🕊️ Whisper: ⚪ idle · โหมด: ...</span>
-    </div>
-
     <nav class="nav-links" id="mainNav">
       <a href="/" class="nav-link {% if active_page == 'home' %}active{% endif %}">หน้าแรก</a>
       <a href="/audio/transcribe" class="nav-link {% if active_page == 'upload' %}active{% endif %}">ถอดไฟล์เสียง</a>
@@ -48,7 +43,7 @@
       });
 
       window.addEventListener('resize', function () {
-        if (window.innerWidth > 768 && nav.classList.contains('open')) {
+        if (window.innerWidth > 960 && nav.classList.contains('open')) {
           nav.classList.remove('open');
           toggle.classList.remove('open');
           toggle.setAttribute('aria-expanded', 'false');
@@ -56,4 +51,4 @@
       });
     })();
   </script>
-  <script src="/static/js/model_status.js?v=1"></script>
+  <script src="/static/js/model_status.js?v=2"></script>
