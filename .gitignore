@@ -8,7 +8,9 @@ venv/
 ENV/
 *.nemo
 model/*.nemo
-.cache/
+.agents/skills/
+!.agents/skills/project-onboarding/
+!.agents/skills/project-onboarding/SKILL.md
 skills-lock.json
 .serena/
 
