@@ -123,6 +123,43 @@ document.addEventListener('DOMContentLoaded', () => {
     return `<span class="status-badge ${info.cls}">${info.label}</span>`;
   }
 
+  // --- Retention banner (last automatic cleanup by COMPRESS_RETENTION_HOURS) ---
+  function escapeText(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (m) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[m]));
+  }
+
+  async function loadRetentionInfo() {
+    const banner = document.getElementById('retentionBanner');
+    if (!banner) return;
+    try {
+      const headers = {};
+      const apiKey = getApiKey();
+      if (apiKey) headers['x-api-key'] = apiKey;
+      const res = await fetch('/v1/media/compress/retention', { headers });
+      if (!res.ok) return;
+      const info = await res.json();
+      const hours = info.retention_hours || 0;
+      const lastAt = info.last_cleanup_at ? formatDate(info.last_cleanup_at) : '';
+      const count = info.last_cleanup_count || 0;
+      const lastCleanup = lastAt
+        ? `🕐 ล้างไฟล์ตามนโยบายครั้งล่าสุด: <strong>${escapeText(lastAt)}</strong>${count ? ` (ลบไฟล์ของ ${count} งาน)` : ''}`
+        : '🕐 ล้างไฟล์ตามนโยบายครั้งล่าสุด: <strong>ยังไม่เคยมีรายการล้างไฟล์อัตโนมัติ</strong>';
+      banner.innerHTML = `
+        <span class="retention-icon">🧹</span>
+        <div class="retention-text">
+          <div><strong>นโยบายการลบไฟล์อัตโนมัติ (Retention Policy):</strong>
+          ไฟล์ผลลัพธ์ของงานบีบอัดจะถูกลบจากดิสก์อัตโนมัติหลังสร้างครบ
+          <strong>${hours} ชั่วโมง</strong> (COMPRESS_RETENTION_HOURS) — เก็บเฉพาะประวัติการบีบอัด</div>
+          <div>${lastCleanup}</div>
+        </div>`;
+    } catch (e) {
+      const el = document.getElementById('retentionLastCleanup');
+      if (el && !el.textContent.trim()) el.textContent = 'ยังไม่เคยมีรายการล้างไฟล์อัตโนมัติ';
+    }
+  }
+
   function isProcessing(status) {
     return ['queued', 'processing'].includes(status);
   }
@@ -148,6 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
       jobs = await res.json();
       renderStorageStats();
       renderJobs();
+      loadRetentionInfo();
     } catch (err) {
       listMeta.textContent = `❌ โหลดรายการไม่สำเร็จ: ${err.message || err}`;
       jobsCards.style.display = 'none';
@@ -430,5 +468,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   if (btnRefresh) btnRefresh.addEventListener('click', loadJobs);
 
+  loadRetentionInfo();
   loadJobs();
 });

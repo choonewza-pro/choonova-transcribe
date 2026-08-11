@@ -230,6 +230,24 @@
       justify-content: flex-end;
       gap: 0.75rem;
     }
+
+    /* Warning Modal */
+    .modal.warning-modal { border-color: rgba(210, 153, 34, 0.4); }
+    .warning-header { border-bottom-color: rgba(210, 153, 34, 0.25); }
+    .warning-header h3 { color: #d29922; }
+    .warning-modal .modal-close:hover { border-color: #d29922; color: #d29922; }
+    .modal-warning-msg {
+      background: rgba(210, 153, 34, 0.08);
+      border: 1px solid rgba(210, 153, 34, 0.3);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      color: #ffe2a3;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      margin-bottom: 1rem;
+      word-break: break-word;
+    }
+    .modal-warning-msg strong { color: #ffd76b; }
   </style>
 </head>
 <body>
@@ -250,6 +268,8 @@
         📂 ดูผลการบีบอัด และลบไฟล์เพื่อประหยัดพื้นที่ได้ที่
         <a href="/media/compress/jobs/history" style="color: #ff9d2e; text-decoration: underline;">ประวัติการบีบอัดวิดีโอ</a>
       </p>
+
+      {% include 'partials/retention_banner.html' %}
 
       {% include 'partials/api_key_settings.html' %}
 
@@ -412,6 +432,22 @@
         </details>
         <div class="modal-actions">
           <button type="button" class="btn-primary" id="errorModalOkBtn">ตกลง</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Warning Modal -->
+  <div class="modal-overlay" id="warningModal">
+    <div class="modal warning-modal" role="dialog" aria-modal="true">
+      <div class="modal-header warning-header">
+        <h3>⚠️ กรุณาตรวจสอบข้อมูล</h3>
+        <button type="button" class="modal-close" id="warningModalCloseBtn" title="ปิด">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-warning-msg" id="warningModalMsg"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-primary" id="warningModalOkBtn">ตกลง</button>
         </div>
       </div>
     </div>

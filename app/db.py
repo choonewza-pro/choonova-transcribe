@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import json
+import time
 import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -656,4 +657,13 @@ def cleanup_expired_compress_jobs(hours: float = COMPRESS_RETENTION_HOURS) -> Li
                 f"{len(expired_ids) - len(non_completed_ids)} completed record(s)"
             )
 
-        return expired_ids
+    # Record whenever the retention policy actually cleared files, so the
+    # dashboard can show when the last automatic cleanup ran and how many
+    # on-disk job directories (input/output) were removed. The timestamp is
+    # stored as a JS-friendly UTC string (ISO 8601 with 'Z' suffix).
+    if expired_ids:
+        now_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        set_setting("COMPRESS_LAST_CLEANUP_AT", now_utc)
+        set_setting("COMPRESS_LAST_CLEANUP_COUNT", str(len(expired_ids)))
+
+    return expired_ids

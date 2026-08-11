@@ -127,6 +127,30 @@ nav {
   user-select: none;
 }
 
+.retention-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  margin: 0 0 1.5rem;
+  padding: 0.9rem 1.1rem;
+  border-radius: 12px;
+  background: rgba(210, 153, 34, 0.1);
+  border: 1px solid rgba(210, 153, 34, 0.4);
+  color: #ffd7a0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.retention-icon {
+  font-size: 1.15rem;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.retention-text strong {
+  color: #ffd76b;
+}
+
 .nav-links {
   display: flex;
   gap: 1rem;

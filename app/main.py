@@ -450,6 +450,7 @@ async def media_transcribe_page(request: Request):
 
 @app.get("/media/compress", response_class=HTMLResponse)
 async def media_compress_page(request: Request):
+    retention = compress_retention_summary()
     return templates.TemplateResponse(
         request=request,
         name="compress.html",
@@ -461,16 +462,26 @@ async def media_compress_page(request: Request):
             "device": DEVICE,
             "max_concurrent": COMPRESS_MAX_CONCURRENT,
             "max_queued": COMPRESS_MAX_QUEUED,
+            "retention_hours": retention["retention_hours"],
+            "last_cleanup_at": retention["last_cleanup_at"],
+            "last_cleanup_count": retention["last_cleanup_count"],
         },
     )
 
 
 @app.get("/media/compress/jobs/history", response_class=HTMLResponse)
 async def compress_jobs_history_page(request: Request):
+    retention = compress_retention_summary()
     return templates.TemplateResponse(
         request=request,
         name="compress_jobs.html",
-        context={"active_page": "compress_jobs", "header_badge": "Compressor History"},
+        context={
+            "active_page": "compress_jobs",
+            "header_badge": "Compressor History",
+            "retention_hours": retention["retention_hours"],
+            "last_cleanup_at": retention["last_cleanup_at"],
+            "last_cleanup_count": retention["last_cleanup_count"],
+        },
     )
 
 
@@ -885,6 +896,24 @@ async def export_job_result(
 # =========================================================================
 
 
+def compress_retention_summary() -> Dict[str, Any]:
+    """
+    Retention-policy info for the compressor dashboard: the configured window
+    (COMPRESS_RETENTION_HOURS from env) and the last time the automatic
+    cleanup actually removed on-disk files (tracked in the settings table).
+    """
+    last_at = get_setting("COMPRESS_LAST_CLEANUP_AT")
+    try:
+        last_count = int(get_setting("COMPRESS_LAST_CLEANUP_COUNT", "0") or 0)
+    except (TypeError, ValueError):
+        last_count = 0
+    return {
+        "retention_hours": COMPRESS_RETENTION_HOURS,
+        "last_cleanup_at": last_at,
+        "last_cleanup_count": last_count,
+    }
+
+
 def _validate_compress_params(
     target_width: int, bitrate_kbps: int, crf: int,
     trim_start: float = 0.0, trim_end: float = 0.0,
@@ -1038,6 +1067,18 @@ async def list_compress_jobs_api(
             job.get("output_path") and os.path.exists(job.get("output_path") or "")
         )
     return jobs
+
+
+@app.get("/v1/media/compress/retention")
+async def get_compress_retention_info(
+    authenticated: bool = Depends(verify_api_key),
+):
+    """
+    Retention-policy info for the compressor dashboard: how long compressed
+    output files are kept on disk (COMPRESS_RETENTION_HOURS) and the timestamp
+    + count of the last automatic cleanup that actually removed files.
+    """
+    return compress_retention_summary()
 
 
 @app.get("/v1/media/compress/jobs/{job_id}", response_model=CompressJobStatusResponse)

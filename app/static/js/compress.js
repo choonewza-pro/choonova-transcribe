@@ -73,6 +73,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape' && errorModal && errorModal.classList.contains('open')) closeErrorModal();
   });
 
+  // --- Warning Modal ---
+  const warningModal = document.getElementById('warningModal');
+  const warningModalMsg = document.getElementById('warningModalMsg');
+  const warningModalCloseBtn = document.getElementById('warningModalCloseBtn');
+  const warningModalOkBtn = document.getElementById('warningModalOkBtn');
+
+  function openWarningModal(message) {
+    if (warningModalMsg) warningModalMsg.textContent = message || 'กรุณาตรวจสอบข้อมูลที่กรอก';
+    if (warningModal) warningModal.classList.add('open');
+  }
+  function closeWarningModal() {
+    if (warningModal) warningModal.classList.remove('open');
+  }
+  if (warningModalCloseBtn) warningModalCloseBtn.addEventListener('click', closeWarningModal);
+  if (warningModalOkBtn) warningModalOkBtn.addEventListener('click', closeWarningModal);
+  if (warningModal) warningModal.addEventListener('click', (e) => {
+    if (e.target === warningModal) closeWarningModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && warningModal && warningModal.classList.contains('open')) closeWarningModal();
+  });
+
   function compressErrorMessage(raw) {
     const s = (raw || '').toString();
     const firstLine = s.split('\n')[0].trim();
@@ -131,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (apiKeyInput) apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
   });
   initApiKeyUI();
+  loadRetentionInfo();
 
   // --- Formatting helpers ---
   function formatBytes(bytes) {
@@ -150,6 +173,57 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${secs}วินาที`;
   }
   function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+
+  // --- Retention banner (last automatic cleanup by COMPRESS_RETENTION_HOURS) ---
+  function formatDateTime(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleString('th-TH', {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  function escapeText(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (m) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[m]));
+  }
+
+  async function loadRetentionInfo() {
+    const banner = document.getElementById('retentionBanner');
+    if (!banner) return;
+    try {
+      const headers = {};
+      const apiKey = getApiKey();
+      if (apiKey) headers['x-api-key'] = apiKey;
+      const res = await fetch('/v1/media/compress/retention', { headers });
+      if (!res.ok) return;
+      const info = await res.json();
+      const hours = info.retention_hours || 0;
+      const lastAt = info.last_cleanup_at ? formatDateTime(info.last_cleanup_at) : '';
+      const count = info.last_cleanup_count || 0;
+      const lastCleanup = lastAt
+        ? `🕐 ล้างไฟล์ตามนโยบายครั้งล่าสุด: <strong>${escapeText(lastAt)}</strong>${count ? ` (ลบไฟล์ของ ${count} งาน)` : ''}`
+        : '🕐 ล้างไฟล์ตามนโยบายครั้งล่าสุด: <strong>ยังไม่เคยมีรายการล้างไฟล์อัตโนมัติ</strong>';
+      banner.innerHTML = `
+        <span class="retention-icon">🧹</span>
+        <div class="retention-text">
+          <div><strong>นโยบายการลบไฟล์อัตโนมัติ (Retention Policy):</strong>
+          ไฟล์ผลลัพธ์ของงานบีบอัดจะถูกลบจากดิสก์อัตโนมัติหลังสร้างครบ
+          <strong>${hours} ชั่วโมง</strong> (COMPRESS_RETENTION_HOURS) — เก็บเฉพาะประวัติการบีบอัด</div>
+          <div>${lastCleanup}</div>
+        </div>`;
+    } catch (e) {
+      const el = document.getElementById('retentionLastCleanup');
+      if (el && !el.textContent.trim()) el.textContent = 'ยังไม่เคยมีรายการล้างไฟล์อัตโนมัติ';
+    }
+  }
 
   // --- Drag & drop ---
   compressDropzone.addEventListener('click', () => compressFileInput.click());
@@ -285,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const widthVal = parseInt(targetWidthInput.value, 10) || 0;
     const bitrateVal = parseInt(bitrateInput.value, 10) || 0;
     if (!widthVal && !bitrateVal) {
-      alert('กรุณากรอกอย่างใดอย่างหนึ่ง: ความกว้างที่ต้องการ (px) หรือบิตเรต (kbps)');
+      openWarningModal('กรุณากรอกอย่างใดอย่างหนึ่ง: ความกว้างที่ต้องการ (px) หรือบิตเรต (kbps)');
       return;
     }
 
