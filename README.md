@@ -218,6 +218,8 @@ python -m unittest discover -s tests/unit -t . -v
 
 ```
 app/
+├── main.py          # FastAPI application entry point
+├── *worker.py       # Isolated subprocess workers (Transcription, Compression)
 ├── core/            # Cross-cutting concerns (config, db, security)
 ├── modules/         # Domain bounded contexts (settings, compression, transcription)
 ├── api/             # Delivery layer
