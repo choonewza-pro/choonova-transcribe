@@ -22,14 +22,8 @@ from app.config import (
 logger = logging.getLogger("typhoon-asr-db")
 
 
-def get_db_connection() -> sqlite3.Connection:
-    """
-    Get SQLite database connection with Row factory for dict-like access.
-    """
-    os.makedirs(DATA_DIR, exist_ok=True)
-    conn = sqlite3.connect(JOBS_DB_PATH, timeout=20.0)
-    conn.row_factory = sqlite3.Row
-    return conn
+from app.core.db import get_db_connection
+
 
 
 def init_db() -> None:
