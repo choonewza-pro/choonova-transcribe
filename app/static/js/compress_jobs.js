@@ -1,10 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const API_KEY_STORAGE = 'typhoon_asr_api_key';
 
-  const apiKeyInput = document.getElementById('apiKeyInput');
-  const toggleApiKeyBtn = document.getElementById('toggleApiKeyBtn');
-  const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
-  const clearApiKeyLink = document.getElementById('clearApiKeyLink');
 
   const listMeta = document.getElementById('listMeta');
   const btnRefresh = document.getElementById('btnRefresh');
@@ -20,64 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- API Key Management ---
   function getApiKey() {
-    return (apiKeyInput && apiKeyInput.value.trim()) || localStorage.getItem(API_KEY_STORAGE) || '';
+    return localStorage.getItem(API_KEY_STORAGE) || '';
   }
-
-  function maskApiKey(key) {
-    if (!key) return '••••••••';
-    if (key.length <= 8) return '•'.repeat(key.length);
-    return `${key.slice(0, 4)}••••${key.slice(-4)}`;
-  }
-
-  function initApiKeyUI() {
-    const apiKeyInputGroup = document.getElementById('apiKeyInputGroup');
-    const apiKeySavedState = document.getElementById('apiKeySavedState');
-    const apiKeyMask = document.getElementById('apiKeyMask');
-    const saved = localStorage.getItem(API_KEY_STORAGE);
-    if (saved) {
-      if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'none';
-      if (apiKeySavedState) {
-        apiKeySavedState.style.display = 'flex';
-        if (apiKeyMask) apiKeyMask.textContent = maskApiKey(saved);
-      }
-    } else {
-      if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'block';
-      if (apiKeySavedState) apiKeySavedState.style.display = 'none';
-    }
-  }
-
-  if (saveApiKeyBtn) {
-    saveApiKeyBtn.addEventListener('click', async () => {
-      const key = apiKeyInput ? apiKeyInput.value.trim() : '';
-      if (!key) {
-        alert('Please enter an API key before saving.');
-        return;
-      }
-      localStorage.setItem(API_KEY_STORAGE, key);
-      if (apiKeyInput) apiKeyInput.value = '';
-      initApiKeyUI();
-      await loadJobs();
-    });
-  }
-
-  if (clearApiKeyLink) {
-    clearApiKeyLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      localStorage.removeItem(API_KEY_STORAGE);
-      if (apiKeyInput) apiKeyInput.value = '';
-      initApiKeyUI();
-    });
-  }
-
-  if (toggleApiKeyBtn) {
-    toggleApiKeyBtn.addEventListener('click', () => {
-      if (apiKeyInput) {
-        apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
-      }
-    });
-  }
-
-  initApiKeyUI();
 
   // --- Formatting Helpers ---
   function formatBytes(bytes) {
@@ -326,11 +266,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const encLabel = job.encoder === 'nvenc' ? '⚡ NVENC' : '💻 libx264';
       const hasAudio = completed && job.audio_extract_format && !!job.audio_exists;
 
-      const downloadBtn = `<button type="button" class="btn-row" data-action="download" data-id="${job.job_id}" ${completed && outputExists ? '' : 'disabled title="ไม่มีไฟล์ผลลัพธ์"'} title="${completed && outputExists ? 'ดาวน์โหลดไฟล์ MP4 ที่บีบอัดแล้ว' : 'ไม่มีไฟล์ผลลัพธ์'}">📥 ดาวน์โหลด</button>`;
+      const downloadBtn = `<button type="button" class="btn-row" data-action="download" data-id="${job.job_id}" ${completed && outputExists ? '' : 'disabled title="ไม่มีไฟล์ผลลัพธ์"'} title="${completed && outputExists ? 'ดาวน์โหลดไฟล์ MP4 ที่บีบอัดแล้ว' : 'ไม่มีไฟล์ผลลัพธ์'}">📥 ดาวน์โหลด mp4</button>`;
       const audioDownloadBtn = hasAudio
         ? `<button type="button" class="btn-row" data-action="download-audio" data-id="${job.job_id}" title="ดาวน์โหลดไฟล์เสียงที่สกัดไว้">🎵 ดาวน์โหลดเสียง</button>`
         : '';
-      const delOutputBtn = `<button type="button" class="btn-row btn-danger" data-action="del-output" data-id="${job.job_id}" ${completed && outputExists ? '' : 'disabled title="ไม่มีไฟล์ผลลัพธ์ให้ลบ"'} title="${completed && outputExists ? 'ลบเฉพาะไฟล์ผลลัพธ์ เพื่อประหยัดพื้นที่ (เก็บประวัติไว้)' : 'ไม่มีไฟล์ผลลัพธ์ให้ลบ'}">🗑 ลบไฟล์ผลลัพธ์</button>`;
+      const hasAnyOutput = completed && (outputExists || hasAudio);
+      const delOutputBtn = `<button type="button" class="btn-row btn-danger" data-action="del-output" data-id="${job.job_id}" ${hasAnyOutput ? '' : 'disabled title="ไม่มีไฟล์ผลลัพธ์ให้ลบ"'} title="${hasAnyOutput ? 'ลบไฟล์ผลลัพธ์ (วิดีโอ MP4 + เสียง) เพื่อประหยัดพื้นที่ (เก็บประวัติไว้)' : 'ไม่มีไฟล์ผลลัพธ์ให้ลบ'}">🗑 ลบไฟล์ผลลัพธ์</button>`;
       const delRowBtn = `<button type="button" class="btn-row btn-danger" data-action="del-row" data-id="${job.job_id}" title="ลบทั้งแถว (ประวัติ + ไฟล์ทั้งหมด)">❌ ลบรายการ</button>`;
 
       card.innerHTML = `
@@ -404,17 +345,25 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(detail);
       }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
       const job = jobs.find(j => j.job_id === jobId);
       const base = (job && job.filename) ? String(job.filename).replace(/\.[^/.]+$/, '') : jobId;
+      let filename = `${base}.mp4`;
+
+      const disposition = res.headers.get('Content-Disposition');
+      if (disposition && disposition.includes('filename=')) {
+        const match = disposition.match(/filename=["']?([^"';]+)["']?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${base}.mp4`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (err) {
       alert(`❌ ดาวน์โหลดล้มเหลว: ${err.message || err}`);
     }
@@ -439,16 +388,24 @@ document.addEventListener('DOMContentLoaded', () => {
       const job = jobs.find(j => j.job_id === jobId);
       const fmt = (job && job.audio_extract_format) || 'wav';
       const ext = fmt === 'mp3' ? 'mp3' : 'wav';
+      const base = (job && job.filename) ? String(job.filename).replace(/\.[^/.]+$/, '') : jobId;
+      let filename = `${base}_audio.${ext}`;
+
+      const disposition = res.headers.get('Content-Disposition');
+      if (disposition && disposition.includes('filename=')) {
+        const match = disposition.match(/filename=["']?([^"';]+)["']?/);
+        if (match && match[1]) filename = match[1];
+      }
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const base = (job && job.filename) ? String(job.filename).replace(/\.[^/.]+$/, '') : jobId;
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${base}_audio.${ext}`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (err) {
       alert(`❌ ดาวน์โหลดเสียงล้มเหลว: ${err.message || err}`);
     }
@@ -457,7 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function deleteOutputOnly(jobId) {
     const job = jobs.find(j => j.job_id === jobId);
     const filename = job ? job.filename : jobId;
-    if (!confirm(`🗑 ลบไฟล์ผลลัพธ์ของ "${filename}" ?\n\nจะลบเฉพาะไฟล์ MP4 ที่บีบอัดแล้วเพื่อประหยัดพื้นที่\nประวัติการบีบอัด (ขนาด/ความละเอียด/อัตราการลด) จะถูกเก็บไว้`)) {
+    if (!confirm(`🗑 ลบไฟล์ผลลัพธ์ของ "${filename}" ?\n\nจะลบไฟล์ผลลัพธ์ทั้งหมด (ทั้งวิดีโอ MP4 และไฟล์เสียงที่สกัดไว้) เพื่อประหยัดพื้นที่\nประวัติการบีบอัด (ขนาด/ความละเอียด/อัตราการลด) จะถูกเก็บไว้`)) {
       return;
     }
     await doDelete(`/v1/media/compress/jobs/${jobId}/output`, jobId, 'ลบไฟล์ผลลัพธ์');

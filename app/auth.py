@@ -1,27 +1,9 @@
-from fastapi import Header, HTTPException, status
-import hmac
-from app.config import GATEWAY_API_KEY
+"""
+Backward compatibility layer for app.auth.
+Security functions now live in app.core.security.
+"""
 
-async def verify_api_key(
-    x_api_key: str | None = Header(None, alias="x-api-key"),
-) -> bool:
-    """
-    Verifies authentication via:
-    - x-api-key: <key>
-    """
-    token = x_api_key.strip() if x_api_key else None
+from app.core.security import verify_api_key
 
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing API key. Provide 'x-api-key: <key>' header."
-        )
+__all__ = ["verify_api_key"]
 
-    # Constant time comparison to prevent timing attacks
-    if not hmac.compare_digest(token, GATEWAY_API_KEY):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid API key."
-        )
-
-    return True

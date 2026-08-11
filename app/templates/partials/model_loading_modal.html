@@ -1,0 +1,44 @@
+<!-- Model Loading Dialog Modal (Global component included in header.html) -->
+<div id="modelLoadingBackdrop" class="model-loading-backdrop" style="display: none;" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="model-loading-dialog">
+    <div class="model-loading-header">
+      <div class="model-loading-icon-wrap">
+        <div class="model-loading-spinner"></div>
+        <span class="model-loading-icon">🌀</span>
+      </div>
+      <div class="model-loading-title-group">
+        <h3 id="modelLoadingTitle" class="model-loading-title">กำลังโหลดโมเดลเข้า VRAM / RAM...</h3>
+        <p id="modelLoadingSubtitle" class="model-loading-subtitle">
+          กำลังเตรียมความพร้อมของโมเดล AI สำหรับการถอดข้อความเสียง โปรดรอสักครู่
+        </p>
+      </div>
+    </div>
+
+    <div class="model-loading-body">
+      <div class="model-loading-status-box">
+        <div class="model-loading-status-item">
+          <span class="status-label">🌀 Typhoon ASR:</span>
+          <span id="modelLoadingTyphoonBadge" class="status-badge badge-idle">⚪ รอการโหลด</span>
+        </div>
+        <div class="model-loading-status-item">
+          <span class="status-label">🕊️ Faster-Whisper:</span>
+          <span id="modelLoadingWhisperBadge" class="status-badge badge-idle">⚪ รอการโหลด</span>
+        </div>
+        <div class="model-loading-status-item">
+          <span class="status-label">⏱️ เวลาที่ผ่านไป:</span>
+          <span id="modelLoadingTimer" class="status-timer">00:00s</span>
+        </div>
+      </div>
+
+      <div class="model-loading-tip">
+        💡 <strong>คำแนะนำ:</strong> การโหลดโมเดลเข้าหน่วยความจำ (VRAM/RAM) จะเกิดขึ้นเพียงครั้งแรกหรือเมื่อสลับโหมด หลังจากโมเดลพร้อมแล้ว การถอดความจะทำงานได้รวดเร็วทันที
+      </div>
+    </div>
+
+    <div class="model-loading-footer">
+      <button type="button" id="modelLoadingCancelBtn" class="btn-cancel-task">
+        <span>🛑 ยกเลิกงานที่ทำอยู่ (Cancel Task)</span>
+      </button>
+    </div>
+  </div>
+</div>

@@ -1,10 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const API_KEY_STORAGE = 'typhoon_asr_api_key';
 
-  const apiKeyInput = document.getElementById('apiKeyInput');
-  const toggleApiKeyBtn = document.getElementById('toggleApiKeyBtn');
-  const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
-  const clearApiKeyLink = document.getElementById('clearApiKeyLink');
 
   const listMeta = document.getElementById('listMeta');
   const btnRefresh = document.getElementById('btnRefresh');
@@ -34,63 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- API Key Management ---
   function getApiKey() {
-    return (apiKeyInput && apiKeyInput.value.trim()) || localStorage.getItem(API_KEY_STORAGE) || '';
+    return localStorage.getItem(API_KEY_STORAGE) || '';
   }
-
-  function maskApiKey(key) {
-    if (!key) return '••••••••';
-    if (key.length <= 8) return '•'.repeat(key.length);
-    return `${key.slice(0, 4)}••••${key.slice(-4)}`;
-  }
-
-  function initApiKeyUI() {
-    const apiKeyInputGroup = document.getElementById('apiKeyInputGroup');
-    const apiKeySavedState = document.getElementById('apiKeySavedState');
-    const apiKeyMask = document.getElementById('apiKeyMask');
-    const saved = localStorage.getItem(API_KEY_STORAGE);
-    if (saved) {
-      if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'none';
-      if (apiKeySavedState) {
-        apiKeySavedState.style.display = 'flex';
-        if (apiKeyMask) apiKeyMask.textContent = maskApiKey(saved);
-      }
-    } else {
-      if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'block';
-      if (apiKeySavedState) apiKeySavedState.style.display = 'none';
-    }
-  }
-
-  if (saveApiKeyBtn) {
-    saveApiKeyBtn.addEventListener('click', () => {
-      const key = apiKeyInput ? apiKeyInput.value.trim() : '';
-      if (!key) {
-        alert('Please enter an API key before saving.');
-        return;
-      }
-      localStorage.setItem(API_KEY_STORAGE, key);
-      if (apiKeyInput) apiKeyInput.value = '';
-      initApiKeyUI();
-    });
-  }
-
-  if (clearApiKeyLink) {
-    clearApiKeyLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      localStorage.removeItem(API_KEY_STORAGE);
-      if (apiKeyInput) apiKeyInput.value = '';
-      initApiKeyUI();
-    });
-  }
-
-  if (toggleApiKeyBtn) {
-    toggleApiKeyBtn.addEventListener('click', () => {
-      if (apiKeyInput) {
-        apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
-      }
-    });
-  }
-
-  initApiKeyUI();
 
   // --- Formatting Helpers ---
   function formatBytes(bytes) {
@@ -244,7 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const shortId = escapeHtml((job.job_id || '').substring(0, 8));
       const fileName = escapeHtml(job.filename || '-');
-      const langMap = { th: '🇹🇭 ไทย', en: '🇬🇧 EN', auto: '🌐 อัตโนมัติ' };
+      const langMap = { th: '🇹🇭 ไทย', en: '🇬🇧 EN', auto: 'อัตโนมัติ' };
       const langBadge = langMap[job.language] || '🇹🇭 ไทย';
 
       let extra = '';
@@ -311,6 +252,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  let activeJobFilename = '';
+
+  async function downloadFileWithAuth(url, defaultFilename) {
+    try {
+      const headers = {};
+      const apiKey = getApiKey();
+      if (apiKey) headers['x-api-key'] = apiKey;
+
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const err = await res.json();
+          detail = err.detail || detail;
+        } catch (e2) {}
+        throw new Error(detail);
+      }
+
+      let filename = defaultFilename;
+      const disposition = res.headers.get('Content-Disposition');
+      if (disposition && disposition.includes('filename=')) {
+        const match = disposition.match(/filename=["']?([^"';]+)["']?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch (err) {
+      alert(`❌ ดาวน์โหลดล้มเหลว: ${err.message || err}`);
+    }
+  }
+
   // --- View Transcript Modal ---
   async function openViewModal(jobId) {
     activeJobId = jobId;
@@ -339,17 +319,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const job = await res.json();
+      activeJobFilename = (job.filename || job.job_id).replace(/\.[^/.]+$/, '');
       modalTitle.textContent = `📄 ดูข้อมูลการถอดความ — ${job.filename || jobId}`;
       modalResultText.textContent = job.result_text || '(ไม่มีข้อความที่ถอดได้)';
       statJobId.textContent = `🆔 Job ID: ${job.job_id.substring(0, 8)}...`;
       statStatus.textContent = `📌 สถานะ: ${(STATUS_MAP[job.status] || {}).label || job.status}`;
       statDuration.textContent = `⏱️ ความยาว: ${formatSeconds(job.duration_seconds)}`;
       statElapsed.textContent = `⚡ เวลาประมวลผลรวม: ${formatSeconds(job.elapsed_seconds)}`;
-
-      // Export URLs
-      btnDownloadTxt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/txt`;
-      btnDownloadSrt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/srt`;
-      btnDownloadJson.href = `/v1/media/transcribe/jobs/${job.job_id}/export/json`;
     } catch (err) {
       modalResultText.style.display = 'none';
       modalErrorBox.style.display = 'block';
@@ -360,12 +336,35 @@ document.addEventListener('DOMContentLoaded', () => {
   function closeViewModal() {
     viewModal.classList.remove('open');
     activeJobId = null;
+    activeJobFilename = '';
   }
 
   if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeViewModal);
   viewModal.addEventListener('click', (e) => {
     if (e.target === viewModal) closeViewModal();
   });
+
+  if (btnDownloadTxt) {
+    btnDownloadTxt.addEventListener('click', () => {
+      if (!activeJobId) return;
+      const baseName = activeJobFilename || activeJobId;
+      downloadFileWithAuth(`/v1/media/transcribe/jobs/${activeJobId}/export/txt`, `${baseName}.txt`);
+    });
+  }
+  if (btnDownloadSrt) {
+    btnDownloadSrt.addEventListener('click', () => {
+      if (!activeJobId) return;
+      const baseName = activeJobFilename || activeJobId;
+      downloadFileWithAuth(`/v1/media/transcribe/jobs/${activeJobId}/export/srt`, `${baseName}.srt`);
+    });
+  }
+  if (btnDownloadJson) {
+    btnDownloadJson.addEventListener('click', () => {
+      if (!activeJobId) return;
+      const baseName = activeJobFilename || activeJobId;
+      downloadFileWithAuth(`/v1/media/transcribe/jobs/${activeJobId}/export/json`, `${baseName}.json`);
+    });
+  }
 
   btnCopy.addEventListener('click', () => {
     if (modalResultText.textContent) {

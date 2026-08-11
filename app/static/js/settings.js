@@ -63,7 +63,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (toggleApiKeyBtn) {
     toggleApiKeyBtn.addEventListener('click', () => {
       if (apiKeyInput) {
-        apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
+        const isPassword = apiKeyInput.type === 'password';
+        apiKeyInput.type = isPassword ? 'text' : 'password';
+        toggleApiKeyBtn.textContent = isPassword ? '🙈' : '👁️';
+        toggleApiKeyBtn.title = isPassword ? 'ซ่อน API Key' : 'แสดง API Key';
       }
     });
   }
@@ -111,19 +114,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  let activeSettingsController = null;
+
   saveBtn.addEventListener('click', async () => {
+    const mode = modeSelect.value;
     const payload = {
-      mode: modeSelect.value,
+      mode: mode,
       idle_timeout_sec: Math.max(30, parseFloat(timeoutInput.value) || 900),
     };
     saveBtn.disabled = true;
-    statusEl.textContent = '⏳ กำลังบันทึก...';
+    statusEl.textContent = '⏳ กำลังบันทึกการตั้งค่าโมเดล...';
+
+    activeSettingsController = new AbortController();
+
+    if (mode === 'always' && window.ModelLoadingDialog) {
+      window.ModelLoadingDialog.show({
+        engine: 'all',
+        title: 'กำลังพรีโหลดโมเดลทั้งหมดเข้า VRAM / RAM...',
+        onCancel: () => {
+          if (activeSettingsController) {
+            activeSettingsController.abort();
+          }
+        }
+      });
+    }
+
     try {
       const res = await fetch('/v1/settings/model', {
         method: 'PUT',
         headers: headers(),
         body: JSON.stringify(payload),
+        signal: activeSettingsController.signal,
       });
+
+      if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
+
       if (!res.ok) {
         let detail = 'HTTP ' + res.status;
         try {
@@ -138,7 +163,12 @@ document.addEventListener('DOMContentLoaded', () => {
         `Whisper ${stateLabel(data.whisper_model_state)}`;
       if (window.ModelStatus) window.ModelStatus.refresh();
     } catch (e) {
-      statusEl.textContent = `❌ บันทึกไม่สำเร็จ: ${e.message}`;
+      if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
+      if (e.name === 'AbortError') {
+        statusEl.textContent = '❌ ยกเลิกการบันทึกการตั้งค่าเรียบร้อยแล้ว';
+      } else {
+        statusEl.textContent = `❌ บันทึกไม่สำเร็จ: ${e.message}`;
+      }
     } finally {
       saveBtn.disabled = false;
     }

@@ -1,372 +1,217 @@
-# ChooNova Transcribe — Thai Speech-to-Text API
+# ChooNova Transcribe
 
 <p align="center">
   <img src="app/static/choonova-transcribe-cover.jpg" alt="ChooNova Transcribe Cover" width="100%" style="max-width: 900px; border-radius: 12px;">
 </p>
 
-Speech-to-Text API บริการภาษาไทย powered by **Typhoon ASR Realtime** (FastConformer-Transducer 114M parameters) บน **Python 3.12 + FastAPI + NeMo Toolkit** รองรับทั้ง GPU (NVIDIA, CUDA 12.1) และ CPU (Windows, Mac M1–M4, Linux) — ทดสอบบน **Notebook NVIDIA RTX 4080 Laptop GPU 12GB VRAM**
+Thai Speech-to-Text API and video processing service powered by Typhoon ASR Realtime.
 
-> 🤖 โปรเจกต์นี้พัฒนาขึ้นด้วยความช่วยเหลือของ **DeepSeek V4 Flash Model** (AI Pair Programmer)
+> 💡 **For AI Coding Agents:** Please read [project-onboarding SKILL.md](file://.agents/skills/project-onboarding/SKILL.md) for setup instructions and architecture details before modifying this project.
 
-> 💡 **For AI Coding Agents:** หากต้องการคำแนะนำการตั้งค่า คำสั่งติดตั้ง และสถาปัตยกรรมโปรเจกต์โดยละเอียด โปรดอ่าน [project-onboarding SKILL.md](file://.agents/skills/project-onboarding/SKILL.md) ก่อนดำเนินการ
+## Overview
+ChooNova Transcribe is a high-performance audio transcription and media processing API. It leverages NeMo Toolkit and the Typhoon ASR Realtime model (FastConformer-Transducer 114M) to provide fast and accurate Thai speech-to-text capabilities. The service supports both REST APIs for batch processing and WebSockets for real-time streaming, and includes a built-in video compressor using FFmpeg. It is designed to run efficiently on both NVIDIA GPUs (CUDA 12.1) and CPUs.
 
-## Modes
+## Key Features
+- **Real-time Transcription**: WebSocket endpoint (`/v1/realtime/stream`) for live microphone transcription in 250ms chunks (Thai only).
+- **Short Audio Transcription**: REST API for quick, synchronous processing of short multipart audio uploads.
+- **Long-form Media Pipeline**: Asynchronous processing for large video/audio files (up to 1GB+) with silence-aware chunking and automatic cleanup.
+- **Auto Language Detection**: Seamlessly fallback to faster-whisper for English or code-switched (Thai-English) content.
+- **Video Compression**: Asynchronous FFmpeg-based video compressor with queue management, supporting both CPU (libx264) and GPU (NVENC) encoding.
+- **Job History & Management**: Built-in SQLite tracking for transcription and compression jobs with a web-based dashboard.
+- **Dynamic VRAM Management**: Configurable model residency (Always-on vs. Idle timeout) to optimize GPU memory usage.
 
-1. **REST API** (`POST /v1/audio/transcribe`) — ถอดความไฟล์เสียงสั้น multipart upload
-2. **WebSocket Real-time** (`/v1/realtime/stream`) — ถอดเสียงสดจากไมค์ chunk 250ms
-3. **Long-form Pipeline** (`POST /v1/media/transcribe/jobs`) — ไฟล์วิดีโอ/เสียงยาวสูงสุด 1GB+ แบบ async
-4. **ประวัติการถอดความ** (`/media/transcribe/jobs/history`) — ดู/export/ลบ งานที่เคยถอดความไว้
-5. **Video Compressor** (`POST /v1/media/compress/jobs`) — ลดขนาดไฟล์วิดีโอด้วย FFmpeg แบบ async คิว 1 ไฟล์ต่อครั้ง (ลดความละเอียด / บิตเรต / ตัดหัว-ท้าย `start`/`end`)
-6. **Compressor History** (`/media/compress/jobs/history`) — ดูผลการบีบอัด และลบไฟล์ผลลัพธ์ด้วยตนเองเพื่อประหยัดพื้นที่
-7. **Settings** (`/setting`) — จัดการ API Key และตั้งค่าโมเดล VRAM (always / idle)
+## Architecture
+ChooNova Transcribe follows a Pragmatic Modular Monolith + Hexagonal Architecture:
+- **API Delivery**: FastAPI routers grouped by bounded context (Settings, Compression, Transcription, Realtime).
+- **Isolated Workers**: Long-running jobs (transcription and compression) execute in isolated subprocesses (`job_worker.py`, `run_compress_job.py`) to prevent top-level RAM/VRAM leaks. A watchdog process monitors and recovers from worker crashes.
+- **CUDA Resilience**: Implements transient error retries (with backoff) and allocator corruption recovery via `cudaDeviceReset`.
 
-## Tech Stack
+## Technology Stack
+| Layer | Technology | Purpose |
+| --- | --- | --- |
+| Language | Python 3.12 | Core application logic |
+| Web Framework | FastAPI + Uvicorn | High-performance async HTTP/WebSocket server |
+| Deep Learning | PyTorch 2.5.1 | Tensor operations and model execution (CUDA 12.1) |
+| ASR Models | NeMo Toolkit ≥2.0 | Inference for Typhoon ASR and faster-whisper |
+| Audio/Video | FFmpeg, librosa, soundfile | Media extraction, silence detection, and compression |
+| Storage | SQLite (WAL mode) | Transactional job history and settings persistence |
 
-| Layer            | Technology                                                     |
-| ---------------- | -------------------------------------------------------------- |
-| Language         | Python 3.12                                                    |
-| Web Framework    | FastAPI + Uvicorn                                              |
-| ASR Model        | NeMo Toolkit ≥2.0, Typhoon ASR Realtime (`.nemo`)              |
-| Deep Learning    | PyTorch 2.5.1 (CUDA 12.1 / CPU)                                |
-| Tested Hardware  | Notebook NVIDIA RTX 4080 Laptop GPU (12GB VRAM)                |
-| Audio Processing | FFmpeg, librosa, soundfile                                     |
-| Storage          | SQLite (jobs history), filesystem (temp jobs)                  |
-| Frontend         | Vanilla HTML/CSS/JS + Jinja2 templates (glassmorphism dark UI) |
+## Requirements
+**Recommended (GPU):**
+- NVIDIA GPU with at least 12GB VRAM (Tested on RTX 4080 Laptop GPU)
+- NVIDIA Container Toolkit (for Docker deployments)
+- CUDA 12.1 (for local development)
 
-## Directory Structure
-
-```
-├── app/
-│   ├── main.py          # FastAPI app, route registration, WebSocket, periodic cleanup + idle reaper
-│   ├── config.py        # Environment configuration & defaults
-│   ├── auth.py          # API key verification (x-api-key)
-│   ├── db.py            # SQLite repository for jobs + runtime settings + retention cleanup
-│   ├── schemas.py       # Pydantic request/response models
-│   ├── asr_engine.py    # Typhoon ASR model singleton wrapper (NeMo) with idle-unload
-│   ├── whisper_engine.py # faster-whisper engine (English / Thai-English mixed) with idle-unload
-│   ├── engine_router.py # Language dispatcher (th -> Typhoon, en/auto -> Whisper)
-│   ├── audio_utils.py   # FFmpeg extract/split, disk-space check, safe_delete helpers
-│   ├── job_worker.py    # Async long-form transcription pipeline (chunking + GPU loop)
-│   ├── run_job.py       # Subprocess entrypoint for isolated job workers
-│   ├── compress_utils.py # FFmpeg probe / command builder / progress parser (video compressor)
-│   ├── compress_worker.py # Async video compression worker (FFmpeg, progress -> DB)
-│   ├── run_compress_job.py # Subprocess entrypoint for isolated compressor workers
-│   ├── templates/       # HTML pages (index, upload, realtime, media, jobs, compress, setting)
-│   └── static/          # CSS + JS (upload.js, realtime.js, media.js, jobs.js, model_status.js, settings.js)
-├── data/                # SQLite DB (choonova-transcribe.db) — optional, baked empty into Docker image
-├── model/               # Model weights (typhoon-asr-realtime.nemo, git-ignored)
-├── Dockerfile           # GPU image (CUDA 12.1, PyTorch)
-├── Dockerfile.cpu       # CPU-only image (also works on Mac M1–M4)
-├── docker-compose.yml   # GPU compose (requires NVIDIA Docker + km4u-network)
-├── docker-compose-km4u.yml # GPU compose standalone (no external network)
-├── docker-compose-cpu.yml  # CPU compose (Windows / Mac / Linux CPU)
-├── requirements.txt     # GPU dependencies (CUDA 12.1 PyTorch index)
-├── requirements-cpu.txt # CPU dependencies
-├── .env.example         # Environment template
-└── README.md            # Documentation & project manual
-```
+**Supported (CPU Fallback):**
+- Windows, Mac M1–M4, or Linux CPUs
 
 ## Quick Start
+The shortest path to running the service is via Docker. The image includes an empty SQLite database so it runs immediately without external dependencies. If you wish to persist job history across container restarts, mount the `./data:/app/data` volume in `docker-compose.yml`.
 
-### Docker (Recommended)
-
+**GPU (Requires NVIDIA Docker)**
 ```bash
-# GPU (requires NVIDIA Docker + CUDA)
 docker compose up -d --build
+```
 
-# CPU (Windows / Mac M1–M4 / Linux)
+**CPU (Windows / Mac / Linux)**
+```bash
 docker compose -f docker-compose-cpu.yml up -d --build
 ```
 
-Service runs on `http://localhost:8830/`
+The service dashboard and API will be available at `http://localhost:8830/`.
 
-**หมายเหตุเรื่องฐานข้อมูล:** image มี SQLite `choonova-transcribe.db` ว่างๆ ฝังไว้ในตัวแล้ว (baked) — รันโดยไม่ mount ก็ใช้งานได้ทันที เหมาะสำหรับ export/แจกจ่าย image ส่วนข้อมูลประวัติงานจะอยู่ใน container (หายเมื่อลบ container) ถ้าต้องการเก็บข้อมูลข้าม container ให้เปิดคอมเมนต์ volume `./data:/app/data` ใน docker-compose ไฟล์นั้นๆ
+## Configuration
+Application behavior is controlled via environment variables. Copy `.env.example` to `.env` to configure the service.
 
-### Local Development
+| Variable | Default | Required | Description |
+| --- | --- | --- | --- |
+| `GATEWAY_API_KEY` | `change-me-in-production` | Yes | Secret key for API authentication. |
+| `DEVICE` | `cuda` | No | Target device (`cuda` or `cpu`). Auto-detects if CUDA is missing. |
+| `WHISPER_MODEL` | `medium` | No | faster-whisper size (`tiny/base/small/medium/large-v3`). |
+| `MODEL_LOAD_MODE` | `always` | No | VRAM residency seed: `always` or `idle`. |
+| `MODEL_IDLE_TIMEOUT_SEC` | `900` | No | Seconds of inactivity before unloading models (if `idle`). |
+| `COMPRESS_ENCODER` | `libx264` | No | Video encoder: `libx264` or `nvenc` (auto-falls back if NVENC unavailable). |
+| `MAX_AUDIO_UPLOAD_SIZE_MB` | `50.0` | No | Size limit for synchronous audio endpoint. |
+| `MAX_UPLOAD_SIZE_MB` | `0` | No | Size limit for async long-form jobs (0 = unlimited). |
 
-```bash
-# GPU
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8830
+*(Note: Environment variables for VRAM mode only seed the database on first boot. The database is the source of truth thereafter.)*
 
-# CPU
-pip install -r requirements-cpu.txt
-DEVICE=cpu uvicorn app.main:app --host 0.0.0.0 --port 8830
-```
+## Authentication / Security
+- **API Endpoints**: All `/v1` REST endpoints require a static API key passed via the `x-api-key` HTTP header. The system uses constant-time HMAC comparison to verify keys.
+- **Web UI & WebSockets**: Unauthenticated for ease of local access and streaming.
 
-## Environment Variables
+## Usage: Model VRAM Residency
+The ASR models (Typhoon + Whisper) consume significant GPU memory (~1GB+). Their lifecycle is managed in two modes:
+- **`always`** (Default): Models remain in VRAM permanently once loaded. Best for low latency.
+- **`idle`**: Models are unloaded after `MODEL_IDLE_TIMEOUT_SEC` of inactivity. The next request pays a cold-start cost (~10-60s) to reload.
 
-| Variable                    | Default                           | Description                                                                                                               |
-| --------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `HOST`                      | `0.0.0.0`                         | Bind address                                                                                                              |
-| `PORT`                      | `8830`                            | Service port                                                                                                              |
-| `GATEWAY_API_KEY`           | `change-me-in-production`         | API key (set in production)                                                                                               |
-| `MODEL_PATH`                | `model/typhoon-asr-realtime.nemo` | Local model path (fallback: HuggingFace)                                                                                  |
-| `DEVICE`                    | `cuda`                            | `cuda` / `cpu` (auto-detect if CUDA unavailable)                                                                          |
-| `WHISPER_MODEL`             | `medium`                          | faster-whisper size: `tiny/base/small/medium/large-v3`                                                                    |
-| `LOG_LEVEL`                 | `info`                            | Logging level                                                                                                             |
-| `DATA_DIR`                  | `<project>/data`                  | SQLite directory                                                                                                          |
-| `TEMP_JOBS_DIR`             | `/tmp/choonova-transcribe-jobs`   | Temp job directory                                                                                                        |
-| `MIN_FREE_DISK_GB`          | `5.0`                             | Min disk space before rejecting uploads                                                                                   |
-| `MAX_UPLOAD_SIZE_MB`        | `0`                               | Max upload size for long-form media jobs (MB); `0` = unlimited                                                            |
-| `MAX_AUDIO_UPLOAD_SIZE_MB`  | `50.0`                            | Max upload size for short audio endpoint (MB); always enforced (> 0)                                                      |
-| `TARGET_CHUNK_DURATION_SEC` | `30.0`                            | Target chunk duration for silence-aware splitting                                                                         |
-| `MAX_CHUNK_DURATION_SEC`    | `60.0`                            | Max chunk duration (hard cut fallback)                                                                                    |
-| `CLEANUP_RETENTION_HOURS`   | `24`                              | Job retention before periodic cleanup                                                                                     |
-| `PYTORCH_CUDA_ALLOC_CONF`   | `expandable_segments:True`        | PyTorch CUDA allocator config                                                                                             |
-| `MODEL_LOAD_MODE`           | `always`                          | Model VRAM residency mode: `always` / `idle` (seed value only, see below)                                                 |
-| `MODEL_IDLE_TIMEOUT_SEC`    | `900`                             | Seconds of inactivity before unloading models in `idle` mode (seed value only)                                            |
-| `COMPRESS_ENCODER`          | `libx264`                         | Video compressor encoder: `libx264` (software) / `nvenc` (GPU NVENC; auto-falls back to `libx264` if unusable at runtime) |
-| `COMPRESS_PRESET`           | `medium`                          | Default x264 preset (ultrafast..veryslow)                                                                                 |
-| `COMPRESS_CRF`              | `28`                              | Default encoder quality (1-51; higher = smaller)                                                                          |
-| `COMPRESS_MAX_CONCURRENT`   | `1`                               | Max videos compressed at once (1 = strict queue)                                                                          |
-| `COMPRESS_MAX_QUEUED`       | `10`                              | Max jobs in queue before new uploads rejected (429)                                                                       |
-| `COMPRESS_RETENTION_HOURS`  | `24`                              | Retention for compressed output files on disk                                                                             |
+You can toggle this mode at runtime without restarting the server via the web dashboard (`/setting`) or the `PUT /v1/settings/model` endpoint.
 
-Copy `.env.example` to `.env` to customize.
+## API Reference
 
-## Model VRAM Residency Mode
-
-The service can control how long the ASR models (Typhoon + Whisper) stay loaded in GPU memory:
-
-- **`always` (default)** — models stay resident in VRAM once loaded (warm). Original behavior.
-- **`idle`** — models are unloaded from VRAM after `MODEL_IDLE_TIMEOUT_SEC` of inactivity, then reload on demand (first request after idle pays a cold-start cost of ~10–60s).
-
-The mode and idle timeout are stored in the SQLite `settings` table. On **first boot** the values are seeded from the environment (`MODEL_LOAD_MODE` / `MODEL_IDLE_TIMEOUT_SEC`). After that the **DB is the source of truth** — you can change the mode at runtime without restarting:
-
-- **Settings page** (`/setting`): \"ตั้งค่าโมเดลบน VRAM\" card — select mode + idle timeout, save.
-- **API**: `GET` / `PUT /v1/settings/model` (auth required).
-
-Every page header shows a live status badge: 🟢 model on VRAM / 🟡 loading / ⚪ idle (unloaded), plus the active mode — and pages show "กำลังโหลดโมเดลขึ้น VRAM..." progress when a cold load is triggered.
-
-> 💡 **Docker note:** with the default compose (DB volume not mounted), the settings DB lives inside the container — any mode change made via the UI is lost when the container is recreated, and the mode resets to the `.env` default. Enable `./data:/app/data` in docker-compose to persist the DB (and job history) across restarts.
-
-## API
-
-| Method | Path                                                     | Auth | Description                                                |
-| ------ | -------------------------------------------------------- | ---- | ---------------------------------------------------------- |
-| GET    | `/`                                                      | —    | Dashboard home                                             |
-| GET    | `/audio/transcribe`                                      | —    | Audio file transcribe page                                 |
-| GET    | `/realtime/stream`                                       | —    | Real-time mic stream page                                  |
-| GET    | `/media/transcribe`                                      | —    | Long-form video/audio transcribe                           |
-| GET    | `/media/compress`                                        | —    | Video compressor page                                      |
-| GET    | `/media/compress/jobs/history`                           | —    | Compressor history page (ดูผล + ลบไฟล์ output ด้วยตนเอง)   |
-| GET    | `/media/transcribe/jobs/history`                         | —    | Transcription history page (เดิม `/jobs/history` redirect) |
-| GET    | `/setting`                                               | —    | Settings page (API Key + VRAM mode)                        |
-| GET    | `/healthz`                                               | —    | Health check (+ model state / mode)                        |
-| GET    | `/v1/settings/model`                                     | ✅   | Get model VRAM mode + engine states                        |
-| PUT    | `/v1/settings/model`                                     | ✅   | Change model VRAM mode at runtime                          |
-| POST   | `/v1/audio/transcribe`                                   | ✅   | Transcribe audio file                                      |
-| POST   | `/v1/media/transcribe/jobs`                              | ✅   | Create long-form job (202, async)                          |
-| GET    | `/v1/media/transcribe/jobs`                              | ✅   | List jobs                                                  |
-| GET    | `/v1/media/transcribe/jobs/{id}`                         | ✅   | Job status + result                                        |
-| DELETE | `/v1/media/transcribe/jobs/{id}`                         | ✅   | Delete job (record + media)                                |
-| DELETE | `/v1/media/transcribe/jobs/{id}/media`                   | ✅   | Delete media only (keep record)                            |
-| GET    | `/v1/media/transcribe/jobs/{id}/export/{txt\|srt\|json}` | ✅   | Export result                                              |
-| POST   | `/v1/media/compress/jobs`                                | ✅   | Create video compress job (202, async queue)               |
-| GET    | `/v1/media/compress/jobs`                                | ✅   | List compress jobs                                         |
-| GET    | `/v1/media/compress/jobs/{id}`                           | ✅   | Compress job status + result                               |
-| GET    | `/v1/media/compress/jobs/{id}/download`                  | ✅   | Download compressed MP4                                    |
-| DELETE | `/v1/media/compress/jobs/{id}`                           | ✅   | Cancel/delete compress job (input + output)                |
-| DELETE | `/v1/media/compress/jobs/{id}/output`                    | ✅   | Delete output file ONLY (keep history record)              |
-| WS     | `/v1/realtime/stream`                                    | —    | Real-time streaming                                        |
+### REST Endpoints
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| POST | `/v1/audio/transcribe` | ✅ | Synchronously transcribe short audio (multipart). |
+| POST | `/v1/media/transcribe/jobs` | ✅ | Enqueue long-form transcription job (returns 202). |
+| GET | `/v1/media/transcribe/jobs/{id}` | ✅ | Check status and retrieve transcription results. |
+| GET | `/v1/media/transcribe/jobs/{id}/export/{format}` | ✅ | Export results as `txt`, `srt`, or `json`. |
+| POST | `/v1/media/compress/jobs` | ✅ | Enqueue video compression job (returns 202). |
+| GET | `/v1/media/compress/jobs/{id}/download` | ✅ | Download the compressed MP4 output. |
+| PUT | `/v1/settings/model` | ✅ | Change model VRAM mode at runtime. |
 
 ### cURL Examples
-
+**Short Audio Transcription (Thai - default via Typhoon ASR)**
 ```bash
-# Transcribe audio file (Thai - default via Typhoon ASR)
 curl -X POST http://localhost:8830/v1/audio/transcribe \
   -H "x-api-key: change-me-in-production" \
   -F "file=@audio.mp3" -F "language=th" -F "with_timestamps=true"
+```
 
-# Transcribe English / Thai-English mixed audio via Whisper
-curl -X POST http://localhost:8830/v1/audio/transcribe \
-  -H "x-api-key: change-me-in-production" \
-  -F "file=@english.mp3" -F "language=en"
-
-# Transcribe with auto language detection (Whisper)
-curl -X POST http://localhost:8830/v1/audio/transcribe \
-  -H "x-api-key: change-me-in-production" \
-  -F "file=@mixed.mp3" -F "language=auto"
-
-# Long-form job (Thai - default)
+**Long-form Video Transcription (Auto-detect Language - Whisper)**
+```bash
 curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
   -H "x-api-key: change-me-in-production" \
-  -F "file=@video.mp4"
+  -F "file=@video.mp4" -F "language=auto"
+```
 
-# Long-form job with English / mixed audio
-curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
-  -H "x-api-key: change-me-in-production" \
-  -F "file=@video.mp4" -F "language=th"
-
-# Long-form job with custom chunk settings (optional; defaults 30/60s from env)
-curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
-  -H "x-api-key: change-me-in-production" \
-  -F "file=@video.mp4" -F "target_chunk_sec=45" -F "max_chunk_sec=90"
-
-# Check status
-curl http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID> \
-  -H "x-api-key: change-me-in-production"
-
-# Export SRT
-curl http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID>/export/srt \
-  -H "x-api-key: change-me-in-production" -o subtitle.srt
-
-# Create video compression job (reduce width to 1280 + cap bitrate to 2000kbps)
-curl -X POST http://localhost:8830/v1/media/compress/jobs \
-  -H "x-api-key: change-me-in-production" \
-  -F "file=@video.mp4" -F "target_width=1280" -F "bitrate_kbps=2000"
-
-# Same, but cut the head/tail first: keep only 01:00 - 02:00 (start/end accept SS, MM:SS or HH:MM:SS; empty = no trim)
+**Video Compression (Resize & Trim)**
+```bash
 curl -X POST http://localhost:8830/v1/media/compress/jobs \
   -H "x-api-key: change-me-in-production" \
   -F "file=@video.mp4" -F "target_width=1280" -F "bitrate_kbps=2000" \
   -F "start=00:01:00" -F "end=00:02:00"
-
-# Check compression status (includes queue position)
-curl http://localhost:8830/v1/media/compress/jobs/<JOB_ID> \
-  -H "x-api-key: change-me-in-production"
-
-# Download the compressed MP4
-curl http://localhost:8830/v1/media/compress/jobs/<JOB_ID>/download \
-  -H "x-api-key: change-me-in-production" -o compressed.mp4
-
-# Switch model to 'idle' mode (unload VRAM after 10 min of inactivity)
-curl -X PUT http://localhost:8830/v1/settings/model \
-  -H "x-api-key: change-me-in-production" \
-  -H "Content-Type: application/json" \
-  -d '{"mode":"idle","idle_timeout_sec":600}'
 ```
 
-`language` รับค่าได้ 3 แบบ:
-
-- `th` (default) — ใช้ Typhoon ASR Realtime (ภาษาไทย, **เร็วกว่า Whisper มาก** เหมาะกับ real-time)
-- `en` — ใช้ faster-whisper (อังกฤษ, output คำอังกฤษเป็นตัวละติน)
-- `auto` — ใช้ faster-whisper ตรวจจับภาษาอัตโนมัติ (รองรับภาษาไทย/อังกฤษผสม หรือ code-switching)
-
-`target_chunk_sec` / `max_chunk_sec` (ไม่บังคับ) — กำหนดช่วงความยาวต่อ chunk ในการตัดแบ่งตามช่วงเงียบ (ค่า default จาก env `TARGET_CHUNK_DURATION_SEC`=30 และ `MAX_CHUNK_DURATION_SEC`=60) ต้องผ่านเงื่อนไข `0 < target_chunk_sec <= max_chunk_sec`; ค่าที่ใช้จริงจะถูกบันทึกในตาราง `jobs` (คอลัมน์ `target_chunk_sec`, `max_chunk_sec`) และโผล่ใน response ของ job status
-
-> ⚠️ WebSocket `/v1/realtime/stream` (real-time ไมค์) รองรับเฉพาะภาษาไทย (Typhoon) อย่างเดียว — คำอังกฤษในเสียงไทยจะออกเป็นทับศัพท์ตัวไทย โมเดล Whisper ที่โหลดครั้งแรกจะดาวน์โหลดอัตโนมัติจาก HuggingFace (config: `WHISPER_MODEL`, default `medium`)
-
-### WebSocket
-
+### WebSocket Streaming
 ```javascript
 const ws = new WebSocket(`ws://localhost:8830/v1/realtime/stream`);
-// Send audio chunks + text commands: "INTERIM", "COMMIT_SEGMENT", "CLEAR"
+// Send audio Blob and text commands: "INTERIM", "COMMIT_SEGMENT", "CLEAR"
 ws.send(audioBlob);
 ws.send("COMMIT_SEGMENT");
 ```
+*(Note: Real-time websocket streaming supports Thai language only via Typhoon)*
 
-## Long-form Pipeline Flow
+## Processing Flow
 
+### Long-form Transcription Pipeline
 ```
-POST /v1/media/transcribe/jobs  (multipart, 1GB+)
-        │ 202 Accepted → job_id
-        ▼
+POST /v1/media/transcribe/jobs (multipart)
+   │ (Returns 202 Accepted → job_id)
+   ▼
 job_worker.py (isolated subprocess)
-  ├─ 1. FFmpeg extract → 16kHz mono 16-bit WAV
-  ├─ 2. Silence-aware chunking (target 30s, max 60s, overlap 0.25s)
-  ├─ 3. GPU transcription loop (global asyncio.Lock)
-  │      → delete each chunk WAV after inference
-  ├─ 4. Build full text + timestamps + SRT
-  └─ 5. Save to SQLite → cleanup temp files
+   ├─ 1. FFmpeg extract → 16kHz mono 16-bit WAV
+   ├─ 2. Silence-aware chunking (target 30s, max 60s, overlap 0.25s)
+   ├─ 3. GPU transcription loop (with global asyncio.Lock)
+   ├─ 4. Build full text + timestamps + SRT
+   └─ 5. Save results to SQLite & cleanup temp files
 ```
 
-- Media files deleted automatically after processing (text/SRT/timestamps preserved in SQLite)
-- CUDA resilience: transient error retry (backoff) + allocator corruption recovery (cudaDeviceReset)
-- Worker crash watchdog: detects subprocess death and marks jobs as failed
-
-## Video Compressor Flow
-
+### Video Compressor Flow
 ```
-POST /v1/media/compress/jobs  (multipart; target_width / bitrate_kbps / crf / preset / start / end)
-        │ 202 Accepted → job_id + queue_position
-        ▼
-compress_queue_dispatcher (FIFO, COMPRESS_MAX_CONCURRENT=1 → ทำทีละ 1 ไฟล์)
-        ▼
+POST /v1/media/compress/jobs (multipart)
+   │ (Returns 202 Accepted → job_id + queue position)
+   ▼
+compress_queue_dispatcher (FIFO queue)
+   ▼
 run_compress_job.py (isolated subprocess)
-  ├─ 1. ffprobe → ความละเอียด / ความยาว / มีเสียงไหม
-  ├─ 2. สร้างคำสั่ง FFmpeg (scale คงอัตราส่วน, bitrate/CRF, encoder libx264|nvenc)
-  │      → progress % อัปเดตลง SQLite ทุก ~1 วิ (-progress pipe:1)
-  │      → ถ้า nvenc เปิด encoder ไม่ได้ที่ runtime (missing libnvidia-encode.so.1 / driver เก่า)
-  │        ระบบ auto-fallback เป็น libx264 และบันทึก encoder จริงที่ใช้ลง DB อัตโนมัติ
-  ├─ 3. ตรวจ output → บันทึก output_path / ขนาด / ความละเอียด ลง SQLite
-  └─ 4. ลบไฟล์ต้นฉบับทุกกรณี (สำเร็จ/ล้มเหลว/ยกเลิก/restart) — output เก็บตาม COMPRESS_RETENTION_HOURS
+   ├─ 1. ffprobe → extract metadata (resolution, duration, audio streams)
+   ├─ 2. FFmpeg encode (scale, bitrate/CRF, libx264/nvenc)
+   │      ↳ Auto-fallback to libx264 if NVENC fails at runtime.
+   ├─ 3. Update SQLite with progress and final output paths.
+   └─ 4. Delete input file immediately; retain output per schedule.
 ```
 
-- **ลด dimension คงอัตราส่วน**: `-vf scale=<width>:-2` (ค่า `-2` รักษาสัดส่วน + จำนวนคู่; ระบบห้ามขยายเกินไฟล์ต้นฉบับ)
-- **ตัดหัว/ท้าย (trim)**: `start`/`end` รับค่าเป็น `SS`, `MM:SS` หรือ `HH:MM:SS` (ว่าง = ไม่ตัด, default) — FFmpeg ใช้ `-ss <start> -to <end>` แบบ input option (fast seek + frame-accurate ตอน re-encode) เพื่อตัดเฉพาะช่วง `[start, end]`; ถ้าระบุแค่ `start` → ตัดหัว แล้วเก็บไปจนจบ, ระบุแค่ `end` → เก็บตั้งแต่ต้นถึง `end`
-- **ลด bitrate**: `-b:v Nk -maxrate Nk -bufsize 2Nk` (หรือใช้ CRF `-crf` ถ้าไม่ได้ระบุ)
-- **Encoder**: `libx264` (default, ใช้ได้ทุกที่) หรือ `h264_nvenc` (GPU เร็วมาก ถ้า ffmpeg build รองรับ — เปลี่ยนผ่าน env `COMPRESS_ENCODER`). ถ้าเลือก `nvenc` แล้ว runtime ใช้ไม่ได้ (เช่น ไม่มี `libnvidia-encode.so.1` ในคอนเทนเนอร์ หรือ driver เก่า) → ระบบ fallback เป็น `libx264` อัตโนมัติ + บันทึก encoder จริงที่ใช้ใน DB. **ใน Docker ต้องตั้ง env `NVIDIA_DRIVER_CAPABILITIES=video,compute,utility`** (ใน docker-compose.yml / docker-compose-km4u.yml แล้ว) ถึงจะ inject library NVENC เข้าไปในคอนเทนเนอร์ได้
-- **คิว**: รองรับพร้อมกันสูงสุด `COMPRESS_MAX_CONCURRENT` (default 1 = เข้มงวด 1 ไฟล์ต่อครั้ง), อัปโหลดเกิน `COMPRESS_MAX_QUEUED` → HTTP 429
-- ไฟล์ output จะถูกลบจากดิสก์อัตโนมัติหลัง `COMPRESS_RETENTION_HOURS` (default 24 ชม.) แต่ record ยังอยู่ใน DB
-- วิดีโอที่ไม่มีเสียง → FFmpeg ใช้ `-an` อัตโนมัติ
-- Output เป็น MP4 (H.264 + AAC 128k) เสมอ เข้ากันได้ทุกอุปกรณ์
+## Development
+Local development setup requires manually installing dependencies:
 
-## ตรวจสอบ NVIDIA GPU / NVENC
+```bash
+# GPU environment
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8830
 
-ตรวจ driver และ GPU บน Windows host (ต้องเห็น **NVIDIA-SMI ≥ 530.41.03** และชื่อ GPU ถูกต้อง):
-
+# CPU environment
+pip install -r requirements-cpu.txt
+DEVICE=cpu uvicorn app.main:app --host 0.0.0.0 --port 8830
 ```
-nvidia-smi
-```
-
-```text
-Tue Aug 11 12:08:45 2026
-+-----------------------------------------------------------------------------------------+
-| NVIDIA-SMI 610.88                 KMD Version: 610.88        CUDA UMD Version: 13.3     |
-+-----------------------------------------+------------------------+----------------------+
-| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
-| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
-|                                         |                        |               MIG M. |
-|=========================================+========================+======================|
-|   0  NVIDIA GeForce RTX 4080 ...  WDDM  |   00000000:01:00.0  On |                  N/A |
-| N/A   47C    P0             21W /  120W |    2007MiB /  12282MiB |      3%      Default |
-|                                         |                        |                  N/A |
-+-----------------------------------------+------------------------+----------------------+
-```
-
-ตรวจว่า GPU ถูก inject เข้า Docker container (ควรเห็น **Persistence-M: On** และชื่อ GPU เหมือน host):
-
-```
-docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi
-```
-
-```text
-Tue Aug 11 05:09:05 2026
-+-----------------------------------------------------------------------------------------+
-| NVIDIA-SMI 610.57.01              KMD Version: 610.88        CUDA UMD Version: 13.3     |
-+-----------------------------------------+------------------------+----------------------+
-| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
-| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
-|                                         |                        |               MIG M. |
-|=========================================+========================+======================|
-|   0  NVIDIA GeForce RTX 4080 ...    On  |   00000000:01:00.0  On |                  N/A |
-| N/A   46C    P8              4W /  120W |    2000MiB /  12282MiB |     19%      Default |
-|                                         |                        |                  N/A |
-+-----------------------------------------+------------------------+----------------------+
-```
-
-ตรวจว่า NVENC library ถูก mount เข้า container (ต้องเห็น `libnvidia-encode.so.1` + `libnvcuvid.so.1`) และ encode ได้จริง:
-
-```
-docker exec <container> ls /usr/lib/x86_64-linux-gnu/ | grep -E 'libnvidia-encode|libnvcuvid'
-docker exec <container> ffmpeg -h encoder=h264_nvenc >/dev/null && echo "h264_nvenc OK"
-docker exec <container> ffmpeg -hide_banner -y -f lavfi -i testsrc=size=320x240:rate=30:duration=1 -frames:v 2 -c:v h264_nvenc -f null - && echo "NVENC encode OK"
-```
-
-ถ้าเจอ error `Cannot load libnvidia-encode.so.1` → ตั้ง `NVIDIA_DRIVER_CAPABILITIES=video,compute,utility` ใน `docker-compose.yml` / `docker-compose-km4u.yml` แล้ว `docker compose up -d` — หรือระบบจะ fallback เป็น `libx264` อัตโนมัติ
 
 ## Testing
+The project uses the standard `unittest` library with fake in-memory repositories (no mocking framework) to test domain logic in isolation.
 
-No formal test suite. Manual verification via:
+```bash
+python -m unittest discover -s tests/unit -t . -v
+```
 
-- Dashboard: `http://localhost:8830/`
-- Syntax check: `python -m py_compile app/main.py app/db.py app/config.py app/audio_utils.py app/asr_engine.py app/whisper_engine.py app/engine_router.py app/schemas.py app/job_worker.py`
-- cURL examples above
+## Project Structure
+```
+app/
+├── core/            # Cross-cutting concerns (config, db, security)
+├── modules/         # Domain bounded contexts (settings, compression, transcription)
+├── api/             # Delivery layer
+│   ├── v1/          # REST & WebSocket API routers
+│   └── web/         # HTML Dashboard view routers
+├── templates/       # Jinja2 HTML templates
+└── static/          # Vanilla CSS & JS assets
+tests/
+└── unit/            # Unit tests using in-memory Fake adapters
+```
 
-## Model
+## Troubleshooting
 
-Model weights auto-downloaded from `typhoon-ai/typhoon-asr-realtime` on HuggingFace during Docker build. Local file: `model/typhoon-asr-realtime.nemo` (git-ignored, ~1GB VRAM at FP16).
+### NVIDIA GPU / NVENC Availability
+If video compression falls back to `libx264` unexpectedly, verify that your GPU is exposed to the Docker container properly.
 
-สำหรับภาษาไทย Typhoon ASR Realtime **เร็วกว่า Whisper อย่างมีนัยสำคัญ** โดยเฉพาะบน GPU — เหมาะกับงาน real-time และถอดไฟล์เสียงยาว
+1. **Verify Host GPU:**
+   ```bash
+   nvidia-smi
+   ```
+2. **Verify Docker GPU Injection:**
+   ```bash
+   docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi
+   ```
+3. **Verify NVENC inside Container:**
+   ```bash
+   docker exec <container_name> ls /usr/lib/x86_64-linux-gnu/ | grep -E 'libnvidia-encode|libnvcuvid'
+   docker exec <container_name> ffmpeg -h encoder=h264_nvenc >/dev/null && echo "h264_nvenc OK"
+   ```
+*Solution*: Ensure `NVIDIA_DRIVER_CAPABILITIES=video,compute,utility` is set in your `docker-compose.yml`.

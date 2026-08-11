@@ -1,10 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const API_KEY_STORAGE = 'typhoon_asr_api_key';
 
-  const apiKeyInput = document.getElementById('apiKeyInput');
-  const toggleApiKeyBtn = document.getElementById('toggleApiKeyBtn');
-  const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
-  const clearApiKeyLink = document.getElementById('clearApiKeyLink');
 
   const micBtn = document.getElementById('micBtn');
   const micIcon = document.getElementById('micIcon');
@@ -33,63 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- API Key Management ---
   function getApiKey() {
-    return (apiKeyInput && apiKeyInput.value.trim()) || localStorage.getItem(API_KEY_STORAGE) || '';
+    return localStorage.getItem(API_KEY_STORAGE) || '';
   }
-
-  function maskApiKey(key) {
-    if (!key) return '••••••••';
-    if (key.length <= 8) return '•'.repeat(key.length);
-    return `${key.slice(0, 4)}••••${key.slice(-4)}`;
-  }
-
-  function initApiKeyUI() {
-    const apiKeyInputGroup = document.getElementById('apiKeyInputGroup');
-    const apiKeySavedState = document.getElementById('apiKeySavedState');
-    const apiKeyMask = document.getElementById('apiKeyMask');
-    const saved = localStorage.getItem(API_KEY_STORAGE);
-    if (saved) {
-      if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'none';
-      if (apiKeySavedState) {
-        apiKeySavedState.style.display = 'flex';
-        if (apiKeyMask) apiKeyMask.textContent = maskApiKey(saved);
-      }
-    } else {
-      if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'block';
-      if (apiKeySavedState) apiKeySavedState.style.display = 'none';
-    }
-  }
-
-  if (saveApiKeyBtn) {
-    saveApiKeyBtn.addEventListener('click', () => {
-      const key = apiKeyInput ? apiKeyInput.value.trim() : '';
-      if (!key) {
-        alert('Please enter an API key before saving.');
-        return;
-      }
-      localStorage.setItem(API_KEY_STORAGE, key);
-      if (apiKeyInput) apiKeyInput.value = '';
-      initApiKeyUI();
-    });
-  }
-
-  if (clearApiKeyLink) {
-    clearApiKeyLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      localStorage.removeItem(API_KEY_STORAGE);
-      if (apiKeyInput) apiKeyInput.value = '';
-      initApiKeyUI();
-    });
-  }
-
-  if (toggleApiKeyBtn) {
-    toggleApiKeyBtn.addEventListener('click', () => {
-      if (apiKeyInput) {
-        apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
-      }
-    });
-  }
-
-  initApiKeyUI();
 
   function saveSelectedMic(deviceId) {
     try {
@@ -406,13 +347,17 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Surface Typhoon model cold-load progress before connecting, so the user
-    // knows the first frames will be slow until the model is on VRAM.
-    if (window.ModelStatus) {
+    // Check if model loading dialog is needed
+    if (window.ModelStatus && window.ModelLoadingDialog) {
       const st = window.ModelStatus.getLast();
       if (st && st.typhoon_model_state !== 'loaded') {
-        micStatus.textContent = '⏳ กำลังโหลดโมเดลขึ้น VRAM (ครั้งแรก 10–60 วิ)... รอสักครู่';
-        micStatus.style.color = 'var(--accent-cyan)';
+        window.ModelLoadingDialog.show({
+          engine: 'typhoon',
+          title: 'กำลังโหลดโมเดล Typhoon ASR เข้า VRAM / RAM...',
+          onCancel: () => {
+            stopRecording();
+          }
+        });
       }
     }
 
@@ -464,11 +409,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (window.ModelStatus) {
         const st = window.ModelStatus.getLast();
         if (st && st.typhoon_model_state === 'loaded') {
+          if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
           setReadyMessage();
         } else {
           micStatus.textContent = '⏳ กำลังโหลดโมเดลขึ้น VRAM (ครั้งแรก 10–60 วิ)...';
           micStatus.style.color = 'var(--accent-cyan)';
           window.ModelStatus.waitForReady('typhoon', () => {
+            if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
             if (isRecording) setReadyMessage();
           });
         }
@@ -516,6 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function stopRecording() {
     isRecording = false;
+    if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
 
     if (interimTimer) {
       clearInterval(interimTimer);

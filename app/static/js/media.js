@@ -1,10 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const API_KEY_STORAGE = 'typhoon_asr_api_key';
 
-  const apiKeyInput = document.getElementById('apiKeyInput');
-  const toggleApiKeyBtn = document.getElementById('toggleApiKeyBtn');
-  const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
-  const clearApiKeyLink = document.getElementById('clearApiKeyLink');
 
   const mediaDropzone = document.getElementById('mediaDropzone');
   const mediaFileInput = document.getElementById('mediaFileInput');
@@ -48,63 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- API Key Management ---
   function getApiKey() {
-    return (apiKeyInput && apiKeyInput.value.trim()) || localStorage.getItem(API_KEY_STORAGE) || '';
+    return localStorage.getItem(API_KEY_STORAGE) || '';
   }
-
-  function maskApiKey(key) {
-    if (!key) return '••••••••';
-    if (key.length <= 8) return '•'.repeat(key.length);
-    return `${key.slice(0, 4)}••••${key.slice(-4)}`;
-  }
-
-  function initApiKeyUI() {
-    const apiKeyInputGroup = document.getElementById('apiKeyInputGroup');
-    const apiKeySavedState = document.getElementById('apiKeySavedState');
-    const apiKeyMask = document.getElementById('apiKeyMask');
-    const saved = localStorage.getItem(API_KEY_STORAGE);
-    if (saved) {
-      if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'none';
-      if (apiKeySavedState) {
-        apiKeySavedState.style.display = 'flex';
-        if (apiKeyMask) apiKeyMask.textContent = maskApiKey(saved);
-      }
-    } else {
-      if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'block';
-      if (apiKeySavedState) apiKeySavedState.style.display = 'none';
-    }
-  }
-
-  if (saveApiKeyBtn) {
-    saveApiKeyBtn.addEventListener('click', () => {
-      const key = apiKeyInput ? apiKeyInput.value.trim() : '';
-      if (!key) {
-        alert('Please enter an API key before saving.');
-        return;
-      }
-      localStorage.setItem(API_KEY_STORAGE, key);
-      if (apiKeyInput) apiKeyInput.value = '';
-      initApiKeyUI();
-    });
-  }
-
-  if (clearApiKeyLink) {
-    clearApiKeyLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      localStorage.removeItem(API_KEY_STORAGE);
-      if (apiKeyInput) apiKeyInput.value = '';
-      initApiKeyUI();
-    });
-  }
-
-  if (toggleApiKeyBtn) {
-    toggleApiKeyBtn.addEventListener('click', () => {
-      if (apiKeyInput) {
-        apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
-      }
-    });
-  }
-
-  initApiKeyUI();
 
   // --- Formatting Helpers ---
   function formatBytes(bytes) {
@@ -234,6 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCancelBtn('failed');
     currentStageText.textContent = message;
     startJobBtn.disabled = false;
+    mediaDropzone.style.display = '';
   }
 
   function resetMediaUI() {
@@ -251,6 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
     mediaFileInput.value = '';
     mediaFileName.textContent = '📹 ลากไฟล์วิดีโอ/ไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์';
     mediaFileSize.textContent = '';
+    mediaDropzone.style.display = '';
     mediaPreviewContainer.style.display = 'none';
     videoPreview.src = '';
     audioPreview.src = '';
@@ -296,6 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!selectedFile) return;
 
     startJobBtn.disabled = true;
+    mediaDropzone.style.display = 'none';
     jobProgressSection.style.display = 'block';
     resultSection.style.display = 'none';
     updateProgress(0, 'อัปโหลดไฟล์ขึ้นเซิร์ฟเวอร์...');
@@ -339,22 +283,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = JSON.parse(xhr.responseText);
         activeJobId = data.job_id;
         updateProgress(10, 'เริ่มการประมวลผลเบื้องหลัง...');
+
+        // Check if model loading dialog should be shown
+        if (window.ModelStatus && window.ModelLoadingDialog) {
+          const st = window.ModelStatus.getLast();
+          const lang = (languageSelect && languageSelect.value) || 'th';
+          const targetEngine = lang === 'th' ? 'typhoon' : 'whisper';
+          if (st && st[targetEngine + '_model_state'] !== 'loaded') {
+            window.ModelLoadingDialog.show({
+              engine: targetEngine,
+              title: `กำลังโหลดโมเดล ${targetEngine === 'typhoon' ? 'Typhoon ASR' : 'Whisper'} เข้า VRAM / RAM...`,
+              onCancel: () => {
+                cancelActiveJob();
+              }
+            });
+          }
+        }
+
         startPollingJobStatus(activeJobId);
       } else {
+        if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
         try {
           const errData = JSON.parse(xhr.responseText);
           alert(`เกิดข้อผิดพลาดในการสร้างงาน: ${errData.detail || 'Unknown error'}`);
         } catch (ex) {
           alert(`เกิดข้อผิดพลาดในการอัปโหลด (${xhr.status})`);
         }
-    startJobBtn.disabled = false;
-    selectedFile = null;
-  }
+        startJobBtn.disabled = false;
+        mediaDropzone.style.display = '';
+        selectedFile = null;
+      }
     };
 
     xhr.onerror = () => {
+      if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
       alert('การเชื่อมต่อเครือข่ายล้มเหลวขณะอัปโหลดไฟล์');
       startJobBtn.disabled = false;
+      mediaDropzone.style.display = '';
     };
 
     xhr.send(formData);
@@ -389,19 +354,81 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStepper(job.current_stage, job.status);
         updateCancelBtn(job.status);
 
+        // Check if job is in model loading stage or model status is loading
+        if (job.status === 'processing' || job.status === 'queued') {
+          if (window.ModelStatus && window.ModelLoadingDialog) {
+            const st = window.ModelStatus.getLast();
+            const lang = (document.getElementById('languageSelect') && document.getElementById('languageSelect').value) || 'th';
+            const targetEngine = lang === 'th' ? 'typhoon' : 'whisper';
+            if (st && st[targetEngine + '_model_state'] === 'loading' && !window.ModelLoadingDialog.isActive()) {
+              window.ModelLoadingDialog.show({
+                engine: targetEngine,
+                title: 'กำลังโหลดโมเดลเข้า VRAM / RAM เพื่อถอดความวิดีโอ/สื่อ...',
+                onCancel: () => {
+                  if (typeof cancelActiveJob === 'function') {
+                    cancelActiveJob();
+                  }
+                }
+              });
+            }
+          }
+        }
+
         if (job.status === 'completed') {
+          if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
           stopPolling();
           handleJobCompleted(job);
         } else if (job.status === 'failed') {
+          if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
           stopPolling();
           alert(`กระบวนการถอดความล้มเหลว: ${job.error_message || 'Unknown error'}`);
           currentStageText.textContent = `❌ เกิดข้อผิดพลาด: ${job.error_message || 'Failed'}`;
           startJobBtn.disabled = false;
+          mediaDropzone.style.display = '';
         }
       } catch (err) {
         console.error('Error polling job status:', err);
       }
     }, 2000);
+  }
+
+  let activeJobFilename = '';
+
+  async function downloadFileWithAuth(url, defaultFilename) {
+    try {
+      const headers = {};
+      const apiKey = getApiKey();
+      if (apiKey) headers['x-api-key'] = apiKey;
+
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const err = await res.json();
+          detail = err.detail || detail;
+        } catch (e2) {}
+        throw new Error(detail);
+      }
+
+      let filename = defaultFilename;
+      const disposition = res.headers.get('Content-Disposition');
+      if (disposition && disposition.includes('filename=')) {
+        const match = disposition.match(/filename=["']?([^"';]+)["']?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch (err) {
+      alert(`❌ ดาวน์โหลดล้มเหลว: ${err.message || err}`);
+    }
   }
 
   function handleJobCompleted(job) {
@@ -412,12 +439,32 @@ document.addEventListener('DOMContentLoaded', () => {
     statDuration.textContent = `⏱️ ความยาววิดีโอ: ${formatSeconds(job.duration_seconds)}`;
     statElapsed.textContent = `⚡ เวลาประมวลผลรวม: ${formatSeconds(job.elapsed_seconds)}`;
 
-    // Set export URLs
-    btnDownloadTxt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/txt`;
-    btnDownloadSrt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/srt`;
-    btnDownloadJson.href = `/v1/media/transcribe/jobs/${job.job_id}/export/json`;
+    activeJobId = job.job_id;
+    activeJobFilename = (job.filename || job.job_id).replace(/\.[^/.]+$/, '');
 
     startJobBtn.disabled = false;
+  }
+
+  if (btnDownloadTxt) {
+    btnDownloadTxt.addEventListener('click', () => {
+      if (!activeJobId) return;
+      const baseName = activeJobFilename || activeJobId;
+      downloadFileWithAuth(`/v1/media/transcribe/jobs/${activeJobId}/export/txt`, `${baseName}.txt`);
+    });
+  }
+  if (btnDownloadSrt) {
+    btnDownloadSrt.addEventListener('click', () => {
+      if (!activeJobId) return;
+      const baseName = activeJobFilename || activeJobId;
+      downloadFileWithAuth(`/v1/media/transcribe/jobs/${activeJobId}/export/srt`, `${baseName}.srt`);
+    });
+  }
+  if (btnDownloadJson) {
+    btnDownloadJson.addEventListener('click', () => {
+      if (!activeJobId) return;
+      const baseName = activeJobFilename || activeJobId;
+      downloadFileWithAuth(`/v1/media/transcribe/jobs/${activeJobId}/export/json`, `${baseName}.json`);
+    });
   }
 
   // Copy Result Text

@@ -154,6 +154,20 @@ if os.path.exists(STATIC_DIR):
 
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+# Mount Modular Hexagonal Routers
+from app.api.v1.settings_router import router as settings_router
+from app.api.v1.compression_router import router as compression_router
+from app.api.v1.transcription_router import router as transcription_router
+from app.api.v1.realtime_router import router as realtime_router
+from app.api.web.views_router import router as views_router
+
+app.include_router(settings_router)
+app.include_router(compression_router)
+app.include_router(transcription_router)
+app.include_router(realtime_router)
+app.include_router(views_router)
+
+
 
 def dir_has_files(dir_path: str) -> bool:
     """
@@ -908,16 +922,8 @@ def compress_retention_summary() -> Dict[str, Any]:
     (COMPRESS_RETENTION_HOURS from env) and the last time the automatic
     cleanup actually removed on-disk files (tracked in the settings table).
     """
-    last_at = get_setting("COMPRESS_LAST_CLEANUP_AT")
-    try:
-        last_count = int(get_setting("COMPRESS_LAST_CLEANUP_COUNT", "0") or 0)
-    except (TypeError, ValueError):
-        last_count = 0
-    return {
-        "retention_hours": COMPRESS_RETENTION_HOURS,
-        "last_cleanup_at": last_at,
-        "last_cleanup_count": last_count,
-    }
+    from app.db import get_compress_retention_summary
+    return get_compress_retention_summary()
 
 
 def _validate_compress_params(
@@ -928,12 +934,6 @@ def _validate_compress_params(
     if target_width < 0 or bitrate_kbps < 0:
         raise HTTPException(
             status_code=422, detail="target_width and bitrate_kbps must be >= 0."
-        )
-    if target_width == 0 and bitrate_kbps == 0:
-        raise HTTPException(
-            status_code=422,
-            detail="Specify at least one of target_width (dimension) or bitrate_kbps "
-            "(quality/bitrate) to compress the video.",
         )
     if not (1 <= crf <= 51):
         raise HTTPException(status_code=422, detail="crf must be between 1 and 51.")
@@ -1153,42 +1153,61 @@ async def delete_compress_job_output(
     job_id: str, authenticated: bool = Depends(verify_api_key)
 ):
     """
-    Delete ONLY the compressed output file of a completed job to free disk
-    space, while keeping the job record (history) intact.
+    Delete ONLY the compressed output file(s) (video + extracted audio) of a completed job
+    to free disk space, while keeping the job record (history) intact.
     """
     job = get_compress_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Compress job {job_id} not found.")
-    if job.get("status") != "completed" or not job.get("output_path"):
-        raise HTTPException(status_code=400, detail="Job has no output file.")
+    if job.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="Job has no output files.")
 
-    output_path = job["output_path"]
+    output_path = job.get("output_path")
+    audio_path = job.get("audio_extract_path")
+    if not output_path and not audio_path:
+        raise HTTPException(status_code=400, detail="Job has no output files.")
+
     base_real = os.path.realpath(COMPRESS_OUTPUT_DIR)
     job_dir_real = os.path.realpath(os.path.join(COMPRESS_OUTPUT_DIR, job_id))
-    out_real = os.path.realpath(output_path)
-    if not out_real.startswith(base_real + os.sep) or os.path.dirname(out_real) != job_dir_real:
-        raise HTTPException(
-            status_code=403, detail="Access to this output path is not allowed."
-        )
 
-    if not os.path.exists(out_real):
+    freed = 0
+    removed_any = False
+
+    # 1. Delete compressed video file if it exists
+    if output_path:
+        out_real = os.path.realpath(output_path)
+        if out_real.startswith(base_real + os.sep) and os.path.dirname(out_real) == job_dir_real:
+            if os.path.exists(out_real):
+                try:
+                    freed += os.path.getsize(out_real)
+                    os.remove(out_real)
+                    removed_any = True
+                except OSError as e:
+                    logger.error(f"Failed to delete output video file for compress job {job_id}: {e}")
+
+    # 2. Delete extracted audio file if it exists
+    if audio_path:
+        aud_real = os.path.realpath(audio_path)
+        if aud_real.startswith(base_real + os.sep) and os.path.dirname(aud_real) == job_dir_real:
+            if os.path.exists(aud_real):
+                try:
+                    freed += os.path.getsize(aud_real)
+                    os.remove(aud_real)
+                    removed_any = True
+                except OSError as e:
+                    logger.error(f"Failed to delete output audio file for compress job {job_id}: {e}")
+
+    if not removed_any:
         return {
             "status": "success",
-            "message": "Output file was already removed.",
+            "message": "Output files were already removed.",
             "output_size_bytes": job.get("output_size_bytes") or 0,
         }
 
-    try:
-        freed = os.path.getsize(out_real)
-        os.remove(out_real)
-    except OSError as e:
-        logger.error(f"Failed to delete output file for compress job {job_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete output file: {e}")
-
-    logger.info(f"Compress job {job_id}: output file deleted manually (freed {freed} bytes)")
+    logger.info(f"Compress job {job_id}: output file(s) deleted manually (freed {freed} bytes)")
     return {
         "status": "success",
-        "message": "Compressed output file deleted. Job record kept for history.",
+        "message": "Compressed output file(s) deleted. Job record kept for history.",
         "output_size_bytes": freed,
     }
 

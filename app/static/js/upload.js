@@ -1,10 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const API_KEY_STORAGE = 'typhoon_asr_api_key';
 
-  const apiKeyInput = document.getElementById('apiKeyInput');
-  const toggleApiKeyBtn = document.getElementById('toggleApiKeyBtn');
-  const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
-  const clearApiKeyLink = document.getElementById('clearApiKeyLink');
 
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('audioFileInput');
@@ -31,63 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- API Key Management ---
   function getApiKey() {
-    return (apiKeyInput && apiKeyInput.value.trim()) || localStorage.getItem(API_KEY_STORAGE) || '';
+    return localStorage.getItem(API_KEY_STORAGE) || '';
   }
-
-  function maskApiKey(key) {
-    if (!key) return '••••••••';
-    if (key.length <= 8) return '•'.repeat(key.length);
-    return `${key.slice(0, 4)}••••${key.slice(-4)}`;
-  }
-
-  function initApiKeyUI() {
-    const apiKeyInputGroup = document.getElementById('apiKeyInputGroup');
-    const apiKeySavedState = document.getElementById('apiKeySavedState');
-    const apiKeyMask = document.getElementById('apiKeyMask');
-    const saved = localStorage.getItem(API_KEY_STORAGE);
-    if (saved) {
-      if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'none';
-      if (apiKeySavedState) {
-        apiKeySavedState.style.display = 'flex';
-        if (apiKeyMask) apiKeyMask.textContent = maskApiKey(saved);
-      }
-    } else {
-      if (apiKeyInputGroup) apiKeyInputGroup.style.display = 'block';
-      if (apiKeySavedState) apiKeySavedState.style.display = 'none';
-    }
-  }
-
-  if (saveApiKeyBtn) {
-    saveApiKeyBtn.addEventListener('click', () => {
-      const key = apiKeyInput ? apiKeyInput.value.trim() : '';
-      if (!key) {
-        alert('Please enter an API key before saving.');
-        return;
-      }
-      localStorage.setItem(API_KEY_STORAGE, key);
-      if (apiKeyInput) apiKeyInput.value = '';
-      initApiKeyUI();
-    });
-  }
-
-  if (clearApiKeyLink) {
-    clearApiKeyLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      localStorage.removeItem(API_KEY_STORAGE);
-      if (apiKeyInput) apiKeyInput.value = '';
-      initApiKeyUI();
-    });
-  }
-
-  if (toggleApiKeyBtn) {
-    toggleApiKeyBtn.addEventListener('click', () => {
-      if (apiKeyInput) {
-        apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
-      }
-    });
-  }
-
-  initApiKeyUI();
 
   // Copy text to clipboard handler
   copyResultBtn.addEventListener('click', async () => {
@@ -164,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!selectedFile) return;
 
     transcribeBtn.disabled = true;
+    dropzone.style.display = 'none';
     cancelBtn.style.display = 'inline-flex';
     statusMessage.textContent = '⏳ กำลังส่งไฟล์และประมวลผลบน GPU...';
     statusMessage.style.color = 'var(--accent-cyan)';
@@ -185,27 +127,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // If the target engine is not resident on VRAM yet, surface the cold-start
     // load progress so the user knows why the first request takes longer.
     if (window.ModelStatus) {
-      const lang = (languageSelect && languageSelect.value) || 'th';
-      const engine = lang === 'th' ? 'typhoon' : 'whisper';
+    activeController = new AbortController();
+    const signal = activeController.signal;
+
+    // Check if model loading dialog is needed
+    const lang = (languageSelect && languageSelect.value) || 'th';
+    const targetEngine = lang === 'th' ? 'typhoon' : 'whisper';
+    let dialogShown = false;
+
+    if (window.ModelStatus && window.ModelLoadingDialog) {
       const st = window.ModelStatus.getLast();
-      if (st && st[engine + '_model_state'] && st[engine + '_model_state'] !== 'loaded') {
-        statusMessage.textContent = '⏳ กำลังโหลดโมเดลขึ้น VRAM (ครั้งแรกอาจใช้เวลา 10–60 วินาที)...';
-        statusMessage.style.color = 'var(--accent-cyan)';
-        window.ModelStatus.waitForReady(engine, () => {
-          statusMessage.textContent = '✅ โมเดลพร้อมแล้ว กำลังแปลงเสียง...';
-          statusMessage.style.color = 'var(--success)';
+      if (st && st[targetEngine + '_model_state'] !== 'loaded') {
+        dialogShown = true;
+        window.ModelLoadingDialog.show({
+          engine: targetEngine,
+          title: `กำลังโหลดโมเดล ${targetEngine === 'typhoon' ? 'Typhoon ASR' : 'Whisper'} เข้า VRAM / RAM...`,
+          onCancel: () => {
+            if (activeController) {
+              activeController.abort();
+            }
+          }
         });
       }
     }
-
-    const headers = {};
-    const apiKey = getApiKey();
-    if (apiKey) {
-      headers['x-api-key'] = apiKey;
-    }
-
-    activeController = new AbortController();
-    const signal = activeController.signal;
 
     try {
       const response = await fetch('/v1/audio/transcribe', {
@@ -214,6 +158,10 @@ document.addEventListener('DOMContentLoaded', () => {
         body: formData,
         signal: signal
       });
+
+      if (window.ModelLoadingDialog) {
+        window.ModelLoadingDialog.hide();
+      }
 
       const data = await response.json();
 
@@ -245,8 +193,13 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMessage.textContent = `❌ เกิดข้อผิดพลาด: ${data.detail || 'ไม่สามารถแปลงไฟล์เสียงได้'}`;
         statusMessage.style.color = 'var(--danger)';
         resultText.textContent = 'เกิดข้อผิดพลาดในการประมวลผล';
+        dropzone.style.display = '';
       }
     } catch (err) {
+      if (window.ModelLoadingDialog) {
+        window.ModelLoadingDialog.hide();
+      }
+      dropzone.style.display = '';
       if (err.name === 'AbortError') {
         statusMessage.textContent = '❌ ยกเลิกการแปลงเรียบร้อยแล้ว (Cancelled)';
         statusMessage.style.color = 'var(--danger)';
@@ -278,6 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fileInput.value = '';
     fileNameDisplay.textContent = '📁 ลากไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์';
+    dropzone.style.display = '';
     transcribeBtn.disabled = true;
     transcribeBtn.innerHTML = '<span>🚀 เริ่มแปลงไฟล์เสียง (Transcribe)</span>';
     cancelBtn.style.display = 'none';
