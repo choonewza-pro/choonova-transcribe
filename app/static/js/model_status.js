@@ -50,7 +50,22 @@
       `</div>`;
   }
 
+  function renderNoApiKey() {
+    const badgeEl = getBadgeEl();
+    if (!badgeEl) return;
+    badgeEl.innerHTML =
+      `<div class="model-status-title" style="color: #ff6b6b;">⚠️ ยังไม่ได้ตั้งค่า API Key</div>` +
+      `<div class="model-status-body" style="text-align: center;">` +
+      `<p style="margin: 0.25rem 0; color: var(--text-muted); font-size: 0.88rem;">กรุณาตั้งค่า API Key ก่อนใช้งานระบบ</p>` +
+      `<a href="/setting" class="btn-primary" style="display: inline-block; padding: 0.45rem 1.2rem; text-decoration: none; font-size: 0.9rem; margin-top: 0.15rem;">⚙️ ไปที่หน้าตั้งค่า</a>` +
+      `</div>`;
+  }
+
   async function refresh() {
+    if (!getApiKey()) {
+      renderNoApiKey();
+      return null;
+    }
     const data = await fetchStatus();
     if (data) render(data);
     return data;

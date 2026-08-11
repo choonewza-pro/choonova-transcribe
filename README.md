@@ -16,6 +16,7 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 4. **ประวัติการถอดความ** (`/media/transcribe/jobs/history`) — ดู/export/ลบ งานที่เคยถอดความไว้
 5. **Video Compressor** (`POST /v1/media/compress/jobs`) — ลดขนาดไฟล์วิดีโอด้วย FFmpeg แบบ async คิว 1 ไฟล์ต่อครั้ง (ลดความละเอียด / บิตเรต / ตัดหัว-ท้าย `start`/`end`)
 6. **Compressor History** (`/media/compress/jobs/history`) — ดูผลการบีบอัด และลบไฟล์ผลลัพธ์ด้วยตนเองเพื่อประหยัดพื้นที่
+7. **Settings** (`/setting`) — จัดการ API Key และตั้งค่าโมเดล VRAM (always / idle)
 
 ## Tech Stack
 
@@ -48,7 +49,7 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 │   ├── compress_utils.py # FFmpeg probe / command builder / progress parser (video compressor)
 │   ├── compress_worker.py # Async video compression worker (FFmpeg, progress -> DB)
 │   ├── run_compress_job.py # Subprocess entrypoint for isolated compressor workers
-│   ├── templates/       # HTML pages (index, upload, realtime, media, jobs, compress)
+│   ├── templates/       # HTML pages (index, upload, realtime, media, jobs, compress, setting)
 │   └── static/          # CSS + JS (upload.js, realtime.js, media.js, jobs.js, model_status.js, settings.js)
 ├── model/               # Model weights (typhoon-asr-realtime.nemo, git-ignored)
 ├── data/                # SQLite DB (choonova-transcribe.db) — optional, baked empty into Docker image
@@ -130,7 +131,7 @@ The service can control how long the ASR models (Typhoon + Whisper) stay loaded 
 
 The mode and idle timeout are stored in the SQLite `settings` table. On **first boot** the values are seeded from the environment (`MODEL_LOAD_MODE` / `MODEL_IDLE_TIMEOUT_SEC`). After that the **DB is the source of truth** — you can change the mode at runtime without restarting:
 
-- **Dashboard homepage** (`/`): "ตั้งค่าโมเดล (VRAM)" card — select mode + idle timeout, save.
+- **Settings page** (`/setting`): \"ตั้งค่าโมเดลบน VRAM\" card — select mode + idle timeout, save.
 - **API**: `GET` / `PUT /v1/settings/model` (auth required).
 
 Every page header shows a live status badge: 🟢 model on VRAM / 🟡 loading / ⚪ idle (unloaded), plus the active mode — and pages show "กำลังโหลดโมเดลขึ้น VRAM..." progress when a cold load is triggered.
@@ -148,6 +149,7 @@ Every page header shows a live status badge: 🟢 model on VRAM / 🟡 loading /
 | GET    | `/media/compress`                                        | —    | Video compressor page                                      |
 | GET    | `/media/compress/jobs/history`                           | —    | Compressor history page (ดูผล + ลบไฟล์ output ด้วยตนเอง)   |
 | GET    | `/media/transcribe/jobs/history`                         | —    | Transcription history page (เดิม `/jobs/history` redirect) |
+| GET    | `/setting`                                             | —    | Settings page (API Key + VRAM mode)                        |
 | GET    | `/healthz`                                               | —    | Health check (+ model state / mode)                        |
 | GET    | `/v1/settings/model`                                     | ✅   | Get model VRAM mode + engine states                        |
 | PUT    | `/v1/settings/model`                                     | ✅   | Change model VRAM mode at runtime                          |

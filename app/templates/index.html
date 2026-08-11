@@ -90,43 +90,12 @@
           <h3>6. ประวัติการบีบอัด</h3>
           <p>ดูผลการบีบอัด (ขนาด/ความละเอียด/อัตราการลด) และลบไฟล์ผลลัพธ์เองเพื่อประหยัดพื้นที่ดิสก์</p>
         </a>
-      </div>
 
-      <!-- Model VRAM Residency Settings -->
-      <div style="margin: 2rem 0; padding: 1.5rem 1.75rem; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--card-border); border-radius: 16px; backdrop-filter: blur(10px);">
-        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
-          <span style="font-size: 1.8rem;">⚙️</span>
-          <div>
-            <h2 style="font-size: 1.35rem; color: var(--accent-cyan); margin: 0;">ตั้งค่าโมเดลบน VRAM (Model VRAM Residency)</h2>
-            <p style="color: var(--text-muted); font-size: 0.88rem; margin: 0.2rem 0 0 0;">
-              เลือกว่าโมเดลจะถูกโหลดค้างใน VRAM ตลอดเวลา หรือปล่อยเมื่อว่าง (idle) — เปลี่ยนได้ทันทีโดยไม่ต้อง restart บริการ
-            </p>
-          </div>
-        </div>
-
-        {% include 'partials/api_key_settings.html' %}
-
-        <div id="modelSettingsForm" style="display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: flex-end; margin-top: 1rem;">
-          <label style="display: flex; flex-direction: column; gap: 0.35rem;">
-            <span style="color: var(--text-muted); font-size: 0.85rem;">โหมดการใช้งาน (Load Mode)</span>
-            <select id="settingsLoadMode" class="form-select" style="padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(0,0,0,0.25); color: #fff; border: 1px solid var(--card-border);">
-              <option value="always">always — จอง VRAM ตลอดเวลา (เร็วสุด)</option>
-              <option value="idle">idle — ปล่อย VRAM เมื่อไม่ใช้งานเกินเวลา</option>
-            </select>
-          </label>
-
-          <label style="display: flex; flex-direction: column; gap: 0.35rem;" id="settingsTimeoutWrap">
-            <span style="color: var(--text-muted); font-size: 0.85rem;">Idle Timeout (วินาที)</span>
-            <input type="number" id="settingsIdleTimeout" min="30" step="30" value="900" style="padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(0,0,0,0.25); color: #fff; border: 1px solid var(--card-border); width: 160px;">
-          </label>
-
-          <button type="button" class="btn-primary" id="saveModelSettingsBtn">💾 บันทึกการตั้งค่า</button>
-        </div>
-
-        <div id="settingsStatus" style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-muted);">กำลังโหลดการตั้งค่าปัจจุบัน...</div>
-        <p style="color: var(--text-muted); font-size: 0.82rem; margin: 0.75rem 0 0 0;">
-          💡 ค่าจาก <code>.env</code> ใช้เฉพาะการสร้างฐานข้อมูลครั้งแรกเท่านั้น หลังจากนั้นระบบจะอ้างอิงค่าจากฐานข้อมูล — การเปลี่ยนที่นี่มีผลทันที (ไม่ต้อง restart)
-        </p>
+        <a href="/setting" class="card-button">
+          <div class="icon">⚙️</div>
+          <h3>7. ตั้งค่าระบบ</h3>
+          <p>จัดการ API Key และตั้งค่าโมเดลบน VRAM — เลือกโหมด always (จองถาวร) หรือ idle (ปล่อยเมื่อว่าง)</p>
+        </a>
       </div>
 
       <!-- Model Capabilities & Specifications Table -->
@@ -206,10 +175,10 @@
       </div>
 
       <!-- API Endpoints Documentation -->
-      <hr style="border: 0; border-top: 1px solid var(--card-border); margin: 2rem 0;">
-
-      <h2 style="font-size: 1.8rem; margin-bottom: 0.5rem; color: var(--accent-cyan);">📚 วิธีการใช้งาน API Endpoints ทั้งหมด</h2>
-      <p style="color: var(--text-muted); margin-bottom: 2rem;">เอกสารประกอบการเชื่อมต่อบริการ ChooNova Transcribe สำหรับนักพัฒนา (Developer API Reference) — คลิกที่แต่ละ endpoint เพื่อดูรายละเอียด</p>
+      <details style="margin-top: 2rem;">
+        <summary style="cursor: pointer; font-size: 1.4rem; font-weight: 600; color: var(--accent-cyan); padding: 0.5rem 0;">📚 วิธีการใช้งาน API Endpoints ทั้งหมด <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 400;">(คลิกเพื่อเปิด/ปิด)</span></summary>
+        <div style="margin-top: 1rem;">
+        <p style="color: var(--text-muted); margin-bottom: 2rem;">เอกสารประกอบการเชื่อมต่อบริการ ChooNova Transcribe สำหรับนักพัฒนา (Developer API Reference) — คลิกที่แต่ละ endpoint เพื่อดูรายละเอียด</p>
 
       <!-- Authentication Rules -->
       <div style="background: rgba(0, 242, 254, 0.05); border: 1px solid rgba(0, 242, 254, 0.2); padding: 1.2rem; border-radius: 10px; margin-bottom: 2rem;">
@@ -227,6 +196,8 @@
       {% include 'partials/api_card_realtime.html' %}
       {% include 'partials/api_card_media.html' %}
       {% include 'partials/api_card_compress.html' %}
+        </div>
+      </details>
 
     </div>
   </main>
@@ -236,6 +207,6 @@
     <br><span style="opacity: 0.7;">🤖 พัฒนาด้วย DeepSeek V4 Flash Model</span>
   </footer>
 
-  <script src="/static/js/settings.js?v=1"></script>
+  <script src="/static/js/model_status.js?v=2"></script>
 </body>
 </html>

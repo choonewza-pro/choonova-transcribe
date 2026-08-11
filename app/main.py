@@ -491,6 +491,11 @@ async def jobs_history_page(request: Request):
     return templates.TemplateResponse(request=request, name="jobs.html")
 
 
+@app.get("/setting", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    return templates.TemplateResponse(request=request, name="setting.html")
+
+
 @app.get("/jobs/history", response_class=HTMLResponse)
 async def jobs_history_page_legacy(request: Request):
     return RedirectResponse(url="/media/transcribe/jobs/history", status_code=302)
