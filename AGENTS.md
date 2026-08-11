@@ -1,96 +1,89 @@
 <!-- headroom:rtk-instructions -->
-# RTK (Rust Token Killer) - Token-Optimized Commands
-
-When running shell commands, **always prefix with `rtk`**. This reduces context
-usage by 60-90% with zero behavior change. If rtk has no filter for a command,
-it passes through unchanged — so it is always safe to use.
-
-## Key Commands
-```bash
-# Git (59-80% savings)
-rtk git status          rtk git diff            rtk git log
-
-# Files & Search (60-75% savings)
-rtk ls <path>           rtk read <file>         rtk grep <pattern>
-rtk find <pattern>      rtk diff <file>
-
-# Test (90-99% savings) — shows failures only
-rtk pytest tests/       rtk cargo test          rtk test <cmd>
-
-# Build & Lint (80-90% savings) — shows errors only
-rtk tsc                 rtk lint                rtk cargo build
-rtk prettier --check    rtk mypy                rtk ruff check
-
-# Analysis (70-90% savings)
-rtk err <cmd>           rtk log <file>          rtk json <file>
-rtk summary <cmd>       rtk deps                rtk env
-
-# GitHub (26-87% savings)
-rtk gh pr view <n>      rtk gh run list         rtk gh issue list
-
-# Infrastructure (85% savings)
-rtk docker ps           rtk kubectl get         rtk docker logs <c>
-
-# Package managers (70-90% savings)
-rtk pip list            rtk pnpm install        rtk npm run <script>
-```
-
-## Rules
-- In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
-- For debugging, use raw command without rtk prefix
-- `rtk proxy <cmd>` runs command without filtering but tracks usage
+# RTK — prefix every shell command with `rtk` (safe no-op passthrough; saves 60-90% tokens)
 <!-- /headroom:rtk-instructions -->
 
-# Typhoon ASR Transcribe Service
+# ChooNova Transcribe — Agent Reference
 
-## Project Overview
-Thai speech-to-text API service powered by **Typhoon ASR Realtime** (FastConformer-Transducer 114M) on **Python 3.12 + FastAPI + NeMo**. Runs on NVIDIA RTX 4080 (12GB VRAM). Supports REST, WebSocket real-time, and long-form video pipeline.
-
-## Architecture
-- **Entrypoint**: `app/main.py` — FastAPI app, route registration, WebSocket, periodic cleanup
-- **Config**: `app/config.py` — reads env vars with defaults
-- **Auth**: `app/auth.py` — API key verification (x-api-key)
-- **DB**: `app/db.py` — SQLite repository for job history
-- **ASR Engine**: `app/asr_engine.py` — NeMo model singleton wrapper
-- **Audio Utils**: `app/audio_utils.py` — FFmpeg extract/split, disk-space check
-- **Job Worker**: `app/job_worker.py` — async long-form transcription pipeline
+Thai speech-to-text API (Python 3.12, FastAPI, NeMo Typhoon ASR). Port **8830**. Docker network **km4u-network** must exist: `docker network create km4u-network`
 
 ## Commands
 ```bash
-# GPU (requires CUDA)
+# GPU local
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8830
 
-# CPU
+# CPU local
 pip install -r requirements-cpu.txt
 DEVICE=cpu uvicorn app.main:app --host 0.0.0.0 --port 8830
 
-# Docker
-```bash
-# GPU
+# Docker GPU / CPU
 docker compose up -d --build
-
-# CPU (also works on Mac M1–M4)
 docker compose -f docker-compose-cpu.yml up -d --build
-```
+
+# Unit tests (unittest, NOT pytest)
+python -m unittest discover -s tests/unit -t . -v
+
+# Single test
+python -m unittest tests.unit.settings.test_settings_service
+
+# Syntax check
+python -m py_compile app/main.py
 ```
 
-## Test
-No formal test suite exists. Manual verification via:
-- Dashboard at `http://localhost:8830/`
-- Syntax check: `python -m py_compile app/main.py app/db.py app/config.py app/audio_utils.py`
-- cURL examples in README.md
+## Test Architecture
+- `unittest` (stdlib) — no pytest. Tests use `TestCase` with inline `Fake*Repository` classes implementing domain port ABCs (dict-backed, no mocking library).
+- One test file per module under `tests/unit/<module>/`.
+
+## Architecture (Pragmatic Modular Hexagonal)
+```
+app/
+├── core/                  # Cross-cutting: config, db (WAL SQLite), security (x-api-key HMAC), exceptions, logging
+├── modules/
+│   ├── settings/          # VRAM residency mode: domain -> application -> adapters/outbound/SQLiteSettingsRepository
+│   ├── transcription/     # ASR jobs: domain -> application -> adapters/{inbound/workers/run_job.py, outbound/{repositories/, media/, engines/}}
+│   └── compression/       # Video compress: domain -> application -> adapters/{inbound/workers/run_compress_job.py, outbound/}
+├── api/v1/                # FastAPI routers: transcription_router, compression_router, settings_router, realtime_router
+└── api/web/               # HTML dashboard (views_router.py, Jinja2)
+```
+- **Workers run as isolated subprocesses**: `sys.executable -m app.run_job <job_id> <path> <lang>`. Watchdog detects crashes.
+- **Worker subprocesses must lazy-import PyTorch/NeMo** (prevent RAM/VRAM leak at top level).
+- **Heavy DI via FastAPI `Depends` factory functions** — no DI container. Services receive repo adapters; engine/media ports are `None` in API endpoints (used only in subprocess workers).
+- **`app/db.py` / `app/config.py` / `app/auth.py` are backward-compat shims** that re-export from `app/core/`.
+
+## Engines
+- **Typhoon ASR** (`typhoon-adapter`): Thai-only, NeMo FastConformer-Transducer 114M. ~1GB VRAM at FP16. Faster than Whisper for Thai.
+- **faster-whisper** (`whisper-adapter`): English (`en`) or auto-detect (`auto`). Lazy-loaded on first `en`/`auto` request.
+- **Routing**: `app/engine_router.py` dispatches by language. `normalize_language("th"|"en"|"auto")`.
+
+## Model VRAM Mode
+- `always` (default): models stay in VRAM once loaded.
+- `idle`: unloaded after `MODEL_IDLE_TIMEOUT_SEC` (default 900s) of inactivity.
+- Mode stored in SQLite `settings` table (seeded from env on first boot; editable at runtime via `/setting` or `PUT /v1/settings/model`).
+
+## API Auth
+- `x-api-key` header, HMAC constant-time comparison. Applied via `Depends(verify_api_key)` on all v1 REST routes.
+- Web UI (`/`, `/audio/transcribe`, etc.) = no auth.
+- WebSocket = no auth (would need query-param handshake).
+
+## CUDA Resilience
+- Transient errors: backoff + `clear_cuda_cache()` + retry (3 attempts, 5s backoff).
+- Allocator corruption: `cudaDeviceReset` + model reload.
+- Worker watchdog: polls every 30s for crashed subprocesses (marks jobs failed).
+- `CUDA_RESET_BETWEEN_CHUNKS=true` (env) resets CUDA context between long-form chunks.
 
 ## Key Files
 - `requirements.txt` — GPU deps (CUDA 12.1 PyTorch index)
-- `requirements-cpu.txt` — CPU deps (no PyTorch index)
-- `Dockerfile` / `Dockerfile.cpu` — GPU/CPU Docker images
-- `.env.example` — env template; copy to `.env` for local dev
-- `model/` — `.nemo` weights (gitignored, auto-downloaded from HuggingFace)
+- `requirements-cpu.txt` — CPU deps
+- `.env.example` → copy to `.env`
+- `model/typhoon-asr-realtime.nemo` — weights (gitignored, auto-downloaded from HuggingFace)
+- `app/core/config.py` — all env vars defined here
+- `app/core/db.py` — SQLite WAL connection factory (used by all repositories)
 
-## Convention Notes
-- Model weights downloaded from `typhoon-ai/typhoon-asr-realtime` on HuggingFace
-- `.nemo` files are gitignored
-- `.env`, `.cache/`, `.agents/skills/`, `skills-lock.json` are gitignored
-- Docker network `km4u-network` must exist: `docker network create km4u-network`
-- Service port: `8830`
+## Gitignored
+`.env`, `.cache/`, `data/choonova-transcribe.db`, `*.nemo`, `.agents/skills/`, `.serena/`, `skills-lock.json`
+
+## Style Notes
+- **No `utils.py` / `helpers.py`** — put FFmpeg work in `FFmpegAdapter`, filesystem work in `FilesystemAdapter`, audio logic in domain.
+- **Group related use cases** in cohesive service files (no 1-file-per-class).
+- Domain layer = pure Python `dataclasses` + ABC ports only — zero framework imports.
+- Config = module-level constants (not Pydantic Settings).
