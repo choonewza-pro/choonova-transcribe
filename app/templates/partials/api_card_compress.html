@@ -147,6 +147,7 @@
               <br><code>crf</code> — คุณภาพ (1–51, default {{ default_crf|default(28) }}) · <code>preset</code> — ultrafast..veryslow
               <br><code>encoder</code> — <code>libx264</code> (default) หรือ <code>nvenc</code> (GPU ถ้า ffmpeg รองรับ)
               <br><code>start</code> / <code>end</code> — ตัดหัว/ท้าย (ไม่บังคับ): รูปแบบ <code>SS</code>, <code>MM:SS</code> หรือ <code>HH:MM:SS</code>, ว่าง = ไม่ตัด
+              <br><code>audio_extract</code> — ถอดไฟล์เสียงหลังบีบอัด: <code>''</code> (default, ไม่ถอด), <code>wav</code> (16kHz Mono PCM), <code>mp3</code> (192kbps)
               <br>ต้องระบุอย่างน้อยหนึ่งอย่าง: <code>target_width</code> หรือ <code>bitrate_kbps</code>
               <br>คิวเต็ม (มากกว่า {{ max_queued|default(5) }} งาน) → HTTP 429 · พื้นที่ดิสก์ไม่พอ → HTTP 507
             </p>
@@ -160,7 +161,8 @@
   -F "crf=28" \
   -F "preset=medium" \
   -F "start=00:01:00" \
-  -F "end=00:02:00"</pre>
+  -F "end=00:02:00" \
+  -F "audio_extract=wav"</pre>
             </div>
             <div class="code-container">
               <div class="code-header">Response JSON (202 Accepted)</div>
@@ -252,6 +254,24 @@
               <div class="code-header">cURL Request</div>
               <pre>curl -o compressed.mp4 \
   "http://localhost:8830/v1/media/compress/jobs/b2c3d4e5-.../download?api_key=change-me-in-production"</pre>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-get">GET</span> <code>/v1/media/compress/jobs/{job_id}/audio</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              ดาวน์โหลดไฟล์เสียงที่สกัดจากวิดีโอ (WAV หรือ MP3) — เฉพาะงานที่เลือกถอดไฟล์เสียง
+              คืน HTTP 404 หากไม่ได้ถอดเสียงหรือไฟล์ถูกลบตาม retention policy
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL Request</div>
+              <pre>curl -o audio.wav \
+  "http://localhost:8830/v1/media/compress/jobs/b2c3d4e5-.../audio?api_key=change-me-in-production"</pre>
             </div>
           </div>
         </details>

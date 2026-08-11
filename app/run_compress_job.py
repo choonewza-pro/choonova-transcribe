@@ -46,12 +46,14 @@ def main():
     encoder = sys.argv[7] if len(sys.argv) > 7 else "libx264"
     trim_start = _float_arg(8, 0.0)
     trim_end = _float_arg(9, 0.0)
+    audio_extract_format = sys.argv[10] if len(sys.argv) > 10 else ""
 
     logger.info(
         f"🚀 Isolated compressor worker starting job_id={job_id} "
         f"(width={target_width}, bitrate={bitrate_kbps}kbps, crf={crf}, "
         f"preset={preset}, encoder={encoder}, "
-        f"trim_start={trim_start}, trim_end={trim_end})"
+        f"trim_start={trim_start}, trim_end={trim_end}, "
+        f"audio_extract={audio_extract_format or 'none'})"
     )
 
     try:
@@ -59,6 +61,7 @@ def main():
             process_compress_job(
                 job_id, input_file_path, target_width, bitrate_kbps,
                 crf, preset, encoder, trim_start, trim_end,
+                audio_extract_format,
             )
         )
         logger.info(f"✅ Isolated compressor worker finished job_id={job_id}")

@@ -278,6 +278,15 @@ document.addEventListener('DOMContentLoaded', () => {
             : '<span class="media-badge media-gone">🗑 ไฟล์ถูกลบแล้ว</span>')
         : '';
 
+      let audioBadge = '';
+      if (completed && job.audio_extract_format) {
+        const audioExists = !!job.audio_exists;
+        const fmt = job.audio_extract_format.toUpperCase();
+        audioBadge = audioExists
+          ? `<span class="media-badge media-exists">🎵 ${fmt}</span>`
+          : `<span class="media-badge media-gone">🎵 ${fmt} (ถูกลบ)</span>`;
+      }
+
       let savingsBadge = '';
       if (completed && job.file_size_bytes && job.output_size_bytes) {
         const inSize = job.file_size_bytes;
@@ -315,8 +324,12 @@ document.addEventListener('DOMContentLoaded', () => {
         ? `${job.output_width}×${job.output_height}`
         : '-';
       const encLabel = job.encoder === 'nvenc' ? '⚡ NVENC' : '💻 libx264';
+      const hasAudio = completed && job.audio_extract_format && !!job.audio_exists;
 
       const downloadBtn = `<button type="button" class="btn-row" data-action="download" data-id="${job.job_id}" ${completed && outputExists ? '' : 'disabled title="ไม่มีไฟล์ผลลัพธ์"'} title="${completed && outputExists ? 'ดาวน์โหลดไฟล์ MP4 ที่บีบอัดแล้ว' : 'ไม่มีไฟล์ผลลัพธ์'}">📥 ดาวน์โหลด</button>`;
+      const audioDownloadBtn = hasAudio
+        ? `<button type="button" class="btn-row" data-action="download-audio" data-id="${job.job_id}" title="ดาวน์โหลดไฟล์เสียงที่สกัดไว้">🎵 ดาวน์โหลดเสียง</button>`
+        : '';
       const delOutputBtn = `<button type="button" class="btn-row btn-danger" data-action="del-output" data-id="${job.job_id}" ${completed && outputExists ? '' : 'disabled title="ไม่มีไฟล์ผลลัพธ์ให้ลบ"'} title="${completed && outputExists ? 'ลบเฉพาะไฟล์ผลลัพธ์ เพื่อประหยัดพื้นที่ (เก็บประวัติไว้)' : 'ไม่มีไฟล์ผลลัพธ์ให้ลบ'}">🗑 ลบไฟล์ผลลัพธ์</button>`;
       const delRowBtn = `<button type="button" class="btn-row btn-danger" data-action="del-row" data-id="${job.job_id}" title="ลบทั้งแถว (ประวัติ + ไฟล์ทั้งหมด)">❌ ลบรายการ</button>`;
 
@@ -336,9 +349,10 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="job-card-meta-item">⚡ ${formatSeconds(job.elapsed_seconds)}</span>
           <span class="job-card-meta-item">📅 ${formatDate(job.created_at)}</span>
         </div>
-        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">${outputBadge}${savingsBadge}</div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">${outputBadge}${audioBadge}${savingsBadge}</div>
         <div class="job-card-actions">
           ${downloadBtn}
+          ${audioDownloadBtn}
           ${delOutputBtn}
           ${delRowBtn}
         </div>
@@ -365,6 +379,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (action === 'download') {
       await downloadOutput(jobId);
+    } else if (action === 'download-audio') {
+      await downloadAudio(jobId);
     } else if (action === 'del-output') {
       await deleteOutputOnly(jobId);
     } else if (action === 'del-row') {
@@ -401,6 +417,40 @@ document.addEventListener('DOMContentLoaded', () => {
       URL.revokeObjectURL(url);
     } catch (err) {
       alert(`❌ ดาวน์โหลดล้มเหลว: ${err.message || err}`);
+    }
+  }
+
+  async function downloadAudio(jobId) {
+    try {
+      const headers = {};
+      const apiKey = getApiKey();
+      if (apiKey) headers['x-api-key'] = apiKey;
+
+      const res = await fetch(`/v1/media/compress/jobs/${jobId}/audio`, { headers });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const err = await res.json();
+          detail = err.detail || detail;
+        } catch (e2) {}
+        throw new Error(detail);
+      }
+
+      const job = jobs.find(j => j.job_id === jobId);
+      const fmt = (job && job.audio_extract_format) || 'wav';
+      const ext = fmt === 'mp3' ? 'mp3' : 'wav';
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const base = (job && job.filename) ? String(job.filename).replace(/\.[^/.]+$/, '') : jobId;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${base}_audio.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`❌ ดาวน์โหลดเสียงล้มเหลว: ${err.message || err}`);
     }
   }
 

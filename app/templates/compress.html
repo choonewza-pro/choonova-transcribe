@@ -350,6 +350,15 @@
             <input type="text" id="trimEndInput" class="option-input" placeholder="เช่น 05:00 หรือ 300 (ว่าง = ไม่ตัด)" inputmode="numeric">
             <span class="option-hint">จุดสิ้นสุดของวิดีโอที่ต้องการ (วินาที, MM:SS หรือ HH:MM:SS) — ทุกอย่างหลังจุดนี้จะถูกตัดทิ้ง</span>
           </div>
+          <div class="option-card">
+            <label class="option-label" for="audioExtractSelect">🎵 ถอดไฟล์เสียง</label>
+            <select id="audioExtractSelect" class="option-input">
+              <option value="">ไม่ถอดไฟล์เสียง</option>
+              <option value="wav">ถอดไฟล์เสียง WAV (16kHz Mono PCM)</option>
+              <option value="mp3">ถอดไฟล์เสียง MP3 (192kbps)</option>
+            </select>
+            <span class="option-hint">สกัดเสียงจากวิดีโอที่บีบอัดแล้ว — ใช้สําหรับถอดความต่อหรือฟังแยก</span>
+          </div>
         </div>
 
         <button type="submit" class="btn-primary" id="startCompressBtn" disabled>
@@ -377,7 +386,10 @@
       <div id="compressResultSection" style="margin-top: 2rem; display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
           <h3 style="font-size: 1.2rem;">✅ บีบอัดเสร็จสมบูรณ์</h3>
-          <a id="btnDownloadCompressed" class="btn-primary" href="#" target="_blank" style="text-decoration: none;">⬇️ ดาวน์โหลดไฟล์ MP4</a>
+          <div style="display: flex; gap: 0.5rem;">
+            <a id="btnDownloadCompressed" class="btn-primary" href="#" target="_blank" style="text-decoration: none;">⬇️ ดาวน์โหลดไฟล์ MP4</a>
+            <a id="btnDownloadAudio" class="btn-primary" href="#" target="_blank" style="text-decoration: none; display: none;">🎵 ดาวน์โหลดเสียง</a>
+          </div>
         </div>
 
         <div class="result-summary">
@@ -453,6 +465,6 @@
     </div>
   </div>
 
-  <script src="/static/js/compress.js?v=2"></script>
+  <script src="/static/js/compress.js?v=3"></script>
 </body>
 </html>

@@ -8,6 +8,7 @@ from app.db import get_compress_job, update_compress_job
 from app.compress_utils import (
     probe_video,
     build_compress_cmd,
+    build_audio_extract_cmd,
     parse_progress_line,
     normalize_encoder,
     normalize_preset,
@@ -130,13 +131,15 @@ async def process_compress_job(
     encoder: str = "libx264",
     trim_start: float = 0.0,
     trim_end: float = 0.0,
+    audio_extract_format: str = "",
 ) -> None:
     """
     Async background worker that compresses a video with FFmpeg and updates the
     job's progress in SQLite. trim_start / trim_end (seconds, 0 = no trim) cut
-    the video head/tail before compressing. The input file is ALWAYS deleted on
-    completion, failure, or cancellation (handled by the caller), plus a
-    defensive cleanup in the finally block below.
+    the video head/tail before compressing. audio_extract_format: '' = none,
+    'wav' or 'mp3' = extract audio after compression. The input file is ALWAYS
+    deleted on completion, failure, or cancellation (handled by the caller), plus
+    a defensive cleanup in the finally block below.
     """
     start_time = time.time()
     job_dir = os.path.dirname(input_file_path)
@@ -216,6 +219,36 @@ async def process_compress_job(
         out_probe = probe_video(output_path)
         elapsed = time.time() - start_time
 
+        audio_extract_path_str = None
+        audio_extract_size = 0
+        if audio_extract_format:
+            fmt_label = audio_extract_format.upper()
+            update_compress_job(
+                job_id, current_stage=f"Extracting audio ({fmt_label})",
+            )
+            audio_ext = ".wav" if audio_extract_format == "wav" else ".mp3"
+            audio_output = os.path.join(job_dir, f"audio{audio_ext}")
+            acmd = build_audio_extract_cmd(output_path, audio_output, audio_extract_format)
+            logger.info(f"Audio extract command: {' '.join(acmd)}")
+            a_proc = await asyncio.create_subprocess_exec(
+                *acmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            a_stdout, a_stderr = await a_proc.communicate()
+            if a_proc.returncode != 0:
+                logger.warning(
+                    f"Audio extraction failed for {job_id}: "
+                    f"{a_stderr.decode('utf-8', errors='replace')[-500:]}"
+                )
+            elif os.path.exists(audio_output) and os.path.getsize(audio_output) > 0:
+                audio_extract_path_str = audio_output
+                audio_extract_size = os.path.getsize(audio_output)
+                logger.info(
+                    f"Audio extracted for {job_id}: {audio_output} "
+                    f"({audio_extract_size} bytes)"
+                )
+
         completed_ok = _maybe_write_terminal(
             job_id,
             status="completed",
@@ -227,6 +260,8 @@ async def process_compress_job(
             output_height=out_probe.get("height", 0),
             duration_seconds=out_probe.get("duration_seconds", 0.0) or duration,
             elapsed_seconds=elapsed,
+            audio_extract_path=audio_extract_path_str,
+            audio_extract_size_bytes=audio_extract_size,
         )
         logger.info(
             f"Compress {job_id} completed in {elapsed:.2f}s "

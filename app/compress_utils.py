@@ -309,3 +309,21 @@ def format_bytes(num: float) -> str:
             return f"{num:.2f} {unit}"
         num /= 1024
     return f"{num:.2f} TB"
+
+
+def build_audio_extract_cmd(
+    input_path: str,
+    output_path: str,
+    format: str = "wav",
+) -> List[str]:
+    """
+    Build an ffmpeg command that extracts audio from a video file.
+    format: 'wav' (16kHz mono PCM) or 'mp3' (192kbps stereo).
+    """
+    cmd = ["ffmpeg", "-y", "-hide_banner", "-i", input_path, "-vn"]
+    if format == "mp3":
+        cmd += ["-c:a", "libmp3lame", "-b:a", "192k"]
+    else:
+        cmd += ["-c:a", "pcm_s16le", "-ar", "16000", "-ac", "1"]
+    cmd += [output_path]
+    return cmd

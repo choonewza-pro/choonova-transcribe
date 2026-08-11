@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const encoderSelect = document.getElementById('encoderSelect');
   const trimStartInput = document.getElementById('trimStartInput');
   const trimEndInput = document.getElementById('trimEndInput');
+  const audioExtractSelect = document.getElementById('audioExtractSelect');
 
   const progressSection = document.getElementById('compressProgressSection');
   const queueBanner = document.getElementById('queueBanner');
@@ -44,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const resDuration = document.getElementById('resDuration');
   const statJobId = document.getElementById('compressStatJobId');
   const statElapsed = document.getElementById('compressStatElapsed');
+  const btnDownloadAudio = document.getElementById('btnDownloadAudio');
 
   // --- Error Modal ---
   const errorModal = document.getElementById('errorModal');
@@ -389,6 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('encoder', encoderSelect ? encoderSelect.value : 'libx264');
     if (trimStartInput.value.trim()) formData.append('start', trimStartInput.value.trim());
     if (trimEndInput.value.trim()) formData.append('end', trimEndInput.value.trim());
+    if (audioExtractSelect) formData.append('audio_extract', audioExtractSelect.value);
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/v1/media/compress/jobs', true);
@@ -494,6 +497,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const apiKey = getApiKey();
     const keyParam = apiKey ? `?api_key=${encodeURIComponent(apiKey)}` : '';
     btnDownload.href = `/v1/media/compress/jobs/${job.job_id}/download${keyParam}`;
+
+    if (btnDownloadAudio && job.audio_extract_format) {
+      btnDownloadAudio.style.display = 'inline-flex';
+      btnDownloadAudio.href = `/v1/media/compress/jobs/${job.job_id}/audio${keyParam}`;
+    } else if (btnDownloadAudio) {
+      btnDownloadAudio.style.display = 'none';
+    }
 
     startCompressBtn.disabled = false;
     selectedFile = null;

@@ -1,5 +1,9 @@
 # ChooNova Transcribe — Thai Speech-to-Text API
 
+<p align="center">
+  <img src="app/static/choonova-transcribe-cover.jpg" alt="ChooNova Transcribe Cover" width="100%" style="max-width: 900px; border-radius: 12px;">
+</p>
+
 Speech-to-Text API บริการภาษาไทย powered by **Typhoon ASR Realtime** (FastConformer-Transducer 114M parameters) บน **Python 3.12 + FastAPI + NeMo Toolkit** รองรับทั้ง GPU (NVIDIA, CUDA 12.1) และ CPU (Windows, Mac M1–M4, Linux) — ทดสอบบน **Notebook NVIDIA RTX 4080 Laptop GPU 12GB VRAM**
 
 > 🤖 โปรเจกต์นี้พัฒนาขึ้นด้วยความช่วยเหลือของ **DeepSeek V4 Flash Model** (AI Pair Programmer)
@@ -88,32 +92,32 @@ DEVICE=cpu uvicorn app.main:app --host 0.0.0.0 --port 8830
 
 ## Environment Variables
 
-| Variable                    | Default                           | Description                                                                    |
-| --------------------------- | --------------------------------- | ------------------------------------------------------------------------------ |
-| `HOST`                      | `0.0.0.0`                         | Bind address                                                                   |
-| `PORT`                      | `8830`                            | Service port                                                                   |
-| `GATEWAY_API_KEY`           | `change-me-in-production`         | API key (set in production)                                                    |
-| `MODEL_PATH`                | `model/typhoon-asr-realtime.nemo` | Local model path (fallback: HuggingFace)                                       |
-| `DEVICE`                    | `cuda`                            | `cuda` / `cpu` (auto-detect if CUDA unavailable)                               |
-| `WHISPER_MODEL`             | `medium`                          | faster-whisper size: `tiny/base/small/medium/large-v3`                         |
-| `LOG_LEVEL`                 | `info`                            | Logging level                                                                  |
-| `DATA_DIR`                  | `<project>/data`                  | SQLite directory                                                               |
-| `TEMP_JOBS_DIR`             | `/tmp/choonova-transcribe-jobs`   | Temp job directory                                                             |
-| `MIN_FREE_DISK_GB`          | `5.0`                             | Min disk space before rejecting uploads                                        |
-| `MAX_UPLOAD_SIZE_MB`        | `0`                               | Max upload size for long-form media jobs (MB); `0` = unlimited                 |
-| `MAX_AUDIO_UPLOAD_SIZE_MB`  | `50.0`                            | Max upload size for short audio endpoint (MB); always enforced (> 0)           |
-| `TARGET_CHUNK_DURATION_SEC` | `30.0`                            | Target chunk duration for silence-aware splitting                              |
-| `MAX_CHUNK_DURATION_SEC`    | `60.0`                            | Max chunk duration (hard cut fallback)                                         |
-| `CLEANUP_RETENTION_HOURS`   | `24`                              | Job retention before periodic cleanup                                          |
-| `PYTORCH_CUDA_ALLOC_CONF`   | `expandable_segments:True`        | PyTorch CUDA allocator config                                                  |
-| `MODEL_LOAD_MODE`           | `always`                          | Model VRAM residency mode: `always` / `idle` (seed value only, see below)      |
-| `MODEL_IDLE_TIMEOUT_SEC`    | `900`                             | Seconds of inactivity before unloading models in `idle` mode (seed value only) |
-| `COMPRESS_ENCODER`          | `libx264`                         | Video compressor encoder: `libx264` (software) / `nvenc` (GPU NVENC; auto-falls back to `libx264` if unusable at runtime)           |
-| `COMPRESS_PRESET`           | `medium`                          | Default x264 preset (ultrafast..veryslow)                                      |
-| `COMPRESS_CRF`              | `28`                              | Default encoder quality (1-51; higher = smaller)                               |
-| `COMPRESS_MAX_CONCURRENT`   | `1`                               | Max videos compressed at once (1 = strict queue)                               |
-| `COMPRESS_MAX_QUEUED`       | `10`                              | Max jobs in queue before new uploads rejected (429)                            |
-| `COMPRESS_RETENTION_HOURS`  | `24`                              | Retention for compressed output files on disk                                  |
+| Variable                    | Default                           | Description                                                                                                               |
+| --------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `HOST`                      | `0.0.0.0`                         | Bind address                                                                                                              |
+| `PORT`                      | `8830`                            | Service port                                                                                                              |
+| `GATEWAY_API_KEY`           | `change-me-in-production`         | API key (set in production)                                                                                               |
+| `MODEL_PATH`                | `model/typhoon-asr-realtime.nemo` | Local model path (fallback: HuggingFace)                                                                                  |
+| `DEVICE`                    | `cuda`                            | `cuda` / `cpu` (auto-detect if CUDA unavailable)                                                                          |
+| `WHISPER_MODEL`             | `medium`                          | faster-whisper size: `tiny/base/small/medium/large-v3`                                                                    |
+| `LOG_LEVEL`                 | `info`                            | Logging level                                                                                                             |
+| `DATA_DIR`                  | `<project>/data`                  | SQLite directory                                                                                                          |
+| `TEMP_JOBS_DIR`             | `/tmp/choonova-transcribe-jobs`   | Temp job directory                                                                                                        |
+| `MIN_FREE_DISK_GB`          | `5.0`                             | Min disk space before rejecting uploads                                                                                   |
+| `MAX_UPLOAD_SIZE_MB`        | `0`                               | Max upload size for long-form media jobs (MB); `0` = unlimited                                                            |
+| `MAX_AUDIO_UPLOAD_SIZE_MB`  | `50.0`                            | Max upload size for short audio endpoint (MB); always enforced (> 0)                                                      |
+| `TARGET_CHUNK_DURATION_SEC` | `30.0`                            | Target chunk duration for silence-aware splitting                                                                         |
+| `MAX_CHUNK_DURATION_SEC`    | `60.0`                            | Max chunk duration (hard cut fallback)                                                                                    |
+| `CLEANUP_RETENTION_HOURS`   | `24`                              | Job retention before periodic cleanup                                                                                     |
+| `PYTORCH_CUDA_ALLOC_CONF`   | `expandable_segments:True`        | PyTorch CUDA allocator config                                                                                             |
+| `MODEL_LOAD_MODE`           | `always`                          | Model VRAM residency mode: `always` / `idle` (seed value only, see below)                                                 |
+| `MODEL_IDLE_TIMEOUT_SEC`    | `900`                             | Seconds of inactivity before unloading models in `idle` mode (seed value only)                                            |
+| `COMPRESS_ENCODER`          | `libx264`                         | Video compressor encoder: `libx264` (software) / `nvenc` (GPU NVENC; auto-falls back to `libx264` if unusable at runtime) |
+| `COMPRESS_PRESET`           | `medium`                          | Default x264 preset (ultrafast..veryslow)                                                                                 |
+| `COMPRESS_CRF`              | `28`                              | Default encoder quality (1-51; higher = smaller)                                                                          |
+| `COMPRESS_MAX_CONCURRENT`   | `1`                               | Max videos compressed at once (1 = strict queue)                                                                          |
+| `COMPRESS_MAX_QUEUED`       | `10`                              | Max jobs in queue before new uploads rejected (429)                                                                       |
+| `COMPRESS_RETENTION_HOURS`  | `24`                              | Retention for compressed output files on disk                                                                             |
 
 Copy `.env.example` to `.env` to customize.
 
