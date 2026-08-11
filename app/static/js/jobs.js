@@ -185,7 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const shortId = escapeHtml((job.job_id || '').substring(0, 8));
       const fileName = escapeHtml(job.filename || '-');
-      const langMap = { th: '🇹🇭 ไทย', en: '🇬🇧 EN', auto: '🌐 อัตโนมัติ' };
+      const langMap = { th: '🇹🇭 ไทย', en: '🇬🇧 EN', auto: 'อัตโนมัติ' };
       const langBadge = langMap[job.language] || '🇹🇭 ไทย';
 
       let extra = '';
