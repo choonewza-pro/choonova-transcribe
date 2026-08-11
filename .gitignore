@@ -9,7 +9,6 @@ ENV/
 *.nemo
 model/*.nemo
 .cache/
-.agents/skills/
 skills-lock.json
 .serena/
 
