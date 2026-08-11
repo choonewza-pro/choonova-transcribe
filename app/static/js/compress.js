@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statJobId = document.getElementById('compressStatJobId');
   const statElapsed = document.getElementById('compressStatElapsed');
   const btnDownloadAudio = document.getElementById('btnDownloadAudio');
+  const btnNewCompress = document.getElementById('btnNewCompress');
 
   // --- Error Modal ---
   const errorModal = document.getElementById('errorModal');
@@ -474,6 +475,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }, 2000);
   }
+
+  function resetCompressUI() {
+    stopPolling();
+    resultSection.style.display = 'none';
+    progressSection.style.display = 'none';
+    cancelCompressBtn.style.display = 'none';
+    queueBanner.classList.remove('visible');
+    updateProgress(0, '');
+    stageText.textContent = '⚙️ กำลังเตรียมการ...';
+
+    selectedFile = null;
+    activeJobId = null;
+    sourceWidth = 0;
+    sourceHeight = 0;
+
+    compressFileInput.value = '';
+    compressFileName.textContent = '📁 ยังไม่ได้เลือกไฟล์';
+    compressFileSize.textContent = '';
+    previewContainer.style.display = 'none';
+    videoPreview.src = '';
+    sourceResInfo.textContent = '';
+    startCompressBtn.disabled = true;
+    startCompressBtn.innerHTML = '<span>🗜️ เริ่มบีบอัด</span>';
+  }
+
+  if (btnNewCompress) btnNewCompress.addEventListener('click', resetCompressUI);
 
   function handleJobCompleted(job) {
     resultSection.style.display = 'block';
