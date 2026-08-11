@@ -92,6 +92,12 @@ _(Note: Environment variables for VRAM mode only seed the database on first boot
 
 - **API Endpoints**: All `/v1` REST endpoints require a static API key passed via the `x-api-key` HTTP header. The system uses constant-time HMAC comparison to verify keys.
 - **Web UI & WebSockets**: Unauthenticated for ease of local access and streaming.
+- **Upload Validation (Defense-in-Depth)**: All file uploads undergo multi-layer inspection before processing:
+  - Extension and Size verification.
+  - Magic Bytes signature checking (`filetype`) to prevent file masking.
+  - Deep container inspection via `ffprobe` to reject malicious Polyglot files.
+  - Safe filename sanitization to prevent Path Traversal attacks.
+- **Subprocess & FFmpeg Security**: FFmpeg executions run securely without `shell=True` and enforce `-protocol_whitelist file,pipe,crypto` to completely eliminate Server-Side Request Forgery (SSRF) risks from malicious media playlists (e.g., weaponized `.m3u8`).
 
 ## Usage: Model VRAM Residency
 
