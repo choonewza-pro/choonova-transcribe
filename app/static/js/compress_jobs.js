@@ -277,7 +277,8 @@ document.addEventListener('DOMContentLoaded', () => {
         : '-';
       const encLabel = job.encoder === 'nvenc' ? '⚡ NVENC' : '💻 libx264';
 
-      const downloadBtn = `<a class="btn-row" data-action="download" data-id="${job.job_id}" href="/v1/media/compress/jobs/${job.job_id}/download" ${completed && outputExists ? '' : 'disabled title="ไม่มีไฟล์ผลลัพธ์"'} title="${completed && outputExists ? 'ดาวน์โหลดไฟล์ MP4 ที่บีบอัดแล้ว' : 'ไม่มีไฟล์ผลลัพธ์'}">📥 ดาวน์โหลด</a>`;
+      const keyParam = getApiKey() ? `?api_key=${encodeURIComponent(getApiKey())}` : '';
+      const downloadBtn = `<a class="btn-row" data-action="download" data-id="${job.job_id}" href="/v1/media/compress/jobs/${job.job_id}/download${keyParam}" ${completed && outputExists ? '' : 'disabled title="ไม่มีไฟล์ผลลัพธ์"'} title="${completed && outputExists ? 'ดาวน์โหลดไฟล์ MP4 ที่บีบอัดแล้ว' : 'ไม่มีไฟล์ผลลัพธ์'}">📥 ดาวน์โหลด</a>`;
       const delOutputBtn = `<button type="button" class="btn-row btn-danger" data-action="del-output" data-id="${job.job_id}" ${completed && outputExists ? '' : 'disabled title="ไม่มีไฟล์ผลลัพธ์ให้ลบ"'} title="${completed && outputExists ? 'ลบเฉพาะไฟล์ผลลัพธ์ เพื่อประหยัดพื้นที่ (เก็บประวัติไว้)' : 'ไม่มีไฟล์ผลลัพธ์ให้ลบ'}">🗑 ลบไฟล์ผลลัพธ์</button>`;
       const delRowBtn = `<button type="button" class="btn-row btn-danger" data-action="del-row" data-id="${job.job_id}" title="ลบทั้งแถว (ประวัติ + ไฟล์ทั้งหมด)">❌ ลบรายการ</button>`;
 
