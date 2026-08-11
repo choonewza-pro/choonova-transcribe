@@ -1107,6 +1107,9 @@ async def get_compress_job_status(
     qinfo = compress_job_queue_info(job_id)
     job["queue_position"] = qinfo["queue_position"] if job["status"] == "queued" else 0
     job["queue_length"] = qinfo["queue_length"]
+    job["audio_exists"] = bool(
+        job.get("audio_extract_path") and os.path.exists(job.get("audio_extract_path") or "")
+    )
     return CompressJobStatusResponse(**job)
 
 

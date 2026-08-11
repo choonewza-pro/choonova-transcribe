@@ -105,5 +105,6 @@ class CompressJobStatusResponse(BaseModel):
     audio_extract_format: str = ""
     audio_extract_path: Optional[str] = None
     audio_extract_size_bytes: int = 0
+    audio_exists: bool = False
     created_at: str
     updated_at: str

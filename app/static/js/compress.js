@@ -498,7 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const keyParam = apiKey ? `?api_key=${encodeURIComponent(apiKey)}` : '';
     btnDownload.href = `/v1/media/compress/jobs/${job.job_id}/download${keyParam}`;
 
-    if (btnDownloadAudio && job.audio_extract_format) {
+    if (btnDownloadAudio && job.audio_extract_format && job.audio_exists) {
       btnDownloadAudio.style.display = 'inline-flex';
       btnDownloadAudio.href = `/v1/media/compress/jobs/${job.job_id}/audio${keyParam}`;
     } else if (btnDownloadAudio) {
