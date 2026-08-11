@@ -1,6 +1,6 @@
 """
 API Router for Real-time WebSocket Speech-to-Text Streaming.
-Enforces lightweight fast-path without DB mapping per audio chunk.
+Handles audio chunks and commands (INTERIM, COMMIT_SEGMENT, CLEAR) matching realtime.js frontend contract.
 """
 
 import io
@@ -9,12 +9,39 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.asr_engine import get_asr_engine
 from app.cuda_utils import is_cuda_error, is_allocator_corruption
-from app.engine_router import cuda_device_reset_all
+from app.engine_router import cuda_device_reset_all, reset_all
 
 logger = logging.getLogger("choonova.realtime")
 router = APIRouter(prefix="/v1/realtime", tags=["Realtime ASR"])
 
 CUDA_RETRY_ATTEMPTS = 2
+CUDA_RETRY_BACKOFF_SEC = 1.0
+
+
+def remove_text_overlap(t1: str, t2: str) -> str:
+    """
+    Removes overlapping tail of t1 that matches the prefix of t2.
+    Prevents duplicate words across streaming segment boundaries.
+    """
+    t1 = t1.strip()
+    t2 = t2.strip()
+    if not t1:
+        return t2
+    if not t2:
+        return t1
+
+    max_check = min(len(t1), len(t2), 60)
+    best_match_len = 0
+
+    for length in range(3, max_check + 1):
+        if t1[-length:] == t2[:length]:
+            best_match_len = length
+
+    if best_match_len > 0:
+        suffix_added = t2[best_match_len:].strip()
+        return (t1 + " " + suffix_added).strip()
+
+    return (t1 + " " + t2).strip()
 
 
 @router.websocket("/stream")
@@ -59,56 +86,79 @@ async def websocket_stream(websocket: WebSocket):
                         return ""
                 if attempt == CUDA_RETRY_ATTEMPTS:
                     logger.warning(f"Realtime transcribe failed with CUDA error: {ex}")
-                    return ""
+                    await loop.run_in_executor(None, reset_all)
+                    await loop.run_in_executor(None, engine.clear_cuda_cache)
+                    try:
+                        res = await loop.run_in_executor(
+                            None, engine.transcribe_bytes, b_data, "stream.webm"
+                        )
+                        return res.get("text", "")
+                    except Exception:
+                        return ""
                 await loop.run_in_executor(None, engine.clear_cuda_cache)
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(CUDA_RETRY_BACKOFF_SEC * attempt)
         return ""
-
 
     try:
         while True:
             msg = await websocket.receive()
             if "bytes" in msg and msg["bytes"]:
-                data = msg["bytes"]
+                chunk = msg["bytes"]
                 if not header_bytes:
-                    header_bytes = data[:4096]
+                    header_bytes = chunk[:1024]
+                audio_buffer.write(chunk)
 
-                audio_buffer.write(data)
-                curr_size = audio_buffer.tell()
-
-                if curr_size > MAX_BUFFER_BYTES:
+                if audio_buffer.tell() > MAX_BUFFER_BYTES:
+                    raw = audio_buffer.getvalue()
                     audio_buffer = io.BytesIO()
                     audio_buffer.write(header_bytes)
-                    audio_buffer.write(data)
+                    audio_buffer.write(raw[-MAX_BUFFER_BYTES:])
 
-                if not transcribe_lock.locked():
+            elif "text" in msg:
+                cmd = msg["text"].strip()
+                if cmd == "CLEAR":
                     async with transcribe_lock:
-                        payload_data = audio_buffer.getvalue()
-                        partial = await _transcribe_bytes_async(payload_data)
-                        if partial:
+                        finalized_text = ""
+                        audio_buffer = io.BytesIO()
+                        if header_bytes:
+                            audio_buffer.write(header_bytes)
+
+                elif cmd == "COMMIT_SEGMENT":
+                    async with transcribe_lock:
+                        b_data = audio_buffer.getvalue()
+                        audio_buffer = io.BytesIO()
+                        if header_bytes:
+                            audio_buffer.write(header_bytes)
+
+                        if len(b_data) > 4096:
+                            text = await _transcribe_bytes_async(b_data)
+                            if text:
+                                finalized_text = remove_text_overlap(
+                                    finalized_text, text
+                                )
                             await websocket.send_json(
                                 {
-                                    "status": "transcribing",
-                                    "text": partial,
-                                    "finalized_text": finalized_text,
+                                    "type": "final",
+                                    "text": text,
+                                    "fullText": finalized_text,
                                 }
                             )
 
-            elif "text" in msg and msg["text"]:
-                txt = msg["text"]
-                if txt == "FINAL":
-                    async with transcribe_lock:
-                        payload_data = audio_buffer.getvalue()
-                        partial = await _transcribe_bytes_async(payload_data)
-                        if partial:
-                            finalized_text += " " + partial
-                        await websocket.send_json(
-                            {
-                                "status": "completed",
-                                "text": "",
-                                "finalized_text": finalized_text.strip(),
-                            }
-                        )
+                elif cmd == "INTERIM":
+                    if not transcribe_lock.locked():
+                        async with transcribe_lock:
+                            b_data = audio_buffer.getvalue()
+                            if len(b_data) > 4096:
+                                text = await _transcribe_bytes_async(b_data)
+                                if text:
+                                    preview = remove_text_overlap(finalized_text, text)
+                                    await websocket.send_json(
+                                        {
+                                            "type": "partial",
+                                            "text": text,
+                                            "fullText": preview,
+                                        }
+                                    )
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected.")
