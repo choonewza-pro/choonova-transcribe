@@ -102,7 +102,12 @@ async def websocket_stream(websocket: WebSocket):
     try:
         while True:
             msg = await websocket.receive()
+            if msg.get("type") == "websocket.disconnect":
+                logger.info("WebSocket client disconnected.")
+                break
+
             if "bytes" in msg and msg["bytes"]:
+
                 chunk = msg["bytes"]
                 if not header_bytes:
                     header_bytes = chunk[:1024]
