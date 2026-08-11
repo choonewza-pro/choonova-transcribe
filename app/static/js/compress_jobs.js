@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (saveApiKeyBtn) {
-    saveApiKeyBtn.addEventListener('click', () => {
+    saveApiKeyBtn.addEventListener('click', async () => {
       const key = apiKeyInput ? apiKeyInput.value.trim() : '';
       if (!key) {
         alert('Please enter an API key before saving.');
@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem(API_KEY_STORAGE, key);
       if (apiKeyInput) apiKeyInput.value = '';
       initApiKeyUI();
+      await loadJobs();
     });
   }
 
@@ -277,8 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
         : '-';
       const encLabel = job.encoder === 'nvenc' ? '⚡ NVENC' : '💻 libx264';
 
-      const keyParam = getApiKey() ? `?api_key=${encodeURIComponent(getApiKey())}` : '';
-      const downloadBtn = `<a class="btn-row" data-action="download" data-id="${job.job_id}" href="/v1/media/compress/jobs/${job.job_id}/download${keyParam}" ${completed && outputExists ? '' : 'disabled title="ไม่มีไฟล์ผลลัพธ์"'} title="${completed && outputExists ? 'ดาวน์โหลดไฟล์ MP4 ที่บีบอัดแล้ว' : 'ไม่มีไฟล์ผลลัพธ์'}">📥 ดาวน์โหลด</a>`;
+      const downloadBtn = `<button type="button" class="btn-row" data-action="download" data-id="${job.job_id}" ${completed && outputExists ? '' : 'disabled title="ไม่มีไฟล์ผลลัพธ์"'} title="${completed && outputExists ? 'ดาวน์โหลดไฟล์ MP4 ที่บีบอัดแล้ว' : 'ไม่มีไฟล์ผลลัพธ์'}">📥 ดาวน์โหลด</button>`;
       const delOutputBtn = `<button type="button" class="btn-row btn-danger" data-action="del-output" data-id="${job.job_id}" ${completed && outputExists ? '' : 'disabled title="ไม่มีไฟล์ผลลัพธ์ให้ลบ"'} title="${completed && outputExists ? 'ลบเฉพาะไฟล์ผลลัพธ์ เพื่อประหยัดพื้นที่ (เก็บประวัติไว้)' : 'ไม่มีไฟล์ผลลัพธ์ให้ลบ'}">🗑 ลบไฟล์ผลลัพธ์</button>`;
       const delRowBtn = `<button type="button" class="btn-row btn-danger" data-action="del-row" data-id="${job.job_id}" title="ลบทั้งแถว (ประวัติ + ไฟล์ทั้งหมด)">❌ ลบรายการ</button>`;
 
@@ -325,13 +325,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const action = btn.getAttribute('data-action');
     const jobId = btn.getAttribute('data-id');
 
-    if (action === 'del-output') {
+    if (action === 'download') {
+      await downloadOutput(jobId);
+    } else if (action === 'del-output') {
       await deleteOutputOnly(jobId);
     } else if (action === 'del-row') {
       await deleteRow(jobId);
     }
-    // download is a plain <a href>, no handling needed
   });
+
+  async function downloadOutput(jobId) {
+    try {
+      const headers = {};
+      const apiKey = getApiKey();
+      if (apiKey) headers['x-api-key'] = apiKey;
+
+      const res = await fetch(`/v1/media/compress/jobs/${jobId}/download`, { headers });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const err = await res.json();
+          detail = err.detail || detail;
+        } catch (e2) {}
+        throw new Error(detail);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const job = jobs.find(j => j.job_id === jobId);
+      const base = (job && job.filename) ? String(job.filename).replace(/\.[^/.]+$/, '') : jobId;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${base}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`❌ ดาวน์โหลดล้มเหลว: ${err.message || err}`);
+    }
+  }
 
   async function deleteOutputOnly(jobId) {
     const job = jobs.find(j => j.job_id === jobId);
