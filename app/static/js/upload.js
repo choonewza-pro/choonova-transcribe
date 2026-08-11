@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const audioPreview = document.getElementById('audioPreview');
   const playerStatus = document.getElementById('playerStatus');
   const cancelBtn = document.getElementById('cancelBtn');
+  const newTranscribeBtn = document.getElementById('newTranscribeBtn');
 
   let selectedFile = null;
   let activeController = null;
@@ -169,6 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resultText.textContent = 'กำลังแปลงเสียงพูดเป็นข้อความ...';
     statsBar.style.display = 'none';
     timestampsBox.style.display = 'none';
+    newTranscribeBtn.style.display = 'none';
 
     const formData = new FormData();
     formData.append('file', selectedFile);
@@ -219,6 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMessage.textContent = '✅ แปลงไฟล์เสียงสำเร็จ!';
         statusMessage.style.color = 'var(--success)';
         resultText.textContent = data.text || '(ไม่พบข้อความเสียงพูด)';
+        newTranscribeBtn.style.display = 'inline-flex';
 
         // Update stats
         statsBar.style.display = 'flex';
@@ -268,4 +271,27 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  function resetUploadUI() {
+    selectedFile = null;
+    activeController = null;
+
+    fileInput.value = '';
+    fileNameDisplay.textContent = '📁 ลากไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์';
+    transcribeBtn.disabled = true;
+    transcribeBtn.innerHTML = '<span>🚀 เริ่มแปลงไฟล์เสียง (Transcribe)</span>';
+    cancelBtn.style.display = 'none';
+
+    document.getElementById('audioPlayerContainer').style.display = 'none';
+    audioPreview.src = '';
+    playerStatus.textContent = '';
+
+    statusMessage.textContent = '';
+    statusMessage.style.color = '';
+    resultText.textContent = '📁 ผลลัพธ์ข้อความภาษาไทยจะแสดงตรงนี้...';
+    statsBar.style.display = 'none';
+    timestampsBox.style.display = 'none';
+  }
+
+  if (newTranscribeBtn) newTranscribeBtn.addEventListener('click', resetUploadUI);
 });

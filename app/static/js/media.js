@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statElapsed = document.getElementById('statElapsed');
 
   const cancelJobBtn = document.getElementById('cancelJobBtn');
+  const btnNewJob = document.getElementById('btnNewJob');
 
   let selectedFile = null;
   let activeJobId = null;
@@ -235,6 +236,30 @@ document.addEventListener('DOMContentLoaded', () => {
     startJobBtn.disabled = false;
   }
 
+  function resetMediaUI() {
+    stopPolling();
+    resultSection.style.display = 'none';
+    jobProgressSection.style.display = 'none';
+    updateCancelBtn('failed');
+    currentStageText.textContent = '⚙️ กำลังประมวลผล...';
+    updateProgress(0, '');
+    updateStepper(1, '');
+
+    selectedFile = null;
+    activeJobId = null;
+
+    mediaFileInput.value = '';
+    mediaFileName.textContent = '📹 ลากไฟล์วิดีโอ/ไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์';
+    mediaFileSize.textContent = '';
+    mediaPreviewContainer.style.display = 'none';
+    videoPreview.src = '';
+    audioPreview.src = '';
+    startJobBtn.disabled = true;
+    startJobBtn.innerHTML = '<span>🚀 เริ่มการถอดความ</span>';
+  }
+
+  if (btnNewJob) btnNewJob.addEventListener('click', resetMediaUI);
+
   async function cancelActiveJob() {
     if (!activeJobId) return;
     if (!confirm('❌ ยกเลิกงานนี้?\n\nข้อมูลการถอดความทั้งหมด และไฟล์ชั่วคราวจะถูกลบถาวร ไม่สามารถกู้คืนได้')) {
@@ -322,8 +347,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (ex) {
           alert(`เกิดข้อผิดพลาดในการอัปโหลด (${xhr.status})`);
         }
-        startJobBtn.disabled = false;
-      }
+    startJobBtn.disabled = false;
+    selectedFile = null;
+  }
     };
 
     xhr.onerror = () => {
