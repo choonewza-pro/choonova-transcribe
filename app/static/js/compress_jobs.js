@@ -144,19 +144,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const lastAt = info.last_cleanup_at ? formatDate(info.last_cleanup_at) : '';
       const count = info.last_cleanup_count || 0;
       const lastCleanup = lastAt
-        ? `🕐 ล้างไฟล์ตามนโยบายครั้งล่าสุด: <strong>${escapeText(lastAt)}</strong>${count ? ` (ลบไฟล์ของ ${count} งาน)` : ''}`
-        : '🕐 ล้างไฟล์ตามนโยบายครั้งล่าสุด: <strong>ยังไม่เคยมีรายการล้างไฟล์อัตโนมัติ</strong>';
+        ? `🕐 ล่าสุด: <strong>${escapeText(lastAt)}</strong>${count ? ` (${count} งาน)` : ''}`
+        : '🕐 ยังไม่มีประวัติล้างไฟล์';
       banner.innerHTML = `
         <span class="retention-icon">🧹</span>
         <div class="retention-text">
-          <div><strong>นโยบายการลบไฟล์อัตโนมัติ (Retention Policy):</strong>
-          ไฟล์ผลลัพธ์ของงานบีบอัดจะถูกลบจากดิสก์อัตโนมัติหลังสร้างครบ
-          <strong>${hours} ชั่วโมง</strong> (COMPRESS_RETENTION_HOURS) — เก็บเฉพาะประวัติการบีบอัด</div>
+          <div><strong>Retention Policy:</strong>
+          ลบไฟล์บีบอัดอัตโนมัติหลัง
+          <strong>${hours} ชม.</strong> — เก็บเฉพาะประวัติ</div>
           <div>${lastCleanup}</div>
         </div>`;
     } catch (e) {
       const el = document.getElementById('retentionLastCleanup');
-      if (el && !el.textContent.trim()) el.textContent = 'ยังไม่เคยมีรายการล้างไฟล์อัตโนมัติ';
+      if (el && !el.textContent.trim()) el.textContent = 'ยังไม่มีประวัติล้างไฟล์';
     }
   }
 

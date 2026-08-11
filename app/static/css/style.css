@@ -131,7 +131,7 @@ nav {
   display: flex;
   align-items: flex-start;
   gap: 0.8rem;
-  margin: 0 0 1.5rem;
+  margin: 0 0 2rem;
   padding: 0.9rem 1.1rem;
   border-radius: 12px;
   background: rgba(210, 153, 34, 0.1);
@@ -1135,6 +1135,22 @@ footer {
   border: 1px solid var(--card-border);
   color: var(--text-muted);
   vertical-align: middle;
+}
+
+/* ============================================================
+   Retention Banner (Mobile)
+   ============================================================ */
+@media (max-width: 560px) {
+  .retention-banner {
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.82rem;
+    margin: 0 0 1.5rem;
+  }
+  .retention-icon {
+    align-self: flex-start;
+  }
 }
 
 

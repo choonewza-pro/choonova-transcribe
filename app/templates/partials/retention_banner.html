@@ -5,19 +5,18 @@
   <span class="retention-icon">🧹</span>
   <div class="retention-text">
     <div>
-      <strong>นโยบายการลบไฟล์อัตโนมัติ (Retention Policy):</strong>
-      ไฟล์ผลลัพธ์ของงานบีบอัดจะถูกลบจากดิสก์อัตโนมัติหลังสร้างครบ
-      <strong>{{ retention_hours|default(24) }} ชั่วโมง</strong>
-      (COMPRESS_RETENTION_HOURS) — เก็บเฉพาะประวัติการบีบอัด
+      <strong>Retention Policy:</strong>
+      ลบไฟล์บีบอัดอัตโนมัติหลัง
+      <strong>{{ retention_hours|default(24) }} ชม.</strong>
+      — เก็บเฉพาะประวัติ
     </div>
     <div id="retentionLastCleanup">
-      🕐 ล้างไฟล์ตามนโยบายครั้งล่าสุด:
-      {% if last_cleanup_at %}
-      <strong>{{ last_cleanup_at }}</strong>
+      🕐 {% if last_cleanup_at %}
+      ล่าสุด: <strong>{{ last_cleanup_at }}</strong>
       {% else %}
-      <strong>ยังไม่เคยมีรายการล้างไฟล์อัตโนมัติ</strong>
+      ยังไม่มีประวัติล้างไฟล์
       {% endif %}
-      {% if last_cleanup_count %}(ลบไฟล์ของ {{ last_cleanup_count }} งาน){% endif %}
+      {% if last_cleanup_count %}({{ last_cleanup_count }} งาน){% endif %}
     </div>
   </div>
 </div>
