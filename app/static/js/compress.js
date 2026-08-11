@@ -521,13 +521,11 @@ document.addEventListener('DOMContentLoaded', () => {
     statJobId.textContent = `🆔 Job ID: ${job.job_id.substring(0, 8)}...`;
     statElapsed.textContent = `⚡ เวลาประมวลผล: ${formatSeconds(job.elapsed_seconds)}`;
 
-    const apiKey = getApiKey();
-    const keyParam = apiKey ? `?api_key=${encodeURIComponent(apiKey)}` : '';
-    btnDownload.href = `/v1/media/compress/jobs/${job.job_id}/download${keyParam}`;
+    btnDownload.href = `/v1/media/compress/jobs/${job.job_id}/download`;
 
     if (btnDownloadAudio && job.audio_extract_format && job.audio_exists) {
       btnDownloadAudio.style.display = 'inline-flex';
-      btnDownloadAudio.href = `/v1/media/compress/jobs/${job.job_id}/audio${keyParam}`;
+      btnDownloadAudio.href = `/v1/media/compress/jobs/${job.job_id}/audio`;
     } else if (btnDownloadAudio) {
       btnDownloadAudio.style.display = 'none';
     }

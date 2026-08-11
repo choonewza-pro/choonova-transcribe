@@ -346,11 +346,10 @@ document.addEventListener('DOMContentLoaded', () => {
       statDuration.textContent = `⏱️ ความยาว: ${formatSeconds(job.duration_seconds)}`;
       statElapsed.textContent = `⚡ เวลาประมวลผลรวม: ${formatSeconds(job.elapsed_seconds)}`;
 
-      // Export URLs with API key query param (same pattern as media page)
-      const keyParam = apiKey ? `?api_key=${encodeURIComponent(apiKey)}` : '';
-      btnDownloadTxt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/txt${keyParam}`;
-      btnDownloadSrt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/srt${keyParam}`;
-      btnDownloadJson.href = `/v1/media/transcribe/jobs/${job.job_id}/export/json${keyParam}`;
+      // Export URLs
+      btnDownloadTxt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/txt`;
+      btnDownloadSrt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/srt`;
+      btnDownloadJson.href = `/v1/media/transcribe/jobs/${job.job_id}/export/json`;
     } catch (err) {
       modalResultText.style.display = 'none';
       modalErrorBox.style.display = 'block';

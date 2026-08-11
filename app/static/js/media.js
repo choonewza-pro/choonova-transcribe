@@ -412,13 +412,10 @@ document.addEventListener('DOMContentLoaded', () => {
     statDuration.textContent = `⏱️ ความยาววิดีโอ: ${formatSeconds(job.duration_seconds)}`;
     statElapsed.textContent = `⚡ เวลาประมวลผลรวม: ${formatSeconds(job.elapsed_seconds)}`;
 
-    // Set export URLs with API key query param
-    const apiKey = getApiKey();
-    const keyParam = apiKey ? `?api_key=${encodeURIComponent(apiKey)}` : '';
-
-    btnDownloadTxt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/txt${keyParam}`;
-    btnDownloadSrt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/srt${keyParam}`;
-    btnDownloadJson.href = `/v1/media/transcribe/jobs/${job.job_id}/export/json${keyParam}`;
+    // Set export URLs
+    btnDownloadTxt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/txt`;
+    btnDownloadSrt.href = `/v1/media/transcribe/jobs/${job.job_id}/export/srt`;
+    btnDownloadJson.href = `/v1/media/transcribe/jobs/${job.job_id}/export/json`;
 
     startJobBtn.disabled = false;
   }

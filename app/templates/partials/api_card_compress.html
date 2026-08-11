@@ -253,7 +253,8 @@
             <div class="code-container">
               <div class="code-header">cURL Request</div>
               <pre>curl -o compressed.mp4 \
-  "http://localhost:8830/v1/media/compress/jobs/b2c3d4e5-.../download?api_key=change-me-in-production"</pre>
+  -H "x-api-key: change-me-in-production" \
+  "http://localhost:8830/v1/media/compress/jobs/b2c3d4e5-.../download"</pre>
             </div>
           </div>
         </details>
@@ -271,7 +272,8 @@
             <div class="code-container">
               <div class="code-header">cURL Request</div>
               <pre>curl -o audio.wav \
-  "http://localhost:8830/v1/media/compress/jobs/b2c3d4e5-.../audio?api_key=change-me-in-production"</pre>
+  -H "x-api-key: change-me-in-production" \
+  "http://localhost:8830/v1/media/compress/jobs/b2c3d4e5-.../audio"</pre>
             </div>
           </div>
         </details>

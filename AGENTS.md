@@ -49,7 +49,7 @@ Thai speech-to-text API service powered by **Typhoon ASR Realtime** (FastConform
 ## Architecture
 - **Entrypoint**: `app/main.py` — FastAPI app, route registration, WebSocket, periodic cleanup
 - **Config**: `app/config.py` — reads env vars with defaults
-- **Auth**: `app/auth.py` — API key verification (Bearer / x-api-key / ?api_key=)
+- **Auth**: `app/auth.py` — API key verification (x-api-key)
 - **DB**: `app/db.py` — SQLite repository for job history
 - **ASR Engine**: `app/asr_engine.py` — NeMo model singleton wrapper
 - **Audio Utils**: `app/audio_utils.py` — FFmpeg extract/split, disk-space check

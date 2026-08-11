@@ -1,30 +1,20 @@
-from fastapi import Header, Query, HTTPException, status
+from fastapi import Header, HTTPException, status
 import hmac
 from app.config import GATEWAY_API_KEY
 
 async def verify_api_key(
-    authorization: str | None = Header(None, alias="Authorization"),
     x_api_key: str | None = Header(None, alias="x-api-key"),
-    api_key: str | None = Query(None, alias="api_key")
 ) -> bool:
     """
     Verifies authentication via:
-    1) Authorization: Bearer <key>
-    2) x-api-key: <key>
-    3) ?api_key=<key> query param (for direct file downloads)
+    - x-api-key: <key>
     """
-    token = None
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization[7:].strip()
-    elif x_api_key:
-        token = x_api_key.strip()
-    elif api_key:
-        token = api_key.strip()
+    token = x_api_key.strip() if x_api_key else None
 
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing API key. Provide 'Authorization: Bearer <key>' or 'x-api-key: <key>' header."
+            detail="Missing API key. Provide 'x-api-key: <key>' header."
         )
 
     # Constant time comparison to prevent timing attacks

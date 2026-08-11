@@ -39,7 +39,7 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 ├── app/
 │   ├── main.py          # FastAPI app, route registration, WebSocket, periodic cleanup + idle reaper
 │   ├── config.py        # Environment configuration & defaults
-│   ├── auth.py          # API key verification (Bearer / x-api-key / ?api_key=)
+│   ├── auth.py          # API key verification (x-api-key)
 │   ├── db.py            # SQLite repository for jobs + runtime settings + retention cleanup
 │   ├── schemas.py       # Pydantic request/response models
 │   ├── asr_engine.py    # Typhoon ASR model singleton wrapper (NeMo) with idle-unload
@@ -152,7 +152,7 @@ Every page header shows a live status badge: 🟢 model on VRAM / 🟡 loading /
 | GET    | `/media/compress`                                        | —    | Video compressor page                                      |
 | GET    | `/media/compress/jobs/history`                           | —    | Compressor history page (ดูผล + ลบไฟล์ output ด้วยตนเอง)   |
 | GET    | `/media/transcribe/jobs/history`                         | —    | Transcription history page (เดิม `/jobs/history` redirect) |
-| GET    | `/setting`                                             | —    | Settings page (API Key + VRAM mode)                        |
+| GET    | `/setting`                                               | —    | Settings page (API Key + VRAM mode)                        |
 | GET    | `/healthz`                                               | —    | Health check (+ model state / mode)                        |
 | GET    | `/v1/settings/model`                                     | ✅   | Get model VRAM mode + engine states                        |
 | PUT    | `/v1/settings/model`                                     | ✅   | Change model VRAM mode at runtime                          |
@@ -174,15 +174,15 @@ Every page header shows a live status badge: 🟢 model on VRAM / 🟡 loading /
 ### cURL Examples
 
 ```bash
-# Transcribe audio file (Thai - default)
+# Transcribe audio file (Thai - default via Typhoon ASR)
 curl -X POST http://localhost:8830/v1/audio/transcribe \
   -H "x-api-key: change-me-in-production" \
-  -F "file=@audio.mp3" -F "with_timestamps=true"
+  -F "file=@audio.mp3" -F "language=th" -F "with_timestamps=true"
 
 # Transcribe English / Thai-English mixed audio via Whisper
 curl -X POST http://localhost:8830/v1/audio/transcribe \
   -H "x-api-key: change-me-in-production" \
-  -F "file=@english.mp3" -F "language=th"
+  -F "file=@english.mp3" -F "language=en"
 
 # Transcribe with auto language detection (Whisper)
 curl -X POST http://localhost:8830/v1/audio/transcribe \
@@ -209,7 +209,8 @@ curl http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID> \
   -H "x-api-key: change-me-in-production"
 
 # Export SRT
-curl -o subtitle.srt "http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID>/export/srt?api_key=change-me-in-production"
+curl http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID>/export/srt \
+  -H "x-api-key: change-me-in-production" -o subtitle.srt
 
 # Create video compression job (reduce width to 1280 + cap bitrate to 2000kbps)
 curl -X POST http://localhost:8830/v1/media/compress/jobs \
@@ -227,8 +228,8 @@ curl http://localhost:8830/v1/media/compress/jobs/<JOB_ID> \
   -H "x-api-key: change-me-in-production"
 
 # Download the compressed MP4
-curl -o compressed.mp4 \
-  "http://localhost:8830/v1/media/compress/jobs/<JOB_ID>/download?api_key=change-me-in-production"
+curl http://localhost:8830/v1/media/compress/jobs/<JOB_ID>/download \
+  -H "x-api-key: change-me-in-production" -o compressed.mp4
 
 # Switch model to 'idle' mode (unload VRAM after 10 min of inactivity)
 curl -X PUT http://localhost:8830/v1/settings/model \

@@ -418,9 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Connect WebSocket
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const apiKey = getApiKey();
-    const keyParam = apiKey ? `?api_key=${encodeURIComponent(apiKey)}` : '';
-    const wsUrl = `${wsProtocol}//${window.location.host}/v1/realtime/stream${keyParam}`;
+    const wsUrl = `${wsProtocol}//${window.location.host}/v1/realtime/stream`;
 
     socket = new WebSocket(wsUrl);
 
