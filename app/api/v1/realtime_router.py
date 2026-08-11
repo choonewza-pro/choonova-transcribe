@@ -8,7 +8,8 @@ import asyncio
 import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.asr_engine import get_asr_engine
-from app.cuda_utils import is_cuda_error, is_allocator_corruption, clear_cuda_cache, cuda_device_reset_all
+from app.cuda_utils import is_cuda_error, is_allocator_corruption
+from app.engine_router import cuda_device_reset_all
 
 logger = logging.getLogger("choonova.realtime")
 router = APIRouter(prefix="/v1/realtime", tags=["Realtime ASR"])
@@ -59,9 +60,10 @@ async def websocket_stream(websocket: WebSocket):
                 if attempt == CUDA_RETRY_ATTEMPTS:
                     logger.warning(f"Realtime transcribe failed with CUDA error: {ex}")
                     return ""
-                await loop.run_in_executor(None, clear_cuda_cache)
+                await loop.run_in_executor(None, engine.clear_cuda_cache)
                 await asyncio.sleep(0.2)
         return ""
+
 
     try:
         while True:
