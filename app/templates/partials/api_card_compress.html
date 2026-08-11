@@ -1,0 +1,273 @@
+      <!-- ===== Video Compressor Pipeline ===== -->
+      <div class="api-group-card">
+        <div class="api-group-header">
+          <span class="api-group-icon">🗜️</span>
+          <div>
+            <h3 class="api-group-title">บีบอัดวิดีโอ (Video Compressor)</h3>
+            <p class="api-group-desc">อัปโหลด MP4/MKV/MOV/WEBM เพื่อลดขนาดด้วย FFmpeg — ลดความละเอียด (คงอัตราส่วน) และ/หรือลดบิตเรต แบบ async คิว 1 ไฟล์ต่อครั้ง</p>
+          </div>
+        </div>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-flow">FLOW</span> <code>ลำดับการทำงาน (Sequence Diagram)</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <div class="api-flow">
+              <div class="api-flow-lane">
+                <div class="api-flow-participants">
+                  <div class="flow-participant client">🧑 Client <small>Browser / cURL</small></div>
+                  <div class="flow-participant server">🖥️ FastAPI Server <small>main.py</small></div>
+                  <div class="flow-participant worker">⚙️ Queue Dispatcher <small>compress_queue_dispatcher</small></div>
+                  <div class="flow-participant gpu">🎛️ FFmpeg <small>worker subprocess</small></div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>1</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Client ส่งไฟล์วิดีโอ + พารามิเตอร์ไปที่ <code>POST /v1/media/compress/jobs</code>
+                      <span class="flow-tag">upload</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>2</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Server บันทึกไฟล์ + สร้างงานใน SQLite (สถานะ <span class="flow-msg">queued</span>) แล้วตอบกลับทันที
+                      <span class="flow-msg">202 Accepted</span> + <code>job_id</code> + ตำแหน่งคิว
+                      <span class="flow-tag">create_compress_job</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>3</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Queue dispatcher poll งานที่ค้างทุก 1 วิ หยิบงานเก่าสุด (FIFO) — บีบอัดพร้อมกันได้สูงสุด
+                      <code>{{ max_concurrent|default(1) }} ไฟล์</code> (default 1)
+                      <span class="flow-tag">get_next_queued_compress_job</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>4</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Spawn worker subprocess <code>python -m app.run_compress_job &lt;job_id&gt; &lt;input&gt; ...</code>
+                      → อัปเดตสถานะ <span class="flow-msg">processing</span>
+                      <span class="flow-tag">isolated worker</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>5</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Worker probe ด้วย ffprobe (ความละเอียด/ความยาว/มีเสียง) → สร้างคำสั่ง FFmpeg
+                      (scale คงอัตราส่วน, bitrate/CRF, encoder) แล้วรัน — progress % อัปเดตลง DB ทุก ~1 วิ
+                      <span class="flow-tag">-progress pipe:1</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>6</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      FFmpeg เสร็จ → Worker ตรวจ output, บันทึก <code>output_path</code>/ขนาด/ความละเอียด ลง DB
+                      แล้วอัปเดตสถานะ <span class="flow-msg">completed</span> 100%
+                      <span class="flow-tag">write terminal state</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>7</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      <strong>ลบไฟล์ต้นฉบับทุกกรณี</strong> (สำเร็จ/ล้มเหลว/ยกเลิก/restart) — ไฟล์ output ถูกเก็บไว้
+                      ตาม <code>COMPRESS_RETENTION_HOURS</code> แล้วถูกลบอัตโนมัติ (DB เก็บ record ไว้เสมอ)
+                      <span class="flow-tag">cleanup</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>8</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↻</div>
+                    <div class="flow-step-text">
+                      Client poll <code>GET /v1/media/compress/jobs/{job_id}</code> ทุก 2 วิ เพื่อดูคิว/ความคืบหน้า
+                      แล้วดาวน์โหลดผ่าน <code>GET .../download</code>
+                      <span class="flow-tag">polling</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>9</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      (ไม่บังคับ) <code>DELETE /v1/media/compress/jobs/{job_id}</code> เพื่อยกเลิก —
+                      ยุติ FFmpeg ทันที + ลบงาน + ไฟล์ทั้งหมด
+                      <span class="flow-tag">cancel</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-post">POST</span> <code>/v1/media/compress/jobs</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              สร้างงานบีบอัดวิดีโอแบบเบื้องหลัง คืน <code>job_id</code> + ตำแหน่งคิวทันที (HTTP 202)
+              <br><code>target_width</code> — ความกว้างเป้าหมาย px (คงอัตราส่วน, ห้ามขยายเกินต้นฉบับ) · 0 = ไม่ลด
+              <br><code>bitrate_kbps</code> — บิตเรตเป้าหมายของวิดีโอ · 0 = ใช้ CRF แทน
+              <br><code>crf</code> — คุณภาพ (1–51, default {{ default_crf|default(28) }}) · <code>preset</code> — ultrafast..veryslow
+              <br><code>encoder</code> — <code>libx264</code> (default) หรือ <code>nvenc</code> (GPU ถ้า ffmpeg รองรับ)
+              <br>ต้องระบุอย่างน้อยหนึ่งอย่าง: <code>target_width</code> หรือ <code>bitrate_kbps</code>
+              <br>คิวเต็ม (มากกว่า {{ max_queued|default(5) }} งาน) → HTTP 429 · พื้นที่ดิสก์ไม่พอ → HTTP 507
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL (Multipart Upload)</div>
+              <pre>curl -X POST http://localhost:8830/v1/media/compress/jobs \
+  -H "x-api-key: change-me-in-production" \
+  -F "file=@video.mp4" \
+  -F "target_width=1280" \
+  -F "bitrate_kbps=2000" \
+  -F "crf=28" \
+  -F "preset=medium"</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">Response JSON (202 Accepted)</div>
+              <pre>{
+  "status": "accepted",
+  "job_id": "b2c3d4e5-...",
+  "filename": "video.mp4",
+  "queue_position": 3,
+  "queue_length": 4,
+  "message": "Job created and enqueued for background video compression"
+}</pre>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-get">GET</span> <code>/v1/media/compress/jobs</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              แสดงรายการงานบีบอัดล่าสุดตามเวลาสร้าง รองรับ <code>?limit=N</code>
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL Request</div>
+              <pre>curl "http://localhost:8830/v1/media/compress/jobs?limit=10" \
+  -H "x-api-key: change-me-in-production"</pre>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-get">GET</span> <code>/v1/media/compress/jobs/{job_id}</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              ดูสถานะ, ตำแหน่งคิว, ความคืบหน้า (%) และผลลัพธ์ (output_path / ขนาด / ความละเอียด) ของงานเดียว
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL Request</div>
+              <pre>curl http://localhost:8830/v1/media/compress/jobs/b2c3d4e5-... \
+  -H "x-api-key: change-me-in-production"</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">Response JSON (200 OK)</div>
+              <pre>{
+  "job_id": "b2c3d4e5-...",
+  "filename": "video.mp4",
+  "file_size_bytes": 1073741824,
+  "status": "completed",
+  "progress_pct": 100.0,
+  "target_width": 1280,
+  "bitrate_kbps": 2000,
+  "crf": 28,
+  "preset": "medium",
+  "encoder": "libx264",
+  "input_width": 1920,
+  "input_height": 1080,
+  "duration_seconds": 184.5,
+  "output_path": "/tmp/choonova-transcribe-jobs/b2c3d4e5-.../compressed.mp4",
+  "output_size_bytes": 48234521,
+  "output_width": 1280,
+  "output_height": 720,
+  "elapsed_seconds": 42.1,
+  "error_message": null,
+  "queue_position": 0,
+  "queue_length": 0,
+  "created_at": "2026-08-11T08:00:00",
+  "updated_at": "2026-08-11T08:00:42"
+}</pre>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-get">GET</span> <code>/v1/media/compress/jobs/{job_id}/download</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              ดาวน์โหลดไฟล์ MP4 ที่บีบอัดแล้ว (เฉพาะงานที่เสร็จสมบูรณ์) —
+              คืน HTTP 410 หากไฟล์ถูกเคลียร์ตาม retention policy แล้ว
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL Request</div>
+              <pre>curl -o compressed.mp4 \
+  "http://localhost:8830/v1/media/compress/jobs/b2c3d4e5-.../download?api_key=change-me-in-production"</pre>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-delete">DELETE</span> <code>/v1/media/compress/jobs/{job_id}</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              ยกเลิก/ลบงาน: ยุติ worker subprocess ทันที (คืน CPU/GPU) ลบ record ออกจาก SQLite
+              และลบไฟล์ทั้งหมดบนดิสก์ (ทั้ง input และ output)
+            </p>
+            <div class="code-container">
+              <div class="code-header">cURL Request</div>
+              <pre>curl -X DELETE http://localhost:8830/v1/media/compress/jobs/b2c3d4e5-... \
+  -H "x-api-key: change-me-in-production"</pre>
+            </div>
+          </div>
+        </details>
+      </div>

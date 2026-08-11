@@ -19,8 +19,8 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "info")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SERVICE_DIR = os.path.dirname(BASE_DIR)
 DATA_DIR = os.getenv("DATA_DIR", os.path.join(SERVICE_DIR, "data"))
-JOBS_DB_PATH = os.path.join(DATA_DIR, "jobs.db")
-TEMP_JOBS_DIR = os.getenv("TEMP_JOBS_DIR", "/tmp/typhoon_jobs")
+JOBS_DB_PATH = os.path.join(DATA_DIR, "choonova-transcribe.db")
+TEMP_JOBS_DIR = os.getenv("TEMP_JOBS_DIR", "/tmp/choonova-transcribe-jobs")
 
 # Optimize PyTorch CUDA Caching Allocator memory management
 if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
@@ -35,6 +35,26 @@ MAX_CHUNK_DURATION_SEC = float(os.getenv("MAX_CHUNK_DURATION_SEC", "60.0"))
 MAX_UPLOAD_SIZE_MB = float(os.getenv("MAX_UPLOAD_SIZE_MB", "0"))
 # Max upload size for the short audio endpoint in MB; always enforced (must be > 0).
 MAX_AUDIO_UPLOAD_SIZE_MB = float(os.getenv("MAX_AUDIO_UPLOAD_SIZE_MB", "50.0"))
+
+# =========================================================================
+# Video Compressor (FFmpeg) configuration
+# =========================================================================
+# Video encoder backend: 'libx264' (software, portable) or 'nvenc' (GPU NVENC,
+# requires an ffmpeg build with h264_nvenc enabled).
+COMPRESS_ENCODER = os.getenv("COMPRESS_ENCODER", "libx264").strip().lower()
+# Default x264 preset / quality for compression jobs. For NVENC the preset is
+# mapped to the p1..p7 scale automatically in compress_utils.
+COMPRESS_PRESET = os.getenv("COMPRESS_PRESET", "medium")
+COMPRESS_CRF = int(os.getenv("COMPRESS_CRF", "28"))
+# Max videos compressed in parallel. 1 = strict single-file queue (default).
+COMPRESS_MAX_CONCURRENT = int(os.getenv("COMPRESS_MAX_CONCURRENT", "1"))
+# Max number of jobs waiting in the queue; excess uploads are rejected (429).
+COMPRESS_MAX_QUEUED = int(os.getenv("COMPRESS_MAX_QUEUED", "10"))
+# Retention window for compressed output files on disk (hours). The DB record
+# is always kept; only the output file is deleted after this window.
+COMPRESS_RETENTION_HOURS = float(os.getenv("COMPRESS_RETENTION_HOURS", "24"))
+# Output directory for compressed videos (defaults to the shared temp dir).
+COMPRESS_OUTPUT_DIR = os.getenv("COMPRESS_OUTPUT_DIR", TEMP_JOBS_DIR)
 
 # Auto-detect CUDA availability
 requested_device = os.getenv("DEVICE", "cuda").lower()

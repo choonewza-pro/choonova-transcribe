@@ -68,3 +68,37 @@ class JobListItem(BaseModel):
     progress_pct: float
     current_stage: str
     created_at: str
+
+class CompressJobCreateResponse(BaseModel):
+    status: str = "accepted"
+    job_id: str
+    filename: str
+    queue_position: int = 1
+    queue_length: int = 0
+    message: str = "Job created and enqueued for background video compression"
+
+class CompressJobStatusResponse(BaseModel):
+    job_id: str
+    filename: str
+    file_size_bytes: int = 0
+    status: str
+    progress_pct: float
+    current_stage: str
+    target_width: int = 0
+    bitrate_kbps: int = 0
+    crf: int = 28
+    preset: str = "medium"
+    encoder: str = "libx264"
+    input_width: int = 0
+    input_height: int = 0
+    duration_seconds: float = 0.0
+    output_path: Optional[str] = None
+    output_size_bytes: int = 0
+    output_width: int = 0
+    output_height: int = 0
+    elapsed_seconds: float = 0.0
+    error_message: Optional[str] = None
+    queue_position: int = 0
+    queue_length: int = 0
+    created_at: str
+    updated_at: str

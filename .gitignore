@@ -17,5 +17,5 @@ skills-lock.json
 services/typhoon-asr-service/data/jobs/
 
 # --- Local SQLite jobs database (baked empty into the Docker image; mount ./data for persistence) ---
-data/jobs.db
-data/jobs.db-*
+data/choonova-transcribe.db
+data/choonova-transcribe.db-*

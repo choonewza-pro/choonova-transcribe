@@ -18,6 +18,7 @@
         ระบบแปลงเสียงพูดเป็นข้อความ (Speech-to-Text) ความเร็วสูง พร้อมรองรับ 2 ภาษาแบบดูอัล-เอนจิน:<br>
         <strong>Typhoon ASR Realtime</strong> (FastConformer-Transducer 114M) สำหรับภาษาไทย และ
         <strong>Faster-Whisper (CTranslate2)</strong> สำหรับภาษาอังกฤษ / ไทย-อังกฤษผสม
+        <br>พร้อมเครื่องมือ <strong>บีบอัดวิดีโอ</strong> ด้วย FFmpeg (ลดความละเอียด / บิตเรต) แบบคิวอัตโนมัติ
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
@@ -36,6 +37,10 @@
         <div style="background: rgba(255,255,255,0.03); padding: 1.2rem; border-radius: 10px; border: 1px solid var(--card-border);">
           <div style="color: var(--text-muted); font-size: 0.85rem;">ภาษาที่รองรับ</div>
           <div style="font-size: 1.6rem; font-weight: 700; color: var(--success);">ไทย / อังกฤษ / ผสม</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.03); padding: 1.2rem; border-radius: 10px; border: 1px solid var(--card-border);">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">ตัวแปลงวิดีโอ</div>
+          <div style="font-size: 1.15rem; font-weight: 700; color: #ff9d2e;">FFmpeg · libx264 / NVENC</div>
         </div>
       </div>
 
@@ -60,10 +65,22 @@
           <p>อัปโหลดวิดีโอ MP4, MKV, MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง) ประมวลผลเบื้องหลังอัตโนมัติ</p>
         </a>
 
-        <a href="/jobs/history" class="card-button">
+        <a href="/media/transcribe/jobs/history" class="card-button">
           <div class="icon">📚</div>
           <h3>4. ประวัติการถอดความ</h3>
           <p>เรียกดูงานที่เคยถอดความไว้ทั้งหมด พร้อม export เป็น .txt / .srt / .json และจัดการไฟล์ media</p>
+        </a>
+
+        <a href="/media/compress" class="card-button">
+          <div class="icon">🗜️</div>
+          <h3>5. บีบอัดวิดีโอ</h3>
+          <p>ลดขนาดไฟล์วิดีโอด้วย FFmpeg — ลดความละเอียด (คงอัตราส่วน) และ/หรือลดบิตเรต แบบคิวอัตโนมัติ 1 ไฟล์ต่อครั้ง</p>
+        </a>
+
+        <a href="/media/compress/jobs/history" class="card-button">
+          <div class="icon">📂</div>
+          <h3>6. ประวัติการบีบอัด</h3>
+          <p>ดูผลการบีบอัด (ขนาด/ความละเอียด/อัตราการลด) และลบไฟล์ผลลัพธ์เองเพื่อประหยัดพื้นที่ดิสก์</p>
         </a>
       </div>
 
@@ -154,6 +171,12 @@
                 </td>
               </tr>
               <tr>
+                <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff;">🗜️ การบีบอัดวิดีโอ (Video Compressor)</td>
+                <td style="padding: 0.9rem 1.2rem; color: var(--text-main);">
+                  ลดความละเอียด (คงอัตราส่วน) และ/หรือลดบิตเรตด้วย <strong>FFmpeg</strong> ผ่าน <code>POST /v1/media/compress/jobs</code> — เอนจิน <strong>libx264</strong> (CPU) หรือ <strong>NVENC</strong> (GPU) ประมวลผลแบบคิวอัตโนมัติ 1 ไฟล์ต่อครั้ง และลบไฟล์ต้นฉบับอัตโนมัติหลังเสร็จ
+                </td>
+              </tr>
+              <tr>
                 <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff;">🎵 รูปแบบไฟล์ที่รองรับ (Formats)</td>
                 <td style="padding: 0.9rem 1.2rem; color: var(--text-main);">
                   <span class="stats-badge" style="color: #00f2fe; border-color: rgba(0,242,254,0.3);">WAV</span>
@@ -195,6 +218,7 @@
       {% include 'partials/api_card_audio.html' %}
       {% include 'partials/api_card_realtime.html' %}
       {% include 'partials/api_card_media.html' %}
+      {% include 'partials/api_card_compress.html' %}
 
     </div>
   </main>

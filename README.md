@@ -7,7 +7,9 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 1. **REST API** (`POST /v1/audio/transcribe`) — ถอดความไฟล์เสียงสั้น multipart upload
 2. **WebSocket Real-time** (`/v1/realtime/stream`) — ถอดเสียงสดจากไมค์ chunk 250ms
 3. **Long-form Pipeline** (`POST /v1/media/transcribe/jobs`) — ไฟล์วิดีโอ/เสียงยาวสูงสุด 1GB+ แบบ async
-4. **ประวัติการถอดความ** (`/jobs/history`) — ดู/export/ลบ งานที่เคยถอดความไว้
+4. **ประวัติการถอดความ** (`/media/transcribe/jobs/history`) — ดู/export/ลบ งานที่เคยถอดความไว้
+5. **Video Compressor** (`POST /v1/media/compress/jobs`) — ลดขนาดไฟล์วิดีโอด้วย FFmpeg แบบ async คิว 1 ไฟล์ต่อครั้ง
+6. **Compressor History** (`/media/compress/jobs/history`) — ดูผลการบีบอัด และลบไฟล์ผลลัพธ์ด้วยตนเองเพื่อประหยัดพื้นที่
 
 ## Tech Stack
 
@@ -36,10 +38,13 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 │   ├── audio_utils.py   # FFmpeg extract/split, disk-space check, safe_delete helpers
 │   ├── job_worker.py    # Async long-form transcription pipeline (chunking + GPU loop)
 │   ├── run_job.py       # Subprocess entrypoint for isolated job workers
-│   ├── templates/       # HTML pages (index, upload, realtime, media, jobs)
+│   ├── compress_utils.py # FFmpeg probe / command builder / progress parser (video compressor)
+│   ├── compress_worker.py # Async video compression worker (FFmpeg, progress -> DB)
+│   ├── run_compress_job.py # Subprocess entrypoint for isolated compressor workers
+│   ├── templates/       # HTML pages (index, upload, realtime, media, jobs, compress)
 │   └── static/          # CSS + JS (upload.js, realtime.js, media.js, jobs.js, model_status.js, settings.js)
 ├── model/               # Model weights (typhoon-asr-realtime.nemo, git-ignored)
-├── data/                # SQLite DB (jobs.db) — optional, baked empty into Docker image
+├── data/                # SQLite DB (choonova-transcribe.db) — optional, baked empty into Docker image
 ├── Dockerfile           # GPU image (CUDA 12.1, PyTorch)
 ├── Dockerfile.cpu       # CPU-only image (also works on Mac M1–M4)
 ├── docker-compose.yml   # GPU compose (requires NVIDIA Docker + km4u-network)
@@ -64,7 +69,7 @@ docker compose -f docker-compose-cpu.yml up -d --build
 
 Service runs on `http://localhost:8830/`
 
-**หมายเหตุเรื่องฐานข้อมูล:** image มี SQLite `jobs.db` ว่างๆ ฝังไว้ในตัวแล้ว (baked) — รันโดยไม่ mount ก็ใช้งานได้ทันที เหมาะสำหรับ export/แจกจ่าย image ส่วนข้อมูลประวัติงานจะอยู่ใน container (หายเมื่อลบ container) ถ้าต้องการเก็บข้อมูลข้าม container ให้เปิดคอมเมนต์ volume `./data:/app/data` ใน docker-compose ไฟล์นั้นๆ
+**หมายเหตุเรื่องฐานข้อมูล:** image มี SQLite `choonova-transcribe.db` ว่างๆ ฝังไว้ในตัวแล้ว (baked) — รันโดยไม่ mount ก็ใช้งานได้ทันที เหมาะสำหรับ export/แจกจ่าย image ส่วนข้อมูลประวัติงานจะอยู่ใน container (หายเมื่อลบ container) ถ้าต้องการเก็บข้อมูลข้าม container ให้เปิดคอมเมนต์ volume `./data:/app/data` ใน docker-compose ไฟล์นั้นๆ
 
 ### Local Development
 
@@ -90,7 +95,7 @@ DEVICE=cpu uvicorn app.main:app --host 0.0.0.0 --port 8830
 | `WHISPER_MODEL`             | `medium`                          | faster-whisper size: `tiny/base/small/medium/large-v3` |
 | `LOG_LEVEL`                 | `info`                            | Logging level                                     |
 | `DATA_DIR`                  | `<project>/data`                  | SQLite directory                                  |
-| `TEMP_JOBS_DIR`             | `/tmp/typhoon_jobs`               | Temp job directory                                |
+| `TEMP_JOBS_DIR`             | `/tmp/choonova-transcribe-jobs`   | Temp job directory                                |
 | `MIN_FREE_DISK_GB`          | `5.0`                             | Min disk space before rejecting uploads           |
 | `MAX_UPLOAD_SIZE_MB`        | `0`                               | Max upload size for long-form media jobs (MB); `0` = unlimited |
 | `MAX_AUDIO_UPLOAD_SIZE_MB`  | `50.0`                            | Max upload size for short audio endpoint (MB); always enforced (> 0) |
@@ -100,6 +105,12 @@ DEVICE=cpu uvicorn app.main:app --host 0.0.0.0 --port 8830
 | `PYTORCH_CUDA_ALLOC_CONF`   | `expandable_segments:True`        | PyTorch CUDA allocator config                     |
 | `MODEL_LOAD_MODE`           | `always`                          | Model VRAM residency mode: `always` / `idle` (seed value only, see below) |
 | `MODEL_IDLE_TIMEOUT_SEC`    | `900`                             | Seconds of inactivity before unloading models in `idle` mode (seed value only) |
+| `COMPRESS_ENCODER`          | `libx264`                         | Video compressor encoder: `libx264` (software) / `nvenc` (GPU NVENC) |
+| `COMPRESS_PRESET`           | `medium`                          | Default x264 preset (ultrafast..veryslow)         |
+| `COMPRESS_CRF`              | `28`                              | Default encoder quality (1-51; higher = smaller)  |
+| `COMPRESS_MAX_CONCURRENT`   | `1`                               | Max videos compressed at once (1 = strict queue)  |
+| `COMPRESS_MAX_QUEUED`       | `10`                              | Max jobs in queue before new uploads rejected (429) |
+| `COMPRESS_RETENTION_HOURS`  | `24`                              | Retention for compressed output files on disk     |
 
 Copy `.env.example` to `.env` to customize.
 
@@ -127,7 +138,9 @@ Every page header shows a live status badge: 🟢 model on VRAM / 🟡 loading /
 | GET    | `/audio/transcribe`                                         | —    | Audio file transcribe page        |
 | GET    | `/realtime/stream`                                          | —    | Real-time mic stream page         |
 | GET    | `/media/transcribe`                                         | —    | Long-form video/audio transcribe  |
-| GET    | `/jobs/history`                                             | —    | Transcription history page        |
+| GET    | `/media/compress`                                           | —    | Video compressor page              |
+| GET    | `/media/compress/jobs/history`                              | —    | Compressor history page (ดูผล + ลบไฟล์ output ด้วยตนเอง) |
+| GET    | `/media/transcribe/jobs/history`                            | —    | Transcription history page (เดิม `/jobs/history` redirect) |
 | GET    | `/healthz`                                                  | —    | Health check (+ model state / mode) |
 | GET    | `/v1/settings/model`                                        | ✅   | Get model VRAM mode + engine states |
 | PUT    | `/v1/settings/model`                                        | ✅   | Change model VRAM mode at runtime   |
@@ -138,6 +151,12 @@ Every page header shows a live status badge: 🟢 model on VRAM / 🟡 loading /
 | DELETE | `/v1/media/transcribe/jobs/{id}`                            | ✅   | Delete job (record + media)       |
 | DELETE | `/v1/media/transcribe/jobs/{id}/media`                      | ✅   | Delete media only (keep record)   |
 | GET    | `/v1/media/transcribe/jobs/{id}/export/{txt\|srt\|json}`    | ✅   | Export result                     |
+| POST   | `/v1/media/compress/jobs`                                   | ✅   | Create video compress job (202, async queue) |
+| GET    | `/v1/media/compress/jobs`                                   | ✅   | List compress jobs                |
+| GET    | `/v1/media/compress/jobs/{id}`                              | ✅   | Compress job status + result      |
+| GET    | `/v1/media/compress/jobs/{id}/download`                     | ✅   | Download compressed MP4           |
+| DELETE | `/v1/media/compress/jobs/{id}`                              | ✅   | Cancel/delete compress job (input + output) |
+| DELETE | `/v1/media/compress/jobs/{id}/output`                       | ✅   | Delete output file ONLY (keep history record) |
 | WS     | `/v1/realtime/stream`                                       | —    | Real-time streaming               |
 
 ### cURL Examples
@@ -179,6 +198,19 @@ curl http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID> \
 
 # Export SRT
 curl -o subtitle.srt "http://localhost:8830/v1/media/transcribe/jobs/<JOB_ID>/export/srt?api_key=change-me-in-production"
+
+# Create video compression job (reduce width to 1280 + cap bitrate to 2000kbps)
+curl -X POST http://localhost:8830/v1/media/compress/jobs \
+  -H "x-api-key: change-me-in-production" \
+  -F "file=@video.mp4" -F "target_width=1280" -F "bitrate_kbps=2000"
+
+# Check compression status (includes queue position)
+curl http://localhost:8830/v1/media/compress/jobs/<JOB_ID> \
+  -H "x-api-key: change-me-in-production"
+
+# Download the compressed MP4
+curl -o compressed.mp4 \
+  "http://localhost:8830/v1/media/compress/jobs/<JOB_ID>/download?api_key=change-me-in-production"
 
 # Switch model to 'idle' mode (unload VRAM after 10 min of inactivity)
 curl -X PUT http://localhost:8830/v1/settings/model \
@@ -223,6 +255,30 @@ job_worker.py (isolated subprocess)
 - Media files deleted automatically after processing (text/SRT/timestamps preserved in SQLite)
 - CUDA resilience: transient error retry (backoff) + allocator corruption recovery (cudaDeviceReset)
 - Worker crash watchdog: detects subprocess death and marks jobs as failed
+
+## Video Compressor Flow
+
+```
+POST /v1/media/compress/jobs  (multipart; target_width / bitrate_kbps / crf / preset)
+        │ 202 Accepted → job_id + queue_position
+        ▼
+compress_queue_dispatcher (FIFO, COMPRESS_MAX_CONCURRENT=1 → ทำทีละ 1 ไฟล์)
+        ▼
+run_compress_job.py (isolated subprocess)
+  ├─ 1. ffprobe → ความละเอียด / ความยาว / มีเสียงไหม
+  ├─ 2. สร้างคำสั่ง FFmpeg (scale คงอัตราส่วน, bitrate/CRF, encoder libx264|nvenc)
+  │      → progress % อัปเดตลง SQLite ทุก ~1 วิ (-progress pipe:1)
+  ├─ 3. ตรวจ output → บันทึก output_path / ขนาด / ความละเอียด ลง SQLite
+  └─ 4. ลบไฟล์ต้นฉบับทุกกรณี (สำเร็จ/ล้มเหลว/ยกเลิก/restart) — output เก็บตาม COMPRESS_RETENTION_HOURS
+```
+
+- **ลด dimension คงอัตราส่วน**: `-vf scale=<width>:-2` (ค่า `-2` รักษาสัดส่วน + จำนวนคู่; ระบบห้ามขยายเกินไฟล์ต้นฉบับ)
+- **ลด bitrate**: `-b:v Nk -maxrate Nk -bufsize 2Nk` (หรือใช้ CRF `-crf` ถ้าไม่ได้ระบุ)
+- **Encoder**: `libx264` (default, ใช้ได้ทุกที่) หรือ `h264_nvenc` (GPU เร็วมาก ถ้า ffmpeg build รองรับ — เปลี่ยนผ่าน env `COMPRESS_ENCODER`)
+- **คิว**: รองรับพร้อมกันสูงสุด `COMPRESS_MAX_CONCURRENT` (default 1 = เข้มงวด 1 ไฟล์ต่อครั้ง), อัปโหลดเกิน `COMPRESS_MAX_QUEUED` → HTTP 429
+- ไฟล์ output จะถูกลบจากดิสก์อัตโนมัติหลัง `COMPRESS_RETENTION_HOURS` (default 24 ชม.) แต่ record ยังอยู่ใน DB
+- วิดีโอที่ไม่มีเสียง → FFmpeg ใช้ `-an` อัตโนมัติ
+- Output เป็น MP4 (H.264 + AAC 128k) เสมอ เข้ากันได้ทุกอุปกรณ์
 
 ## Testing
 

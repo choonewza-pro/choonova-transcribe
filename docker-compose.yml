@@ -35,7 +35,7 @@ services:
       - MODEL_LOAD_MODE=${MODEL_LOAD_MODE:-always}
       - MODEL_IDLE_TIMEOUT_SEC=${MODEL_IDLE_TIMEOUT_SEC:-900}
     volumes:
-      - ./data/jobs:/tmp/typhoon_jobs
+      - ./data/jobs:/tmp/choonova-transcribe-jobs
       # - ./data:/app/data   # Enable to persist the jobs DB on the host (baked empty DB is used otherwise)
     deploy:
       resources:

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>บีบอัดวิดีโอ - ChooNova Compressor</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    .option-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.1rem;
+      margin: 1.25rem 0 1rem;
+    }
+    .option-card {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+    }
+    .option-label {
+      display: block;
+      font-size: 0.88rem;
+      color: var(--text-main);
+      margin-bottom: 0.45rem;
+    }
+    .option-hint {
+      display: block;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      margin-top: 0.4rem;
+      line-height: 1.45;
+    }
+    .option-input {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.35);
+      color: #fff;
+      border: 1px solid var(--card-border);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s ease;
+      font-family: inherit;
+    }
+    .option-input:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 10px rgba(0, 242, 254, 0.15);
+    }
+    .crf-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .crf-value {
+      min-width: 44px;
+      text-align: center;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      font-family: 'Fira Code', monospace;
+    }
+    input[type="range"] {
+      flex: 1;
+      accent-color: #00f2fe;
+    }
+    .queue-banner {
+      display: none;
+      margin: 1rem 0;
+      padding: 0.75rem 1.1rem;
+      border-radius: 10px;
+      border: 1px solid rgba(210, 153, 34, 0.4);
+      background: rgba(210, 153, 34, 0.12);
+      color: #d29922;
+      font-size: 0.92rem;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .queue-banner.visible { display: flex; }
+    .queue-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(210, 153, 34, 0.4);
+      border-top-color: #d29922;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .progress-bar-container {
+      width: 100%;
+      height: 12px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 1rem 0;
+      border: 1px solid var(--card-border);
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00f2fe, #4facfe, #00f2fe);
+      background-size: 200% 100%;
+      animation: gradientShift 2s linear infinite;
+      transition: width 0.3s ease;
+    }
+    @keyframes gradientShift {
+      0% { background-position: 0% 0%; }
+      100% { background-position: 200% 0%; }
+    }
+    .result-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.9rem;
+      margin: 1.25rem 0;
+    }
+    .result-metric {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 0.9rem 1rem;
+      text-align: center;
+    }
+    .result-metric .m-value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      font-family: 'Fira Code', monospace;
+    }
+    .result-metric .m-label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
+    }
+    .result-metric.saved .m-value { color: var(--success); }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  {% set active_page = 'compress' %}
+  {% set header_badge = 'Video Compressor' %}
+  {% include 'partials/header.html' %}
+
+  <main>
+    <div class="glass-card">
+      <h1>🗜️ บีบอัดวิดีโอ</h1>
+      <p class="subtitle" style="margin-bottom: 1.5rem;">
+        ลดขนาดไฟล์วิดีโอด้วย FFmpeg — ลดความละเอียด (คงอัตราส่วน) และ/หรือลดบิตเรต
+        ประมวลผลเบื้องหลังทีละ {{ max_concurrent }} ไฟล์ (คิวอัตโนมัติ, รอได้สูงสุด {{ max_queued }} งาน)
+      </p>
+      <p class="subtitle" style="margin-bottom: 1rem;">
+        📂 ดูผลการบีบอัด และลบไฟล์เพื่อประหยัดพื้นที่ได้ที่
+        <a href="/media/compress/jobs/history" style="color: #ff9d2e; text-decoration: underline;">ประวัติการบีบอัดวิดีโอ</a>
+      </p>
+
+      {% include 'partials/api_key_settings.html' %}
+
+      <form id="compressForm" data-max-upload-mb="{{ max_upload_mb|default(0) }}">
+        <div class="dropzone" id="compressDropzone">
+          <div class="icon">📹</div>
+          <h3 id="compressFileName">ลากไฟล์วิดีโอมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์</h3>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">
+            รองรับ MP4, MKV, MOV, WEBM, AVI — ไฟล์ต้นฉบับจะถูกลบอัตโนมัติทุกกรณีหลังประมวลผล
+          </p>
+          <input type="file" id="compressFileInput" accept="video/*" style="display: none;">
+        </div>
+
+        <div id="compressPreviewContainer" style="display: none; margin-top: 1.25rem; text-align: left; background: rgba(0, 0, 0, 0.25); padding: 1rem; border-radius: 12px; border: 1px solid var(--card-border);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h4 style="font-size: 0.95rem; color: var(--accent-cyan);">🎥 ตัวเล่นวิดีโอ (Preview):</h4>
+            <span id="compressFileSize" style="font-size: 0.85rem; color: var(--text-muted);"></span>
+          </div>
+          <video id="compressVideoPreview" controls style="width: 100%; max-height: 360px; border-radius: 10px; outline: none; background: #000; display: none;"></video>
+          <p id="sourceResInfo" style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.5rem;"></p>
+        </div>
+
+        <div class="option-grid">
+          <div class="option-card">
+            <label class="option-label" for="targetWidth">📏 ลดความละเอียด (ความกว้าง px, คงอัตราส่วน)</label>
+            <input type="number" id="targetWidth" class="option-input" min="0" step="16" placeholder="เช่น 1280 (เว้นว่าง = ไม่ลด)">
+            <span class="option-hint" id="widthHint">เว้นว่างหรือ 0 = ไม่ปรับขนาด • ระบบห้ามขยายเกินไฟล์ต้นฉบับ</span>
+          </div>
+          <div class="option-card">
+            <label class="option-label" for="bitrateKbps">🎚️ ลดบิตเรตวิดีโอ (kbps)</label>
+            <input type="number" id="bitrateKbps" class="option-input" min="0" step="100" placeholder="เช่น 2000 (เว้นว่าง = ไม่ลด)">
+            <span class="option-hint">เว้นว่างหรือ 0 = ใช้ CRF แทน • ยิ่งค่าน้อยไฟล์ยิ่งเล็กแต่คุณภาพลด</span>
+          </div>
+          <div class="option-card">
+            <label class="option-label" for="crfSlider">🎯 คุณภาพ (CRF: ยิ่งมากไฟล์ยิ่งเล็ก)</label>
+            <div class="crf-row">
+              <input type="range" id="crfSlider" min="18" max="32" step="1" value="{{ default_crf|default(28) }}">
+              <span class="crf-value" id="crfValue">28</span>
+            </div>
+            <span class="option-hint">18 ≈ คุณภาพใกล้ต้นฉบับ • 23 ≈ ดี • 28 ≈ เล็กพอควร (default)</span>
+          </div>
+          <div class="option-card">
+            <label class="option-label" for="presetSelect">⚡ ความเร็วประมวลผล (Preset)</label>
+            <select id="presetSelect" class="option-input">
+              <option value="ultrafast" {% if default_preset == 'ultrafast' %}selected{% endif %}>ultrafast — เร็วสุด (ไฟล์ใหญ่)</option>
+              <option value="superfast" {% if default_preset == 'superfast' %}selected{% endif %}>superfast</option>
+              <option value="veryfast" {% if default_preset == 'veryfast' %}selected{% endif %}>veryfast</option>
+              <option value="faster" {% if default_preset == 'faster' %}selected{% endif %}>faster</option>
+              <option value="fast" {% if default_preset == 'fast' %}selected{% endif %}>fast</option>
+              <option value="medium" {% if default_preset == 'medium' %}selected{% endif %}>medium — สมดุล (default)</option>
+              <option value="slow" {% if default_preset == 'slow' %}selected{% endif %}>slow</option>
+              <option value="slower" {% if default_preset == 'slower' %}selected{% endif %}>slower</option>
+              <option value="veryslow" {% if default_preset == 'veryslow' %}selected{% endif %}>veryslow — ไฟล์เล็กสุด (ช้าสุด)</option>
+            </select>
+            <span class="option-hint">Encoder: <strong>{{ encoder }}</strong> (เปลี่ยนได้ผ่าน env COMPRESS_ENCODER)</span>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary" id="startCompressBtn" disabled>
+          <span>🗜️ เริ่มบีบอัด</span>
+        </button>
+      </form>
+
+      <div id="compressProgressSection" style="display: none; margin-top: 2rem;">
+        <div class="queue-banner" id="queueBanner">
+          <span class="queue-spinner"></span>
+          <span id="queueBannerText">รอคิว...</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="font-size: 1.1rem; color: var(--accent-cyan);" id="compressStageText">⚙️ กำลังเตรียมการ...</h3>
+          <span id="compressPctText" style="font-weight: bold; font-size: 1.1rem;">0%</span>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" id="compressProgressFill"></div>
+        </div>
+        <div style="margin-top: 1.25rem; display: flex; justify-content: center;">
+          <button type="button" id="cancelCompressBtn" class="btn-danger" style="display: none;">❌ ยกเลิกงานนี้</button>
+        </div>
+      </div>
+
+      <div id="compressResultSection" style="margin-top: 2rem; display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h3 style="font-size: 1.2rem;">✅ บีบอัดเสร็จสมบูรณ์</h3>
+          <a id="btnDownloadCompressed" class="btn-primary" href="#" target="_blank" style="text-decoration: none;">⬇️ ดาวน์โหลดไฟล์ MP4</a>
+        </div>
+
+        <div class="result-summary">
+          <div class="result-metric">
+            <div class="m-value" id="resOriginalSize">-</div>
+            <div class="m-label">ขนาดต้นฉบับ</div>
+          </div>
+          <div class="result-metric">
+            <div class="m-value" id="resCompressedSize">-</div>
+            <div class="m-label">ขนาดหลังบีบอัด</div>
+          </div>
+          <div class="result-metric saved">
+            <div class="m-value" id="resSavedPct">-</div>
+            <div class="m-label">ลดลง</div>
+          </div>
+          <div class="result-metric">
+            <div class="m-value" id="resResolution">-</div>
+            <div class="m-label">ความละเอียด</div>
+          </div>
+          <div class="result-metric">
+            <div class="m-value" id="resDuration">-</div>
+            <div class="m-label">ความยาววิดีโอ</div>
+          </div>
+        </div>
+
+        <div class="stats-bar" id="compressStatsBar" style="display: flex; margin-top: 1rem;">
+          <div class="stats-badge" id="compressStatJobId">🆔 Job ID: -</div>
+          <div class="stats-badge" id="compressStatElapsed">⚡ เวลาประมวลผล: -</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass-card" style="margin-top: 2rem;">
+      <h2 style="font-size: 1.4rem; margin-bottom: 1rem; color: var(--accent-cyan);">📚 API Endpoint ของหน้านี้</h2>
+      {% include 'partials/api_card_compress.html' %}
+    </div>
+  </main>
+
+  <script src="/static/js/compress.js?v=1"></script>
+</body>
+</html>

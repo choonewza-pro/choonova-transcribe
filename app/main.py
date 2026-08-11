@@ -1,5 +1,6 @@
 import os
 import io
+import sys
 import time
 import uuid
 import asyncio
@@ -24,7 +25,7 @@ from fastapi import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, JSONResponse, Response, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, PlainTextResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import (
@@ -41,6 +42,13 @@ from app.config import (
     MAX_CHUNK_DURATION_SEC,
     MAX_UPLOAD_SIZE_MB,
     MAX_AUDIO_UPLOAD_SIZE_MB,
+    COMPRESS_ENCODER,
+    COMPRESS_PRESET,
+    COMPRESS_CRF,
+    COMPRESS_MAX_CONCURRENT,
+    COMPRESS_MAX_QUEUED,
+    COMPRESS_RETENTION_HOURS,
+    COMPRESS_OUTPUT_DIR,
 )
 from app.auth import verify_api_key
 from app.schemas import (
@@ -51,6 +59,8 @@ from app.schemas import (
     JobListItem,
     ModelSettings,
     ModelSettingsResponse,
+    CompressJobCreateResponse,
+    CompressJobStatusResponse,
 )
 from app.db import (
     init_db,
@@ -63,9 +73,20 @@ from app.db import (
     update_job_status,
     get_setting,
     set_setting,
+    create_compress_job,
+    get_compress_job,
+    list_compress_jobs,
+    delete_compress_job,
+    update_compress_job,
+    get_next_queued_compress_job,
+    count_queued_compress_jobs,
+    compress_job_queue_info,
+    recover_zombie_compress_jobs,
+    cleanup_expired_compress_jobs,
 )
 from app.audio_utils import check_disk_space, safe_delete_dir
 from app.cuda_utils import is_cuda_error, is_allocator_corruption
+from app.compress_utils import normalize_encoder
 from app.job_worker import (
     process_transcription_job,
     CUDA_RETRY_ATTEMPTS,
@@ -90,6 +111,11 @@ logger = logging.getLogger("typhoon-asr-main")
 # PyTorch/CUDA illegal memory access). Without this, a crashed worker
 # leaves its job row stuck in 'transcribing' forever.
 _active_workers: Dict[str, "subprocess.Popen"] = {}
+
+# Track running video compressor subprocesses (FFmpeg jobs). The queue
+# dispatcher enforces COMPRESS_MAX_CONCURRENT concurrent encodes by checking
+# the size of this dict before spawning the next queued job.
+_active_compress_workers: Dict[str, "subprocess.Popen"] = {}
 
 # When the watchdog detects a crashed worker (returncode != 0 while the DB row
 # is still in a processing state), optionally delete the job's on-disk files
@@ -145,6 +171,7 @@ def dir_has_files(dir_path: str) -> bool:
 async def periodic_cleanup_task():
     """
     Periodic background task running every 1 hour to clean up jobs > 24 hours old.
+    Also removes expired video compressor output files (COMPRESS_RETENTION_HOURS).
     """
     while True:
         try:
@@ -153,6 +180,9 @@ async def periodic_cleanup_task():
             for j_id in expired_ids:
                 j_dir = os.path.join(TEMP_JOBS_DIR, j_id)
                 safe_delete_dir(j_dir)
+            expired_compress_ids = cleanup_expired_compress_jobs(COMPRESS_RETENTION_HOURS)
+            for c_id in expired_compress_ids:
+                safe_delete_dir(os.path.join(COMPRESS_OUTPUT_DIR, c_id))
         except Exception as e:
             logger.error(f"Error in periodic_cleanup_task: {e}")
 
@@ -254,6 +284,95 @@ async def watchdog_workers():
             logger.error(f"Error in watchdog_workers: {e}")
 
 
+async def compress_queue_dispatcher():
+    """
+    FIFO queue dispatcher for video compressor jobs.
+
+    Polls SQLite for the oldest 'queued' job and spawns an isolated worker
+    subprocess for it, but never runs more than COMPRESS_MAX_CONCURRENT encodes
+    at once (the strict single-file queue is COMPRESS_MAX_CONCURRENT=1). The
+    worker updates progress in the DB; a watcher task cleans up the handle when
+    the subprocess exits and marks the job failed if no terminal state was written.
+    """
+    while True:
+        try:
+            await asyncio.sleep(1)
+            if len(_active_compress_workers) >= COMPRESS_MAX_CONCURRENT:
+                continue
+
+            job = get_next_queued_compress_job()
+            if not job:
+                continue
+            job_id = job["job_id"]
+            if job_id in _active_compress_workers:
+                continue
+
+            input_path = job.get("input_path")
+            if not input_path or not os.path.exists(input_path):
+                logger.warning(
+                    f"Compress job {job_id} has no input file on disk; marking failed"
+                )
+                update_compress_job(
+                    job_id, status="failed", current_stage="Failed",
+                    error_message="Input file missing before processing started",
+                )
+                safe_delete_dir(os.path.join(COMPRESS_OUTPUT_DIR, job_id))
+                continue
+
+            # Mark as processing and spawn the isolated worker.
+            update_compress_job(
+                job_id, status="processing", progress_pct=0.5,
+                current_stage="Spawning FFmpeg worker",
+            )
+            cmd = [
+                sys.executable, "-m", "app.run_compress_job",
+                job_id,
+                input_path,
+                str(int(job.get("target_width") or 0)),
+                str(int(job.get("bitrate_kbps") or 0)),
+                str(int(job.get("crf") or 28)),
+                job.get("preset") or "medium",
+                job.get("encoder") or "libx264",
+            ]
+            logger.info(f"Starting compressor worker for job {job_id}")
+            proc = subprocess.Popen(cmd, cwd=SERVICE_DIR)
+            _active_compress_workers[job_id] = proc
+            asyncio.create_task(watch_compress_process(job_id, proc))
+        except Exception as e:
+            logger.error(f"Error in compress_queue_dispatcher: {e}")
+
+
+async def watch_compress_process(job_id: str, proc: "subprocess.Popen"):
+    """
+    Watches a running compressor subprocess. On exit, if the DB row is still in
+    'processing' (worker crashed without writing a terminal state, was killed,
+    or exited before completing), mark it failed. On normal completion the worker
+    already wrote 'completed', so this is a no-op.
+    """
+    try:
+        await asyncio.to_thread(proc.wait)
+    finally:
+        _active_compress_workers.pop(job_id, None)
+        try:
+            job = get_compress_job(job_id)
+            if job and job.get("status") == "processing":
+                update_compress_job(
+                    job_id,
+                    status="failed",
+                    current_stage="Failed",
+                    error_message=(
+                        f"Compressor worker process exited unexpectedly "
+                        f"(code {proc.returncode})"
+                    ),
+                )
+                logger.error(
+                    f"Compressor worker for job {job_id} died "
+                    f"(exit={proc.returncode}); DB row still in processing, marked failed"
+                )
+        except Exception as e:
+            logger.warning(f"watch_compress_process failed for {job_id}: {e}")
+
+
 @app.on_event("startup")
 async def startup_event():
     logger.info(f"Starting Typhoon ASR Service on {HOST}:{PORT} (Device: {DEVICE})...")
@@ -261,6 +380,11 @@ async def startup_event():
     # settings table with MODEL_LOAD_MODE / MODEL_IDLE_TIMEOUT_SEC from env).
     init_db()
     recover_zombie_jobs()
+    # Recover video compressor jobs interrupted by a previous shutdown/crash and
+    # delete their leftover job directories (they can still hold a large input).
+    recovered_compress = recover_zombie_compress_jobs()
+    for c_id in recovered_compress:
+        safe_delete_dir(os.path.join(COMPRESS_OUTPUT_DIR, c_id))
     # Start periodic 24-hour retention cleanup worker
     asyncio.create_task(periodic_cleanup_task())
     # Start worker crash watchdog (detects subprocess crashes that bypass
@@ -268,6 +392,8 @@ async def startup_event():
     asyncio.create_task(watchdog_workers())
     # Start the model VRAM idle reaper (active only in 'idle' mode)
     asyncio.create_task(model_idle_reaper())
+    # Start the video compressor queue dispatcher (FIFO, 1+ concurrent encodes)
+    asyncio.create_task(compress_queue_dispatcher())
 
     mode = current_model_load_mode()
     if mode == "always":
@@ -320,9 +446,39 @@ async def media_transcribe_page(request: Request):
     )
 
 
-@app.get("/jobs/history", response_class=HTMLResponse)
+@app.get("/media/compress", response_class=HTMLResponse)
+async def media_compress_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="compress.html",
+        context={
+            "max_upload_mb": MAX_UPLOAD_SIZE_MB,
+            "default_crf": COMPRESS_CRF,
+            "default_preset": COMPRESS_PRESET,
+            "encoder": COMPRESS_ENCODER,
+            "max_concurrent": COMPRESS_MAX_CONCURRENT,
+            "max_queued": COMPRESS_MAX_QUEUED,
+        },
+    )
+
+
+@app.get("/media/compress/jobs/history", response_class=HTMLResponse)
+async def compress_jobs_history_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="compress_jobs.html",
+        context={"active_page": "compress", "header_badge": "Compressor History"},
+    )
+
+
+@app.get("/media/transcribe/jobs/history", response_class=HTMLResponse)
 async def jobs_history_page(request: Request):
     return templates.TemplateResponse(request=request, name="jobs.html")
+
+
+@app.get("/jobs/history", response_class=HTMLResponse)
+async def jobs_history_page_legacy(request: Request):
+    return RedirectResponse(url="/media/transcribe/jobs/history", status_code=302)
 
 
 # =========================================================================
@@ -719,6 +875,271 @@ async def export_job_result(
             status_code=400,
             detail="Unsupported export format. Use 'txt', 'srt', or 'json'.",
         )
+
+
+# =========================================================================
+# Video Compressor (FFmpeg) Jobs API Endpoints
+# =========================================================================
+
+
+def _validate_compress_params(
+    target_width: int, bitrate_kbps: int, crf: int
+) -> None:
+    """Validate compressor request parameters, raising HTTP 422 on invalid input."""
+    if target_width < 0 or bitrate_kbps < 0:
+        raise HTTPException(
+            status_code=422, detail="target_width and bitrate_kbps must be >= 0."
+        )
+    if target_width == 0 and bitrate_kbps == 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Specify at least one of target_width (dimension) or bitrate_kbps "
+            "(quality/bitrate) to compress the video.",
+        )
+    if not (1 <= crf <= 51):
+        raise HTTPException(status_code=422, detail="crf must be between 1 and 51.")
+    if target_width != 0 and target_width < 16:
+        raise HTTPException(
+            status_code=422, detail="target_width must be at least 16 px (or 0 to skip)."
+        )
+
+
+@app.post("/v1/media/compress/jobs", status_code=202, response_model=CompressJobCreateResponse)
+async def create_compress_job_api(
+    file: UploadFile = File(...),
+    target_width: int = Form(0),
+    bitrate_kbps: int = Form(0),
+    crf: int = Form(COMPRESS_CRF),
+    preset: str = Form(COMPRESS_PRESET),
+    encoder: str = Form(COMPRESS_ENCODER),
+    authenticated: bool = Depends(verify_api_key),
+):
+    """
+    Upload a video (MP4, MKV, MOV, ...) to compress in the background.
+
+    - target_width > 0: rescale to this width keeping the aspect ratio (never upscales).
+    - bitrate_kbps > 0: constrain the video bitrate (overrides CRF quality).
+    - crf: encoder quality (higher = smaller file, 1-51, default 28).
+    - preset: x264 preset (ultrafast..veryslow) or NVENC p1..p7 (auto-mapped).
+    - encoder: 'libx264' (default) or 'nvenc' (GPU, if the ffmpeg build supports it).
+
+    Only COMPRESS_MAX_CONCURRENT video(s) encode at once; uploads beyond
+    COMPRESS_MAX_QUEUED are rejected with 429. Returns job_id immediately (202).
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Video file must be provided.")
+
+    _validate_compress_params(target_width, bitrate_kbps, crf)
+
+    enc = normalize_encoder(encoder)
+
+    queued = count_queued_compress_jobs()
+    if queued >= COMPRESS_MAX_QUEUED:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Compression queue is full ({COMPRESS_MAX_QUEUED} jobs). "
+            "Wait for pending jobs to finish and try again.",
+        )
+
+    if not check_disk_space(COMPRESS_OUTPUT_DIR, MIN_FREE_DISK_GB):
+        raise HTTPException(
+            status_code=507,
+            detail=f"Insufficient disk space. At least {MIN_FREE_DISK_GB} GB free "
+            "disk space is required.",
+        )
+
+    job_id = str(uuid.uuid4())
+    job_dir = os.path.join(COMPRESS_OUTPUT_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+
+    file_ext = os.path.splitext(file.filename)[1] or ".mp4"
+    save_path = os.path.join(job_dir, f"input{file_ext}")
+
+    max_upload_bytes = int(MAX_UPLOAD_SIZE_MB * 1024 * 1024)
+    total_bytes = 0
+    try:
+        with open(save_path, "wb") as buffer:
+            while chunk := await file.read(1024 * 1024):
+                total_bytes += len(chunk)
+                if MAX_UPLOAD_SIZE_MB > 0 and total_bytes > max_upload_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File exceeds maximum upload size of "
+                        f"{MAX_UPLOAD_SIZE_MB:.0f} MB",
+                    )
+                buffer.write(chunk)
+    except HTTPException:
+        safe_delete_dir(job_dir)
+        raise
+    except Exception as e:
+        safe_delete_dir(job_dir)
+        logger.error(f"Error saving upload file for compress job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save upload file: {e}")
+
+    create_compress_job(
+        job_id=job_id,
+        filename=file.filename,
+        input_path=save_path,
+        file_size_bytes=total_bytes,
+        target_width=int(target_width or 0),
+        bitrate_kbps=int(bitrate_kbps or 0),
+        crf=int(crf or COMPRESS_CRF),
+        preset=preset,
+        encoder=enc,
+    )
+
+    qinfo = compress_job_queue_info(job_id)
+    return CompressJobCreateResponse(
+        status="accepted",
+        job_id=job_id,
+        filename=file.filename,
+        queue_position=qinfo["queue_position"],
+        queue_length=qinfo["queue_length"],
+        message="Job created and enqueued for background video compression",
+    )
+
+
+@app.get("/v1/media/compress/jobs", response_model=List[Dict[str, Any]])
+async def list_compress_jobs_api(
+    limit: int = 50, authenticated: bool = Depends(verify_api_key)
+):
+    """
+    List recent video compressor jobs ordered by creation date (newest first).
+    """
+    jobs = list_compress_jobs(limit=limit)
+    for job in jobs:
+        job.pop("input_path", None)
+        job["output_exists"] = bool(
+            job.get("output_path") and os.path.exists(job.get("output_path") or "")
+        )
+    return jobs
+
+
+@app.get("/v1/media/compress/jobs/{job_id}", response_model=CompressJobStatusResponse)
+async def get_compress_job_status(
+    job_id: str, authenticated: bool = Depends(verify_api_key)
+):
+    """
+    Get the status, queue position, progress %, and result of a compressor job.
+    """
+    job = get_compress_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Compress job {job_id} not found.")
+    qinfo = compress_job_queue_info(job_id)
+    job["queue_position"] = qinfo["queue_position"] if job["status"] == "queued" else 0
+    job["queue_length"] = qinfo["queue_length"]
+    return CompressJobStatusResponse(**job)
+
+
+@app.delete("/v1/media/compress/jobs/{job_id}")
+async def cancel_compress_job(
+    job_id: str, authenticated: bool = Depends(verify_api_key)
+):
+    """
+    Cancel/delete a video compressor job: terminate the running FFmpeg worker,
+    remove the job record, and delete ALL on-disk files (input + output).
+    """
+    job = get_compress_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Compress job {job_id} not found.")
+
+    proc = _active_compress_workers.pop(job_id, None)
+    if proc is not None and proc.poll() is None:
+        logger.info(f"Terminating compressor worker for job {job_id} (cancel request)")
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except Exception:
+            logger.warning(f"Compressor worker {job_id} did not exit after terminate; killing it")
+            proc.kill()
+
+    delete_compress_job(job_id)
+    safe_delete_dir(os.path.join(COMPRESS_OUTPUT_DIR, job_id))
+    return {
+        "status": "success",
+        "message": f"Compress job {job_id} deleted (input + output files removed).",
+    }
+
+
+@app.delete("/v1/media/compress/jobs/{job_id}/output")
+async def delete_compress_job_output(
+    job_id: str, authenticated: bool = Depends(verify_api_key)
+):
+    """
+    Delete ONLY the compressed output file of a completed job to free disk
+    space, while keeping the job record (history) intact.
+    """
+    job = get_compress_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Compress job {job_id} not found.")
+    if job.get("status") != "completed" or not job.get("output_path"):
+        raise HTTPException(status_code=400, detail="Job has no output file.")
+
+    output_path = job["output_path"]
+    base_real = os.path.realpath(COMPRESS_OUTPUT_DIR)
+    job_dir_real = os.path.realpath(os.path.join(COMPRESS_OUTPUT_DIR, job_id))
+    out_real = os.path.realpath(output_path)
+    if not out_real.startswith(base_real + os.sep) or os.path.dirname(out_real) != job_dir_real:
+        raise HTTPException(
+            status_code=403, detail="Access to this output path is not allowed."
+        )
+
+    if not os.path.exists(out_real):
+        return {
+            "status": "success",
+            "message": "Output file was already removed.",
+            "output_size_bytes": job.get("output_size_bytes") or 0,
+        }
+
+    try:
+        freed = os.path.getsize(out_real)
+        os.remove(out_real)
+    except OSError as e:
+        logger.error(f"Failed to delete output file for compress job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete output file: {e}")
+
+    logger.info(f"Compress job {job_id}: output file deleted manually (freed {freed} bytes)")
+    return {
+        "status": "success",
+        "message": "Compressed output file deleted. Job record kept for history.",
+        "output_size_bytes": freed,
+    }
+
+
+@app.get("/v1/media/compress/jobs/{job_id}/download")
+async def download_compress_job(
+    job_id: str, authenticated: bool = Depends(verify_api_key)
+):
+    """
+    Download the compressed MP4 output of a completed job. Returns 410 Gone if
+    the output file has been cleaned up by the retention policy.
+    """
+    job = get_compress_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Compress job {job_id} not found.")
+    if job.get("status") != "completed" or not job.get("output_path"):
+        raise HTTPException(status_code=400, detail="Job is not completed yet.")
+
+    output_path = job["output_path"]
+    if not os.path.exists(output_path):
+        raise HTTPException(
+            status_code=410,
+            detail="Compressed file has been removed by the retention policy.",
+        )
+
+    # Path-safety: the output must live inside this job's own directory.
+    base_real = os.path.realpath(COMPRESS_OUTPUT_DIR)
+    job_dir_real = os.path.realpath(os.path.join(COMPRESS_OUTPUT_DIR, job_id))
+    out_real = os.path.realpath(output_path)
+    if not out_real.startswith(base_real + os.sep) or os.path.dirname(out_real) != job_dir_real:
+        raise HTTPException(
+            status_code=403, detail="Access to this output path is not allowed."
+        )
+
+    safe_name = os.path.splitext(job.get("filename", "video"))[0]
+    response = FileResponse(out_real, media_type="video/mp4")
+    response.headers["Content-Disposition"] = _attachment_header(safe_name, "mp4")
+    return response
 
 
 # =========================================================================

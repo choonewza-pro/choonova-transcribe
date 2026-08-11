@@ -37,7 +37,7 @@ services:
     networks:
       - km4u-network
     volumes:
-      - ./data/jobs:/tmp/typhoon_jobs
+      - ./data/jobs:/tmp/choonova-transcribe-jobs
       # - ./data:/app/data   # Enable to persist the jobs DB on the host (baked empty DB is used otherwise)
     deploy:
       resources:

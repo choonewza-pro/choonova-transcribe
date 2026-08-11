@@ -55,7 +55,7 @@ COPY app /app/app
 RUN python3 -c "\
 from app.db import init_db; \
 init_db(); \
-print('  ✅ EMPTY SQLite JOBS DB CREATED at /app/data/jobs.db')"
+print('  ✅ EMPTY SQLite JOBS DB CREATED at /app/data/choonova-transcribe.db')"
 
 EXPOSE 8830
 
