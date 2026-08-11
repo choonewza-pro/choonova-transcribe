@@ -37,22 +37,24 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 
 ```
 ├── app/
-│   ├── main.py          # FastAPI app, route registration, WebSocket, periodic cleanup + idle reaper
-│   ├── config.py        # Environment configuration & defaults
-│   ├── auth.py          # API key verification (x-api-key)
-│   ├── db.py            # SQLite repository for jobs + runtime settings + retention cleanup
-│   ├── schemas.py       # Pydantic request/response models
-│   ├── asr_engine.py    # Typhoon ASR model singleton wrapper (NeMo) with idle-unload
-│   ├── whisper_engine.py # faster-whisper engine (English / Thai-English mixed) with idle-unload
-│   ├── engine_router.py # Language dispatcher (th -> Typhoon, en/auto -> Whisper)
-│   ├── audio_utils.py   # FFmpeg extract/split, disk-space check, safe_delete helpers
-│   ├── job_worker.py    # Async long-form transcription pipeline (chunking + GPU loop)
-│   ├── run_job.py       # Subprocess entrypoint for isolated job workers
-│   ├── compress_utils.py # FFmpeg probe / command builder / progress parser (video compressor)
-│   ├── compress_worker.py # Async video compression worker (FFmpeg, progress -> DB)
-│   ├── run_compress_job.py # Subprocess entrypoint for isolated compressor workers
+│   ├── main.py          # FastAPI app bootstrapper & router assembly
+│   ├── core/            # Cross-cutting concerns (config, security, db WAL engine, exceptions, logging)
+│   │   ├── config.py
+│   │   ├── security.py
+│   │   ├── db.py
+│   │   ├── exceptions.py
+│   │   └── logging.py
+│   ├── modules/         # Modular Monolith Bounded Contexts (Hexagonal Architecture)
+│   │   ├── settings/    # Model VRAM residency settings domain, service & SQLite adapter
+│   │   ├── compression/ # Video compression domain, service, FFmpeg & SQLite adapters
+│   │   └── transcription/# ASR transcription domain, service, Typhoon/Whisper & SQLite adapters
+│   ├── api/             # Delivery Layer
+│   │   ├── v1/          # REST & WebSocket API routers (settings, compression, transcription, realtime)
+│   │   └── web/         # HTML Dashboard view routers
 │   ├── templates/       # HTML pages (index, upload, realtime, media, jobs, compress, setting)
 │   └── static/          # CSS + JS (upload.js, realtime.js, media.js, jobs.js, model_status.js, settings.js)
+├── tests/               # Automated Test Suite
+│   └── unit/            # Unit tests with Fake in-memory repositories
 ├── data/                # SQLite DB (choonova-transcribe.db) — optional, baked empty into Docker image
 ├── model/               # Model weights (typhoon-asr-realtime.nemo, git-ignored)
 ├── Dockerfile           # GPU image (CUDA 12.1, PyTorch)
@@ -359,11 +361,16 @@ docker exec <container> ffmpeg -hide_banner -y -f lavfi -i testsrc=size=320x240:
 
 ## Testing
 
-No formal test suite. Manual verification via:
+Automated Unit Test Suite (In-Memory Fake Adapters):
 
-- Dashboard: `http://localhost:8830/`
-- Syntax check: `python -m py_compile app/main.py app/db.py app/config.py app/audio_utils.py app/asr_engine.py app/whisper_engine.py app/engine_router.py app/schemas.py app/job_worker.py`
-- cURL examples above
+```bash
+python -m unittest tests/unit/settings/test_settings_service.py tests/unit/compression/test_compression_service.py tests/unit/transcription/test_transcription_service.py
+```
+
+Syntax & compilation check:
+```bash
+python -m py_compile app/main.py
+```
 
 ## Model
 
