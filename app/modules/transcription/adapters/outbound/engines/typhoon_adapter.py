@@ -4,7 +4,8 @@ Typhoon ASR Engine Outbound Adapter implementing ASREnginePort.
 
 from typing import Dict, Any
 from app.modules.transcription.domain.ports import ASREnginePort
-from app.asr_engine import transcribe_file as _typhoon_transcribe_file, get_asr_engine
+from app.asr_engine import get_asr_engine
+
 
 
 class TyphoonAdapter(ASREnginePort):

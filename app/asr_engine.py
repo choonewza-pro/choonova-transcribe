@@ -377,3 +377,9 @@ class TyphoonASREngine:
 
 # Global singleton instance
 engine = TyphoonASREngine()
+
+
+def get_asr_engine() -> TyphoonASREngine:
+    """Returns the global Typhoon ASR engine singleton instance."""
+    return engine
+
