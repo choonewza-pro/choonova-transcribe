@@ -56,6 +56,7 @@ def extract_audio_ffmpeg(input_file: str, output_wav: str) -> str:
     os.makedirs(os.path.dirname(output_wav), exist_ok=True)
     cmd = [
         "ffmpeg", "-y",
+        "-protocol_whitelist", "file,pipe,crypto",
         "-i", input_file,
         "-vn",
         "-acodec", "pcm_s16le",
@@ -80,6 +81,7 @@ def get_audio_duration_ffmpeg(audio_path: str) -> float:
     """
     cmd = [
         "ffprobe", "-v", "error",
+        "-protocol_whitelist", "file,pipe,crypto",
         "-show_entries", "format=duration",
         "-of", "default=noprint_wrappers=1:nokey=1",
         audio_path
@@ -92,7 +94,7 @@ def get_audio_duration_ffmpeg(audio_path: str) -> float:
         pass
 
     # Fallback to ffmpeg -i if ffprobe is missing
-    cmd_fallback = ["ffmpeg", "-i", audio_path]
+    cmd_fallback = ["ffmpeg", "-protocol_whitelist", "file,pipe,crypto", "-i", audio_path]
     res_fb = subprocess.run(cmd_fallback, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     match = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)", res_fb.stderr)
     if match:
@@ -107,7 +109,7 @@ def detect_silences_ffmpeg(audio_path: str, noise_db: str = "-30dB", min_duratio
     Returns list of silence midpoint timestamps (in seconds).
     """
     cmd = [
-        "ffmpeg", "-i", audio_path,
+        "ffmpeg", "-protocol_whitelist", "file,pipe,crypto", "-i", audio_path,
         "-af", f"silencedetect=noise={noise_db}:d={min_duration_sec}",
         "-f", "null", "-"
     ]
@@ -202,6 +204,7 @@ def split_audio_silence(
         chunk_path = os.path.join(output_dir, f"chunk_{i:03d}.wav")
         cmd = [
             "ffmpeg", "-y",
+            "-protocol_whitelist", "file,pipe,crypto",
             "-ss", f"{actual_start:.3f}",
             "-to", f"{actual_end:.3f}",
             "-i", input_wav,

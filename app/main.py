@@ -23,6 +23,12 @@ from fastapi import (
     WebSocketDisconnect,
     BackgroundTasks,
 )
+from app.core.media_validator import (
+    validate_magic_bytes,
+    validate_extension,
+    validate_with_ffprobe,
+    secure_filename
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse, Response, PlainTextResponse, FileResponse
@@ -604,6 +610,8 @@ async def transcribe_audio(
     if not file.filename:
         raise HTTPException(status_code=400, detail="Audio file must be provided.")
 
+    validate_extension(file.filename)
+
     try:
         lang = normalize_language(language)
     except ValueError as e:
@@ -621,10 +629,11 @@ async def transcribe_audio(
                     detail=f"Audio file exceeds maximum size of {MAX_AUDIO_UPLOAD_SIZE_MB:.0f} MB",
                 )
         content = bytes(content)
+        validate_magic_bytes(content[:2048])
 
         res = router_transcribe_bytes(
             audio_bytes=content,
-            filename_hint=file.filename,
+            filename_hint=secure_filename(file.filename),
             language=lang,
             with_timestamps=with_timestamps,
         )
@@ -679,6 +688,8 @@ async def create_transcription_job(
             status_code=400, detail="Video/Audio file must be provided."
         )
 
+    validate_extension(file.filename)
+
     if not (0 < target_chunk_sec <= max_chunk_sec):
         raise HTTPException(
             status_code=422,
@@ -700,7 +711,8 @@ async def create_transcription_job(
     job_dir = os.path.join(TEMP_JOBS_DIR, job_id)
     os.makedirs(job_dir, exist_ok=True)
 
-    file_ext = os.path.splitext(file.filename)[1] or ".mp4"
+    safe_name = secure_filename(file.filename)
+    file_ext = os.path.splitext(safe_name)[1] or ".mp4"
     save_path = os.path.join(job_dir, f"input{file_ext}")
 
     # Stream file upload to disk in chunks of 1MB to prevent OOM.
@@ -724,6 +736,20 @@ async def create_transcription_job(
         safe_delete_dir(job_dir)
         logger.error(f"Error saving upload file for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save upload file: {e}")
+
+    # Validate Magic Bytes and FFprobe for saved file
+    try:
+        with open(save_path, "rb") as f:
+            header_bytes = f.read(2048)
+        validate_magic_bytes(header_bytes)
+        validate_with_ffprobe(save_path)
+    except HTTPException:
+        safe_delete_dir(job_dir)
+        raise
+    except Exception as e:
+        safe_delete_dir(job_dir)
+        logger.error(f"Validation error for job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to validate media file")
 
     # Insert job into SQLite
     create_job(
@@ -983,6 +1009,8 @@ async def create_compress_job_api(
     if not file.filename:
         raise HTTPException(status_code=400, detail="Video file must be provided.")
 
+    validate_extension(file.filename)
+
     try:
         trim_start = parse_trim_time(start)
         trim_end = parse_trim_time(end)
@@ -1018,7 +1046,8 @@ async def create_compress_job_api(
     job_dir = os.path.join(COMPRESS_OUTPUT_DIR, job_id)
     os.makedirs(job_dir, exist_ok=True)
 
-    file_ext = os.path.splitext(file.filename)[1] or ".mp4"
+    safe_name = secure_filename(file.filename)
+    file_ext = os.path.splitext(safe_name)[1] or ".mp4"
     save_path = os.path.join(job_dir, f"input{file_ext}")
 
     max_upload_bytes = int(MAX_UPLOAD_SIZE_MB * 1024 * 1024)
@@ -1039,8 +1068,22 @@ async def create_compress_job_api(
         raise
     except Exception as e:
         safe_delete_dir(job_dir)
-        logger.error(f"Error saving upload file for compress job {job_id}: {e}")
+        logger.error(f"Error saving upload file for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save upload file: {e}")
+
+    # Validate Magic Bytes and FFprobe for saved file
+    try:
+        with open(save_path, "rb") as f:
+            header_bytes = f.read(2048)
+        validate_magic_bytes(header_bytes)
+        validate_with_ffprobe(save_path)
+    except HTTPException:
+        safe_delete_dir(job_dir)
+        raise
+    except Exception as e:
+        safe_delete_dir(job_dir)
+        logger.error(f"Validation error for compress job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to validate media file")
 
     create_compress_job(
         job_id=job_id,

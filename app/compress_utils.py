@@ -224,6 +224,7 @@ def build_compress_cmd(
     has_audio = bool(probe.get("has_audio"))
 
     cmd = ["ffmpeg", "-y", "-hide_banner"]
+    cmd += ["-protocol_whitelist", "file,pipe,crypto"]
     if trim_start > 0:
         cmd += ["-ss", str(trim_start)]
     if trim_end > 0:
@@ -320,7 +321,7 @@ def build_audio_extract_cmd(
     Build an ffmpeg command that extracts audio from a video file.
     format: 'wav' (16kHz mono PCM) or 'mp3' (192kbps stereo).
     """
-    cmd = ["ffmpeg", "-y", "-hide_banner", "-i", input_path, "-vn"]
+    cmd = ["ffmpeg", "-y", "-hide_banner", "-protocol_whitelist", "file,pipe,crypto", "-i", input_path, "-vn"]
     if format == "mp3":
         cmd += ["-c:a", "libmp3lame", "-b:a", "192k"]
     else:
