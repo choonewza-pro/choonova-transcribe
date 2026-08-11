@@ -20,7 +20,10 @@
         ระบบแปลงเสียงพูดเป็นข้อความ (Speech-to-Text) ความเร็วสูง พร้อมรองรับ 2 ภาษาแบบดูอัล-เอนจิน:<br>
         <strong>Typhoon ASR Realtime</strong> (FastConformer-Transducer 114M) สำหรับภาษาไทย และ
         <strong>Faster-Whisper (CTranslate2)</strong> สำหรับภาษาอังกฤษ / ไทย-อังกฤษผสม
-        <br>พร้อมเครื่องมือ <strong>บีบอัดวิดีโอ</strong> ด้วย FFmpeg (ลดความละเอียด / บิตเรต) แบบคิวอัตโนมัติ
+        <br>พร้อมเครื่องมือ <strong>บีบอัดวิดีโอ</strong> ด้วย FFmpeg (ลดความละเอียด / บิตเรต / ตัดหัว-ท้าย start/end) แบบคิวอัตโนมัติ
+      </p>
+      <p class="subtitle" style="margin-top: 0.75rem;">
+        🤖 โปรเจกต์นี้พัฒนาด้วยความช่วยเหลือของ <strong>DeepSeek V4 Flash Model</strong> (AI Pair Programmer)
       </p>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
@@ -76,7 +79,7 @@
         <a href="/media/compress" class="card-button">
           <div class="icon">🗜️</div>
           <h3>5. บีบอัดวิดีโอ</h3>
-          <p>ลดขนาดไฟล์วิดีโอด้วย FFmpeg — ลดความละเอียด (คงอัตราส่วน) และ/หรือลดบิตเรต แบบคิวอัตโนมัติ 1 ไฟล์ต่อครั้ง</p>
+          <p>ลดขนาดไฟล์วิดีโอด้วย FFmpeg — ลดความละเอียด (คงอัตราส่วน) และ/หรือลดบิตเรต หรือตัดหัว-ท้าย (start/end) แบบคิวอัตโนมัติ 1 ไฟล์ต่อครั้ง</p>
         </a>
 
         <a href="/media/compress/jobs/history" class="card-button">
@@ -175,7 +178,7 @@
               <tr>
                 <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff;">🗜️ การบีบอัดวิดีโอ (Video Compressor)</td>
                 <td style="padding: 0.9rem 1.2rem; color: var(--text-main);">
-                  ลดความละเอียด (คงอัตราส่วน) และ/หรือลดบิตเรตด้วย <strong>FFmpeg</strong> ผ่าน <code>POST /v1/media/compress/jobs</code> — เอนจิน <strong>libx264</strong> (CPU) หรือ <strong>NVENC</strong> (GPU) ประมวลผลแบบคิวอัตโนมัติ 1 ไฟล์ต่อครั้ง และลบไฟล์ต้นฉบับอัตโนมัติหลังเสร็จ
+                  ลดความละเอียด (คงอัตราส่วน) และ/หรือลดบิตเรต หรือ <strong>ตัดหัว-ท้าย (start/end)</strong> ด้วย <strong>FFmpeg</strong> ผ่าน <code>POST /v1/media/compress/jobs</code> — เอนจิน <strong>libx264</strong> (CPU) หรือ <strong>NVENC</strong> (GPU) ประมวลผลแบบคิวอัตโนมัติ 1 ไฟล์ต่อครั้ง และลบไฟล์ต้นฉบับอัตโนมัติหลังเสร็จ
                 </td>
               </tr>
               <tr>
@@ -227,6 +230,7 @@
 
   <footer>
     Choonova AI Stack • ChooNova Transcribe Service running on Port 8830
+    <br><span style="opacity: 0.7;">🤖 พัฒนาด้วย DeepSeek V4 Flash Model</span>
   </footer>
 
   <script src="/static/js/settings.js?v=1"></script>

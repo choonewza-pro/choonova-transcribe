@@ -2,13 +2,15 @@
 
 Speech-to-Text API บริการภาษาไทย powered by **Typhoon ASR Realtime** (FastConformer-Transducer 114M parameters) บน **Python 3.12 + FastAPI + NeMo Toolkit** รองรับทั้ง GPU (NVIDIA, CUDA 12.1) และ CPU (Windows, Mac M1–M4, Linux) — ทดสอบบน **Notebook NVIDIA RTX 4080 Laptop GPU 12GB VRAM**
 
+> 🤖 โปรเจกต์นี้พัฒนาขึ้นด้วยความช่วยเหลือของ **DeepSeek V4 Flash Model** (AI Pair Programmer)
+
 ## Modes
 
 1. **REST API** (`POST /v1/audio/transcribe`) — ถอดความไฟล์เสียงสั้น multipart upload
 2. **WebSocket Real-time** (`/v1/realtime/stream`) — ถอดเสียงสดจากไมค์ chunk 250ms
 3. **Long-form Pipeline** (`POST /v1/media/transcribe/jobs`) — ไฟล์วิดีโอ/เสียงยาวสูงสุด 1GB+ แบบ async
 4. **ประวัติการถอดความ** (`/media/transcribe/jobs/history`) — ดู/export/ลบ งานที่เคยถอดความไว้
-5. **Video Compressor** (`POST /v1/media/compress/jobs`) — ลดขนาดไฟล์วิดีโอด้วย FFmpeg แบบ async คิว 1 ไฟล์ต่อครั้ง
+5. **Video Compressor** (`POST /v1/media/compress/jobs`) — ลดขนาดไฟล์วิดีโอด้วย FFmpeg แบบ async คิว 1 ไฟล์ต่อครั้ง (ลดความละเอียด / บิตเรต / ตัดหัว-ท้าย `start`/`end`)
 6. **Compressor History** (`/media/compress/jobs/history`) — ดูผลการบีบอัด และลบไฟล์ผลลัพธ์ด้วยตนเองเพื่อประหยัดพื้นที่
 
 ## Tech Stack
@@ -205,6 +207,12 @@ curl -X POST http://localhost:8830/v1/media/compress/jobs \
   -H "x-api-key: change-me-in-production" \
   -F "file=@video.mp4" -F "target_width=1280" -F "bitrate_kbps=2000"
 
+# Same, but cut the head/tail first: keep only 01:00 - 02:00 (start/end accept SS, MM:SS or HH:MM:SS; empty = no trim)
+curl -X POST http://localhost:8830/v1/media/compress/jobs \
+  -H "x-api-key: change-me-in-production" \
+  -F "file=@video.mp4" -F "target_width=1280" -F "bitrate_kbps=2000" \
+  -F "start=00:01:00" -F "end=00:02:00"
+
 # Check compression status (includes queue position)
 curl http://localhost:8830/v1/media/compress/jobs/<JOB_ID> \
   -H "x-api-key: change-me-in-production"
@@ -261,7 +269,7 @@ job_worker.py (isolated subprocess)
 ## Video Compressor Flow
 
 ```
-POST /v1/media/compress/jobs  (multipart; target_width / bitrate_kbps / crf / preset)
+POST /v1/media/compress/jobs  (multipart; target_width / bitrate_kbps / crf / preset / start / end)
         │ 202 Accepted → job_id + queue_position
         ▼
 compress_queue_dispatcher (FIFO, COMPRESS_MAX_CONCURRENT=1 → ทำทีละ 1 ไฟล์)
@@ -277,6 +285,7 @@ run_compress_job.py (isolated subprocess)
 ```
 
 - **ลด dimension คงอัตราส่วน**: `-vf scale=<width>:-2` (ค่า `-2` รักษาสัดส่วน + จำนวนคู่; ระบบห้ามขยายเกินไฟล์ต้นฉบับ)
+- **ตัดหัว/ท้าย (trim)**: `start`/`end` รับค่าเป็น `SS`, `MM:SS` หรือ `HH:MM:SS` (ว่าง = ไม่ตัด, default) — FFmpeg ใช้ `-ss <start> -to <end>` แบบ input option (fast seek + frame-accurate ตอน re-encode) เพื่อตัดเฉพาะช่วง `[start, end]`; ถ้าระบุแค่ `start` → ตัดหัว แล้วเก็บไปจนจบ, ระบุแค่ `end` → เก็บตั้งแต่ต้นถึง `end`
 - **ลด bitrate**: `-b:v Nk -maxrate Nk -bufsize 2Nk` (หรือใช้ CRF `-crf` ถ้าไม่ได้ระบุ)
 - **Encoder**: `libx264` (default, ใช้ได้ทุกที่) หรือ `h264_nvenc` (GPU เร็วมาก ถ้า ffmpeg build รองรับ — เปลี่ยนผ่าน env `COMPRESS_ENCODER`). ถ้าเลือก `nvenc` แล้ว runtime ใช้ไม่ได้ (เช่น ไม่มี `libnvidia-encode.so.1` ในคอนเทนเนอร์ หรือ driver เก่า) → ระบบ fallback เป็น `libx264` อัตโนมัติ + บันทึก encoder จริงที่ใช้ใน DB. **ใน Docker ต้องตั้ง env `NVIDIA_DRIVER_CAPABILITIES=video,compute,utility`** (ใน docker-compose.yml / docker-compose-km4u.yml แล้ว) ถึงจะ inject library NVENC เข้าไปในคอนเทนเนอร์ได้
 - **คิว**: รองรับพร้อมกันสูงสุด `COMPRESS_MAX_CONCURRENT` (default 1 = เข้มงวด 1 ไฟล์ต่อครั้ง), อัปโหลดเกิน `COMPRESS_MAX_QUEUED` → HTTP 429

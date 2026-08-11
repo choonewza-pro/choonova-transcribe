@@ -161,6 +161,36 @@ def _target_width(original_width: int, requested: int) -> Optional[int]:
     return requested
 
 
+def parse_trim_time(value: str) -> float:
+    """
+    Parse a user-supplied trim time into seconds (float).
+
+    Accepts 'SS', 'SS.xxx', 'MM:SS', 'MM:SS.xxx', 'HH:MM:SS' or
+    'HH:MM:SS.xxx'. An empty/whitespace-only value returns 0.0 (= no trim).
+    Raises ValueError for any malformed input.
+    """
+    s = (value or "").strip()
+    if not s:
+        return 0.0
+    parts = s.split(":")
+    if len(parts) > 3:
+        raise ValueError(
+            f"invalid trim time '{value}' (use SS, MM:SS or HH:MM:SS)"
+        )
+    try:
+        nums = [float(p) for p in parts]
+    except ValueError:
+        raise ValueError(
+            f"invalid trim time '{value}' (use SS, MM:SS or HH:MM:SS)"
+        )
+    if any(n < 0 for n in nums):
+        raise ValueError(f"invalid trim time '{value}' (must be >= 0)")
+    total = 0.0
+    for n in nums:
+        total = total * 60.0 + n
+    return total
+
+
 def build_compress_cmd(
     input_path: str,
     output_path: str,
@@ -170,6 +200,8 @@ def build_compress_cmd(
     preset: str = "medium",
     encoder: str = "libx264",
     probe: Optional[Dict[str, Any]] = None,
+    trim_start: float = 0.0,
+    trim_end: float = 0.0,
 ) -> List[str]:
     """
     Build an ffmpeg command that compresses a video.
@@ -182,12 +214,21 @@ def build_compress_cmd(
     - encoder -> 'libx264' or 'nvenc'; picks the correct flag set/preset map.
     - probe -> optional result of probe_video(); used to detect missing audio
       (-> '-an') and to clamp the target width.
+    - trim_start / trim_end -> seconds (float). trim_start > 0 adds a fast,
+      frame-accurate '-ss' seek before the input; trim_end > 0 adds '-to' as an
+      input option too so it is measured on the input timeline (yielding the
+      [trim_start, trim_end] segment exactly). Both default to 0 = no trimming.
     """
     probe = probe or {}
     original_width = int(probe.get("width") or 0)
     has_audio = bool(probe.get("has_audio"))
 
-    cmd = ["ffmpeg", "-y", "-hide_banner", "-i", input_path]
+    cmd = ["ffmpeg", "-y", "-hide_banner"]
+    if trim_start > 0:
+        cmd += ["-ss", str(trim_start)]
+    if trim_end > 0:
+        cmd += ["-to", str(trim_end)]
+    cmd += ["-i", input_path]
     cmd += ["-progress", "pipe:1", "-nostats"]
 
     width = _target_width(original_width, int(target_width or 0))

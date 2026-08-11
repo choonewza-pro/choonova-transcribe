@@ -89,6 +89,8 @@ class CompressJobStatusResponse(BaseModel):
     crf: int = 28
     preset: str = "medium"
     encoder: str = "libx264"
+    trim_start: float = 0.0
+    trim_end: float = 0.0
     input_width: int = 0
     input_height: int = 0
     duration_seconds: float = 0.0

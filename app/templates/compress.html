@@ -320,6 +320,16 @@
             </select>
             <span class="option-hint">เฉพาะ libx264 มี preset เหล่านี้ (nvenc ระบบจะแปลงให้อัตโนมัติ)</span>
           </div>
+          <div class="option-card">
+            <label class="option-label" for="trimStartInput">✂️ ตัดหัววิดีโอ (start)</label>
+            <input type="text" id="trimStartInput" class="option-input" placeholder="เช่น 01:30 หรือ 90 (ว่าง = ไม่ตัด)" inputmode="numeric">
+            <span class="option-hint">จุดเริ่มของวิดีโอที่ต้องการ (วินาที, MM:SS หรือ HH:MM:SS) — ทุกอย่างก่อนจุดนี้จะถูกตัดทิ้ง</span>
+          </div>
+          <div class="option-card">
+            <label class="option-label" for="trimEndInput">✂️ ตัดท้ายวิดีโอ (end)</label>
+            <input type="text" id="trimEndInput" class="option-input" placeholder="เช่น 05:00 หรือ 300 (ว่าง = ไม่ตัด)" inputmode="numeric">
+            <span class="option-hint">จุดสิ้นสุดของวิดีโอที่ต้องการ (วินาที, MM:SS หรือ HH:MM:SS) — ทุกอย่างหลังจุดนี้จะถูกตัดทิ้ง</span>
+          </div>
         </div>
 
         <button type="submit" class="btn-primary" id="startCompressBtn" disabled>

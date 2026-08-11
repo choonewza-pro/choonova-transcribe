@@ -63,12 +63,16 @@ async def _run_ffmpeg_encode(
     encoder: str,
     probe: dict,
     duration: float,
+    trim_start: float = 0.0,
+    trim_end: float = 0.0,
 ) -> Tuple[int, str]:
     """
     Run a single FFmpeg encode pass, streaming '-progress' into the DB.
-    Returns (returncode, stderr_tail). Raises only on subprocess setup errors;
-    a non-zero returncode is returned to the caller so it can decide whether to
-    retry with a different encoder (NVENC -> libx264 fallback).
+    `duration` is the EFFECTIVE (trimmed) length in seconds used only to map
+    '-progress' out_time to a progress %. Returns (returncode, stderr_tail).
+    Raises only on subprocess setup errors; a non-zero returncode is returned
+    to the caller so it can decide whether to retry with a different encoder
+    (NVENC -> libx264 fallback).
     """
     cmd = build_compress_cmd(
         input_path=input_path,
@@ -79,6 +83,8 @@ async def _run_ffmpeg_encode(
         preset=preset,
         encoder=encoder,
         probe=probe,
+        trim_start=trim_start,
+        trim_end=trim_end,
     )
     logger.info(f"FFmpeg command: {' '.join(cmd)}")
 
@@ -122,12 +128,15 @@ async def process_compress_job(
     crf: int = 28,
     preset: str = "medium",
     encoder: str = "libx264",
+    trim_start: float = 0.0,
+    trim_end: float = 0.0,
 ) -> None:
     """
     Async background worker that compresses a video with FFmpeg and updates the
-    job's progress in SQLite. The input file is ALWAYS deleted on completion,
-    failure, or cancellation (handled by the caller), plus a defensive cleanup
-    in the finally block below.
+    job's progress in SQLite. trim_start / trim_end (seconds, 0 = no trim) cut
+    the video head/tail before compressing. The input file is ALWAYS deleted on
+    completion, failure, or cancellation (handled by the caller), plus a
+    defensive cleanup in the finally block below.
     """
     start_time = time.time()
     job_dir = os.path.dirname(input_file_path)
@@ -162,10 +171,15 @@ async def process_compress_job(
             current_stage="Starting FFmpeg encode",
         )
         duration = probe.get("duration_seconds", 0.0) or 0.0
+        effective_duration = duration
+        if trim_start > 0 or trim_end > 0:
+            end_time = trim_end if trim_end > 0 else duration
+            effective_duration = max(0.0, end_time - trim_start)
 
         returncode, stderr_tail = await _run_ffmpeg_encode(
             job_id, input_file_path, output_path,
-            target_width, bitrate_kbps, crf, preset, encoder, probe, duration,
+            target_width, bitrate_kbps, crf, preset, encoder, probe,
+            effective_duration, trim_start, trim_end,
         )
 
         # NVENC is listed by the build but unusable at runtime (missing
@@ -185,7 +199,8 @@ async def process_compress_job(
             logger.info(f"Retrying {job_id} with libx264 (preset={preset})")
             returncode, stderr_tail = await _run_ffmpeg_encode(
                 job_id, input_file_path, output_path,
-                target_width, bitrate_kbps, crf, preset, encoder, probe, duration,
+                target_width, bitrate_kbps, crf, preset, encoder, probe,
+                effective_duration, trim_start, trim_end,
             )
 
         if returncode != 0:
@@ -210,6 +225,7 @@ async def process_compress_job(
             output_size_bytes=output_size,
             output_width=out_probe.get("width", 0),
             output_height=out_probe.get("height", 0),
+            duration_seconds=out_probe.get("duration_seconds", 0.0) or duration,
             elapsed_seconds=elapsed,
         )
         logger.info(

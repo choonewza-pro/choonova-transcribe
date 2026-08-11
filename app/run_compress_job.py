@@ -19,7 +19,8 @@ def main():
     if len(sys.argv) < 3:
         logger.error(
             "Usage: python -m app.run_compress_job <job_id> <input_file_path> "
-            "[target_width] [bitrate_kbps] [crf] [preset] [encoder]"
+            "[target_width] [bitrate_kbps] [crf] [preset] [encoder] "
+            "[trim_start] [trim_end]"
         )
         sys.exit(1)
 
@@ -32,23 +33,32 @@ def main():
         except ValueError:
             return default
 
+    def _float_arg(idx: int, default: float) -> float:
+        try:
+            return float(sys.argv[idx]) if len(sys.argv) > idx else default
+        except ValueError:
+            return default
+
     target_width = _int_arg(3, 0)
     bitrate_kbps = _int_arg(4, 0)
     crf = _int_arg(5, 28)
     preset = sys.argv[6] if len(sys.argv) > 6 else "medium"
     encoder = sys.argv[7] if len(sys.argv) > 7 else "libx264"
+    trim_start = _float_arg(8, 0.0)
+    trim_end = _float_arg(9, 0.0)
 
     logger.info(
         f"🚀 Isolated compressor worker starting job_id={job_id} "
         f"(width={target_width}, bitrate={bitrate_kbps}kbps, crf={crf}, "
-        f"preset={preset}, encoder={encoder})"
+        f"preset={preset}, encoder={encoder}, "
+        f"trim_start={trim_start}, trim_end={trim_end})"
     )
 
     try:
         asyncio.run(
             process_compress_job(
                 job_id, input_file_path, target_width, bitrate_kbps,
-                crf, preset, encoder,
+                crf, preset, encoder, trim_start, trim_end,
             )
         )
         logger.info(f"✅ Isolated compressor worker finished job_id={job_id}")

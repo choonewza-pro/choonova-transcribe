@@ -24,6 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const presetSelect = document.getElementById('presetSelect');
   const presetCard = document.getElementById('presetCard');
   const encoderSelect = document.getElementById('encoderSelect');
+  const trimStartInput = document.getElementById('trimStartInput');
+  const trimEndInput = document.getElementById('trimEndInput');
 
   const progressSection = document.getElementById('compressProgressSection');
   const queueBanner = document.getElementById('queueBanner');
@@ -261,6 +263,21 @@ document.addEventListener('DOMContentLoaded', () => {
   if (cancelCompressBtn) cancelCompressBtn.addEventListener('click', cancelActiveJob);
 
   // --- Upload + create job ---
+  // Parse 'SS', 'MM:SS' or 'HH:MM:SS' into seconds; '' -> 0; invalid -> NaN.
+  function parseTrimTimeSec(v) {
+    const s = (v || '').trim();
+    if (!s) return 0;
+    const parts = s.split(':');
+    if (parts.length > 3) return NaN;
+    let total = 0;
+    for (const p of parts) {
+      const n = Number(p);
+      if (!isFinite(n) || n < 0) return NaN;
+      total = total * 60 + n;
+    }
+    return total;
+  }
+
   compressForm.addEventListener('submit', (e) => {
     e.preventDefault();
     if (!selectedFile) return;
@@ -269,6 +286,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const bitrateVal = parseInt(bitrateInput.value, 10) || 0;
     if (!widthVal && !bitrateVal) {
       alert('กรุณากรอกอย่างใดอย่างหนึ่ง: ความกว้างที่ต้องการ (px) หรือบิตเรต (kbps)');
+      return;
+    }
+
+    const trimStartVal = parseTrimTimeSec(trimStartInput.value);
+    const trimEndVal = parseTrimTimeSec(trimEndInput.value);
+    if (isNaN(trimStartVal) || isNaN(trimEndVal)) {
+      alert('กรุณากรอกเวลาเริ่ม/สิ้นสุดให้ถูกต้อง (วินาที, MM:SS หรือ HH:MM:SS)');
+      return;
+    }
+    if (trimEndVal > 0 && trimStartVal >= trimEndVal) {
+      alert('จุดสิ้นสุด (end) ต้องมากกว่าจุดเริ่มต้น (start)');
       return;
     }
 
@@ -285,6 +313,8 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('crf', crfSlider.value);
     formData.append('preset', presetSelect.value);
     formData.append('encoder', encoderSelect ? encoderSelect.value : 'libx264');
+    if (trimStartInput.value.trim()) formData.append('start', trimStartInput.value.trim());
+    if (trimEndInput.value.trim()) formData.append('end', trimEndInput.value.trim());
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/v1/media/compress/jobs', true);

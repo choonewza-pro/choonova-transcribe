@@ -86,7 +86,7 @@ from app.db import (
 )
 from app.audio_utils import check_disk_space, safe_delete_dir
 from app.cuda_utils import is_cuda_error, is_allocator_corruption
-from app.compress_utils import normalize_encoder
+from app.compress_utils import normalize_encoder, parse_trim_time
 from app.job_worker import (
     process_transcription_job,
     CUDA_RETRY_ATTEMPTS,
@@ -333,6 +333,8 @@ async def compress_queue_dispatcher():
                 str(int(job.get("crf") or 28)),
                 job.get("preset") or "medium",
                 job.get("encoder") or "libx264",
+                str(float(job.get("trim_start") or 0.0)),
+                str(float(job.get("trim_end") or 0.0)),
             ]
             logger.info(f"Starting compressor worker for job {job_id}")
             proc = subprocess.Popen(cmd, cwd=SERVICE_DIR)
@@ -884,7 +886,8 @@ async def export_job_result(
 
 
 def _validate_compress_params(
-    target_width: int, bitrate_kbps: int, crf: int
+    target_width: int, bitrate_kbps: int, crf: int,
+    trim_start: float = 0.0, trim_end: float = 0.0,
 ) -> None:
     """Validate compressor request parameters, raising HTTP 422 on invalid input."""
     if target_width < 0 or bitrate_kbps < 0:
@@ -903,6 +906,15 @@ def _validate_compress_params(
         raise HTTPException(
             status_code=422, detail="target_width must be at least 16 px (or 0 to skip)."
         )
+    if trim_start < 0 or trim_end < 0:
+        raise HTTPException(
+            status_code=422, detail="start and end must be >= 0 (0 = no trim)."
+        )
+    if trim_end > 0 and trim_start >= trim_end:
+        raise HTTPException(
+            status_code=422,
+            detail="end must be greater than start when both are provided.",
+        )
 
 
 @app.post("/v1/media/compress/jobs", status_code=202, response_model=CompressJobCreateResponse)
@@ -913,6 +925,8 @@ async def create_compress_job_api(
     crf: int = Form(COMPRESS_CRF),
     preset: str = Form(COMPRESS_PRESET),
     encoder: str = Form(COMPRESS_ENCODER),
+    start: str = Form(""),
+    end: str = Form(""),
     authenticated: bool = Depends(verify_api_key),
 ):
     """
@@ -923,6 +937,8 @@ async def create_compress_job_api(
     - crf: encoder quality (higher = smaller file, 1-51, default 28).
     - preset: x264 preset (ultrafast..veryslow) or NVENC p1..p7 (auto-mapped).
     - encoder: 'libx264' (default) or 'nvenc' (GPU, if the ffmpeg build supports it).
+    - start / end: optional trim window in 'SS', 'MM:SS' or 'HH:MM:SS' (seconds
+      allowed too). Default (empty) = no trimming, the full video is kept.
 
     Only COMPRESS_MAX_CONCURRENT video(s) encode at once; uploads beyond
     COMPRESS_MAX_QUEUED are rejected with 429. Returns job_id immediately (202).
@@ -930,7 +946,13 @@ async def create_compress_job_api(
     if not file.filename:
         raise HTTPException(status_code=400, detail="Video file must be provided.")
 
-    _validate_compress_params(target_width, bitrate_kbps, crf)
+    try:
+        trim_start = parse_trim_time(start)
+        trim_end = parse_trim_time(end)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    _validate_compress_params(target_width, bitrate_kbps, crf, trim_start, trim_end)
 
     enc = normalize_encoder(encoder)
 
@@ -987,6 +1009,8 @@ async def create_compress_job_api(
         crf=int(crf or COMPRESS_CRF),
         preset=preset,
         encoder=enc,
+        trim_start=trim_start,
+        trim_end=trim_end,
     )
 
     qinfo = compress_job_queue_info(job_id)

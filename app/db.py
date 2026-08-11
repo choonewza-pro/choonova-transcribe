@@ -113,6 +113,8 @@ def init_db() -> None:
                 crf INTEGER DEFAULT 28,
                 preset TEXT DEFAULT 'medium',
                 encoder TEXT DEFAULT 'libx264',
+                trim_start REAL DEFAULT 0.0,
+                trim_end REAL DEFAULT 0.0,
                 input_width INTEGER DEFAULT 0,
                 input_height INTEGER DEFAULT 0,
                 duration_seconds REAL DEFAULT 0.0,
@@ -137,6 +139,10 @@ def init_db() -> None:
         ]
         if "input_path" not in compress_columns:
             cursor.execute("ALTER TABLE compress_jobs ADD COLUMN input_path TEXT")
+        if "trim_start" not in compress_columns:
+            cursor.execute("ALTER TABLE compress_jobs ADD COLUMN trim_start REAL DEFAULT 0.0")
+        if "trim_end" not in compress_columns:
+            cursor.execute("ALTER TABLE compress_jobs ADD COLUMN trim_end REAL DEFAULT 0.0")
         conn.commit()
     logger.info(f"SQLite DB initialized at {JOBS_DB_PATH}")
 
@@ -391,9 +397,12 @@ def create_compress_job(
     crf: int = COMPRESS_CRF,
     preset: str = COMPRESS_PRESET,
     encoder: str = COMPRESS_ENCODER,
+    trim_start: float = 0.0,
+    trim_end: float = 0.0,
 ) -> Dict[str, Any]:
     """
     Insert a new video compressor job with status='queued'.
+    trim_start / trim_end are seconds; 0.0 = no trimming.
     """
     now = datetime.utcnow().isoformat()
     with get_db_connection() as conn:
@@ -403,12 +412,12 @@ def create_compress_job(
             INSERT INTO compress_jobs (
                 job_id, filename, input_path, file_size_bytes, status, progress_pct,
                 current_stage, target_width, bitrate_kbps, crf, preset, encoder,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, 'queued', 0.0, 'Waiting in queue', ?, ?, ?, ?, ?, ?, ?)
+                trim_start, trim_end, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, 'queued', 0.0, 'Waiting in queue', ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 job_id, filename, input_path, file_size_bytes, target_width, bitrate_kbps,
-                crf, preset, encoder, now, now,
+                crf, preset, encoder, trim_start, trim_end, now, now,
             ),
         )
         conn.commit()

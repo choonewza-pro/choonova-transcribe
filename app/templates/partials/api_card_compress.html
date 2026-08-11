@@ -146,6 +146,7 @@
               <br><code>bitrate_kbps</code> — บิตเรตเป้าหมายของวิดีโอ · 0 = ใช้ CRF แทน
               <br><code>crf</code> — คุณภาพ (1–51, default {{ default_crf|default(28) }}) · <code>preset</code> — ultrafast..veryslow
               <br><code>encoder</code> — <code>libx264</code> (default) หรือ <code>nvenc</code> (GPU ถ้า ffmpeg รองรับ)
+              <br><code>start</code> / <code>end</code> — ตัดหัว/ท้าย (ไม่บังคับ): รูปแบบ <code>SS</code>, <code>MM:SS</code> หรือ <code>HH:MM:SS</code>, ว่าง = ไม่ตัด
               <br>ต้องระบุอย่างน้อยหนึ่งอย่าง: <code>target_width</code> หรือ <code>bitrate_kbps</code>
               <br>คิวเต็ม (มากกว่า {{ max_queued|default(5) }} งาน) → HTTP 429 · พื้นที่ดิสก์ไม่พอ → HTTP 507
             </p>
@@ -157,7 +158,9 @@
   -F "target_width=1280" \
   -F "bitrate_kbps=2000" \
   -F "crf=28" \
-  -F "preset=medium"</pre>
+  -F "preset=medium" \
+  -F "start=00:01:00" \
+  -F "end=00:02:00"</pre>
             </div>
             <div class="code-container">
               <div class="code-header">Response JSON (202 Accepted)</div>
