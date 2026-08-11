@@ -26,19 +26,52 @@ X264_PRESET_VALID = (
     "slower", "veryslow",
 )
 
+# Substrings in ffmpeg stderr that indicate NVENC is unusable at runtime even
+# though the binary may list h264_nvenc (e.g. the driver lib libnvidia-encode.so.1
+# is not loadable in the container, or the driver is too old). These are used by
+# both the availability probe and the worker's runtime fallback.
+NVENC_FAILURE_MARKERS: Tuple[str, ...] = (
+    "cannot load libnvidia-encode",
+    "minimum required nvidia driver",
+    "operation not permitted",
+)
+
 
 def is_nvenc_available() -> bool:
-    """Best-effort check that the local ffmpeg build supports h264_nvenc."""
+    """
+    Check that h264_nvenc is not just compiled in, but actually usable at
+    runtime. Listing the encoder via '-encoders' is not enough: a container may
+    ship an ffmpeg build with NVENC enabled while the driver library
+    (libnvidia-encode.so.1) is never mounted, which only fails at encode time.
+    A real tiny encode against a null output catches that case.
+    """
     try:
         res = subprocess.run(
-            ["ffmpeg", "-hide_banner", "-encoders"],
+            [
+                "ffmpeg", "-y", "-hide_banner",
+                "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=1",
+                "-frames:v", "2", "-c:v", "h264_nvenc", "-f", "null", "-",
+            ],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
             timeout=30,
         )
-        return "h264_nvenc" in (res.stdout + res.stderr)
+        if res.returncode != 0:
+            logger.warning(
+                f"NVENC availability probe failed: {res.stderr.strip()[-500:]}"
+            )
+            return False
+        return True
     except Exception as e:
         logger.warning(f"Failed to check NVENC availability: {e}")
         return False
+
+
+def is_nvenc_failure(stderr: str) -> bool:
+    """Return True if ffmpeg stderr indicates NVENC is unusable at runtime."""
+    if not stderr:
+        return False
+    lower = stderr.lower()
+    return any(marker in lower for marker in NVENC_FAILURE_MARKERS)
 
 
 def normalize_encoder(encoder: str) -> str:

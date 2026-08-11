@@ -429,6 +429,7 @@ def update_compress_job(
     output_height: Optional[int] = None,
     elapsed_seconds: Optional[float] = None,
     error_message: Optional[str] = None,
+    encoder: Optional[str] = None,
 ) -> None:
     """
     Dynamically update video compressor job fields in SQLite.
@@ -472,6 +473,9 @@ def update_compress_job(
     if error_message is not None:
         fields.append("error_message = ?")
         values.append(error_message)
+    if encoder is not None:
+        fields.append("encoder = ?")
+        values.append(encoder)
 
     if not fields:
         return

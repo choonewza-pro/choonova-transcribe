@@ -106,7 +106,7 @@ DEVICE=cpu uvicorn app.main:app --host 0.0.0.0 --port 8830
 | `PYTORCH_CUDA_ALLOC_CONF`   | `expandable_segments:True`        | PyTorch CUDA allocator config                                                  |
 | `MODEL_LOAD_MODE`           | `always`                          | Model VRAM residency mode: `always` / `idle` (seed value only, see below)      |
 | `MODEL_IDLE_TIMEOUT_SEC`    | `900`                             | Seconds of inactivity before unloading models in `idle` mode (seed value only) |
-| `COMPRESS_ENCODER`          | `libx264`                         | Video compressor encoder: `libx264` (software) / `nvenc` (GPU NVENC)           |
+| `COMPRESS_ENCODER`          | `libx264`                         | Video compressor encoder: `libx264` (software) / `nvenc` (GPU NVENC; auto-falls back to `libx264` if unusable at runtime)           |
 | `COMPRESS_PRESET`           | `medium`                          | Default x264 preset (ultrafast..veryslow)                                      |
 | `COMPRESS_CRF`              | `28`                              | Default encoder quality (1-51; higher = smaller)                               |
 | `COMPRESS_MAX_CONCURRENT`   | `1`                               | Max videos compressed at once (1 = strict queue)                               |
@@ -270,17 +270,73 @@ run_compress_job.py (isolated subprocess)
   ├─ 1. ffprobe → ความละเอียด / ความยาว / มีเสียงไหม
   ├─ 2. สร้างคำสั่ง FFmpeg (scale คงอัตราส่วน, bitrate/CRF, encoder libx264|nvenc)
   │      → progress % อัปเดตลง SQLite ทุก ~1 วิ (-progress pipe:1)
+  │      → ถ้า nvenc เปิด encoder ไม่ได้ที่ runtime (missing libnvidia-encode.so.1 / driver เก่า)
+  │        ระบบ auto-fallback เป็น libx264 และบันทึก encoder จริงที่ใช้ลง DB อัตโนมัติ
   ├─ 3. ตรวจ output → บันทึก output_path / ขนาด / ความละเอียด ลง SQLite
   └─ 4. ลบไฟล์ต้นฉบับทุกกรณี (สำเร็จ/ล้มเหลว/ยกเลิก/restart) — output เก็บตาม COMPRESS_RETENTION_HOURS
 ```
 
 - **ลด dimension คงอัตราส่วน**: `-vf scale=<width>:-2` (ค่า `-2` รักษาสัดส่วน + จำนวนคู่; ระบบห้ามขยายเกินไฟล์ต้นฉบับ)
 - **ลด bitrate**: `-b:v Nk -maxrate Nk -bufsize 2Nk` (หรือใช้ CRF `-crf` ถ้าไม่ได้ระบุ)
-- **Encoder**: `libx264` (default, ใช้ได้ทุกที่) หรือ `h264_nvenc` (GPU เร็วมาก ถ้า ffmpeg build รองรับ — เปลี่ยนผ่าน env `COMPRESS_ENCODER`)
+- **Encoder**: `libx264` (default, ใช้ได้ทุกที่) หรือ `h264_nvenc` (GPU เร็วมาก ถ้า ffmpeg build รองรับ — เปลี่ยนผ่าน env `COMPRESS_ENCODER`). ถ้าเลือก `nvenc` แล้ว runtime ใช้ไม่ได้ (เช่น ไม่มี `libnvidia-encode.so.1` ในคอนเทนเนอร์ หรือ driver เก่า) → ระบบ fallback เป็น `libx264` อัตโนมัติ + บันทึก encoder จริงที่ใช้ใน DB. **ใน Docker ต้องตั้ง env `NVIDIA_DRIVER_CAPABILITIES=video,compute,utility`** (ใน docker-compose.yml / docker-compose-km4u.yml แล้ว) ถึงจะ inject library NVENC เข้าไปในคอนเทนเนอร์ได้
 - **คิว**: รองรับพร้อมกันสูงสุด `COMPRESS_MAX_CONCURRENT` (default 1 = เข้มงวด 1 ไฟล์ต่อครั้ง), อัปโหลดเกิน `COMPRESS_MAX_QUEUED` → HTTP 429
 - ไฟล์ output จะถูกลบจากดิสก์อัตโนมัติหลัง `COMPRESS_RETENTION_HOURS` (default 24 ชม.) แต่ record ยังอยู่ใน DB
 - วิดีโอที่ไม่มีเสียง → FFmpeg ใช้ `-an` อัตโนมัติ
 - Output เป็น MP4 (H.264 + AAC 128k) เสมอ เข้ากันได้ทุกอุปกรณ์
+
+## ตรวจสอบ NVIDIA GPU / NVENC
+
+ตรวจ driver และ GPU บน Windows host (ต้องเห็น **NVIDIA-SMI ≥ 530.41.03** และชื่อ GPU ถูกต้อง):
+
+```
+nvidia-smi
+```
+
+```text
+Tue Aug 11 12:08:45 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 610.88                 KMD Version: 610.88        CUDA UMD Version: 13.3     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4080 ...  WDDM  |   00000000:01:00.0  On |                  N/A |
+| N/A   47C    P0             21W /  120W |    2007MiB /  12282MiB |      3%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+```
+
+ตรวจว่า GPU ถูก inject เข้า Docker container (ควรเห็น **Persistence-M: On** และชื่อ GPU เหมือน host):
+
+```
+docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi
+```
+
+```text
+Tue Aug 11 05:09:05 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 610.57.01              KMD Version: 610.88        CUDA UMD Version: 13.3     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4080 ...    On  |   00000000:01:00.0  On |                  N/A |
+| N/A   46C    P8              4W /  120W |    2000MiB /  12282MiB |     19%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+```
+
+ตรวจว่า NVENC library ถูก mount เข้า container (ต้องเห็น `libnvidia-encode.so.1` + `libnvcuvid.so.1`) และ encode ได้จริง:
+
+```
+docker exec <container> ls /usr/lib/x86_64-linux-gnu/ | grep -E 'libnvidia-encode|libnvcuvid'
+docker exec <container> ffmpeg -h encoder=h264_nvenc >/dev/null && echo "h264_nvenc OK"
+docker exec <container> ffmpeg -hide_banner -y -f lavfi -i testsrc=size=320x240:rate=30:duration=1 -frames:v 2 -c:v h264_nvenc -f null - && echo "NVENC encode OK"
+```
+
+ถ้าเจอ error `Cannot load libnvidia-encode.so.1` → ตั้ง `NVIDIA_DRIVER_CAPABILITIES=video,compute,utility` ใน `docker-compose.yml` / `docker-compose-km4u.yml` แล้ว `docker compose up -d` — หรือระบบจะ fallback เป็น `libx264` อัตโนมัติ
 
 ## Testing
 

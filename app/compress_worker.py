@@ -2,7 +2,7 @@ import os
 import time
 import asyncio
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from app.db import get_compress_job, update_compress_job
 from app.compress_utils import (
@@ -11,6 +11,7 @@ from app.compress_utils import (
     parse_progress_line,
     normalize_encoder,
     normalize_preset,
+    is_nvenc_failure,
 )
 from app.audio_utils import safe_delete_file, safe_delete_dir
 
@@ -49,6 +50,68 @@ def _maybe_write_terminal(job_id: str, status: str, **kwargs) -> bool:
         return False
     update_compress_job(job_id, status=status, **kwargs)
     return True
+
+
+async def _run_ffmpeg_encode(
+    job_id: str,
+    input_path: str,
+    output_path: str,
+    target_width: int,
+    bitrate_kbps: int,
+    crf: int,
+    preset: str,
+    encoder: str,
+    probe: dict,
+    duration: float,
+) -> Tuple[int, str]:
+    """
+    Run a single FFmpeg encode pass, streaming '-progress' into the DB.
+    Returns (returncode, stderr_tail). Raises only on subprocess setup errors;
+    a non-zero returncode is returned to the caller so it can decide whether to
+    retry with a different encoder (NVENC -> libx264 fallback).
+    """
+    cmd = build_compress_cmd(
+        input_path=input_path,
+        output_path=output_path,
+        target_width=target_width,
+        bitrate_kbps=bitrate_kbps,
+        crf=crf,
+        preset=preset,
+        encoder=encoder,
+        probe=probe,
+    )
+    logger.info(f"FFmpeg command: {' '.join(cmd)}")
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stderr_task = asyncio.ensure_future(_read_stderr_tail(proc.stderr))
+
+    last_progress_write = 0.0
+    last_pct = 2.0
+
+    async for raw in proc.stdout:
+        line = raw.decode("utf-8", errors="replace")
+        out_sec, is_end = parse_progress_line(line)
+        if is_end:
+            break
+        if out_sec is None or duration <= 0:
+            continue
+        pct = min(99.0, 2.0 + (out_sec / duration) * 97.0)
+        now = time.time()
+        if pct - last_pct >= 1.0 or now - last_progress_write >= PROGRESS_UPDATE_INTERVAL_SEC:
+            last_pct = pct
+            last_progress_write = now
+            update_compress_job(
+                job_id, progress_pct=pct,
+                current_stage=f"Compressing ({pct:.0f}%)",
+            )
+
+    returncode = await proc.wait()
+    stderr_tail = await stderr_task
+    return returncode, stderr_tail
 
 
 async def process_compress_job(
@@ -93,53 +156,38 @@ async def process_compress_job(
             f"has_audio={probe.get('has_audio')}, encoder={encoder}, preset={preset}"
         )
 
-        # ---- Step 2: build + run FFmpeg ----
+        # ---- Step 2: build + run FFmpeg (with NVENC -> libx264 fallback) ----
         update_compress_job(
             job_id, status="processing", progress_pct=2.0,
             current_stage="Starting FFmpeg encode",
         )
-        cmd = build_compress_cmd(
-            input_path=input_file_path,
-            output_path=output_path,
-            target_width=target_width,
-            bitrate_kbps=bitrate_kbps,
-            crf=crf,
-            preset=preset,
-            encoder=encoder,
-            probe=probe,
-        )
-        logger.info(f"FFmpeg command: {' '.join(cmd)}")
-
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stderr_task = asyncio.ensure_future(_read_stderr_tail(proc.stderr))
-
         duration = probe.get("duration_seconds", 0.0) or 0.0
-        last_progress_write = 0.0
-        last_pct = 2.0
 
-        async for raw in proc.stdout:
-            line = raw.decode("utf-8", errors="replace")
-            out_sec, is_end = parse_progress_line(line)
-            if is_end:
-                break
-            if out_sec is None or duration <= 0:
-                continue
-            pct = min(99.0, 2.0 + (out_sec / duration) * 97.0)
-            now = time.time()
-            if pct - last_pct >= 1.0 or now - last_progress_write >= PROGRESS_UPDATE_INTERVAL_SEC:
-                last_pct = pct
-                last_progress_write = now
-                update_compress_job(
-                    job_id, progress_pct=pct,
-                    current_stage=f"Compressing ({pct:.0f}%)",
-                )
+        returncode, stderr_tail = await _run_ffmpeg_encode(
+            job_id, input_file_path, output_path,
+            target_width, bitrate_kbps, crf, preset, encoder, probe, duration,
+        )
 
-        returncode = await proc.wait()
-        stderr_tail = await stderr_task
+        # NVENC is listed by the build but unusable at runtime (missing
+        # libnvidia-encode.so.1 / driver too old): retry once with libx264 so
+        # the job still completes instead of dying with a confusing exit 255.
+        if returncode != 0 and encoder == "nvenc" and is_nvenc_failure(stderr_tail):
+            logger.warning(
+                f"Compress {job_id}: NVENC unavailable at runtime, "
+                f"falling back to libx264: {stderr_tail.strip()[-300:]}"
+            )
+            encoder = "libx264"
+            preset = normalize_preset(preset, encoder)
+            update_compress_job(
+                job_id, encoder=encoder,
+                current_stage="NVENC unavailable; retrying with libx264",
+            )
+            logger.info(f"Retrying {job_id} with libx264 (preset={preset})")
+            returncode, stderr_tail = await _run_ffmpeg_encode(
+                job_id, input_file_path, output_path,
+                target_width, bitrate_kbps, crf, preset, encoder, probe, duration,
+            )
+
         if returncode != 0:
             raise RuntimeError(
                 f"FFmpeg exited with code {returncode}:\n{stderr_tail.strip()[-1000:]}"
