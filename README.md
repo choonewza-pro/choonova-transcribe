@@ -8,6 +8,8 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 
 > 🤖 โปรเจกต์นี้พัฒนาขึ้นด้วยความช่วยเหลือของ **DeepSeek V4 Flash Model** (AI Pair Programmer)
 
+> 💡 **For AI Coding Agents:** หากต้องการคำแนะนำการตั้งค่า คำสั่งติดตั้ง และสถาปัตยกรรมโปรเจกต์โดยละเอียด โปรดอ่าน [project-onboarding SKILL.md](file://.agents/skills/project-onboarding/SKILL.md) ก่อนดำเนินการ
+
 ## Modes
 
 1. **REST API** (`POST /v1/audio/transcribe`) — ถอดความไฟล์เสียงสั้น multipart upload
@@ -51,8 +53,8 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 │   ├── run_compress_job.py # Subprocess entrypoint for isolated compressor workers
 │   ├── templates/       # HTML pages (index, upload, realtime, media, jobs, compress, setting)
 │   └── static/          # CSS + JS (upload.js, realtime.js, media.js, jobs.js, model_status.js, settings.js)
-├── model/               # Model weights (typhoon-asr-realtime.nemo, git-ignored)
 ├── data/                # SQLite DB (choonova-transcribe.db) — optional, baked empty into Docker image
+├── model/               # Model weights (typhoon-asr-realtime.nemo, git-ignored)
 ├── Dockerfile           # GPU image (CUDA 12.1, PyTorch)
 ├── Dockerfile.cpu       # CPU-only image (also works on Mac M1–M4)
 ├── docker-compose.yml   # GPU compose (requires NVIDIA Docker + km4u-network)
@@ -60,7 +62,8 @@ Speech-to-Text API บริการภาษาไทย powered by **Typhoon 
 ├── docker-compose-cpu.yml  # CPU compose (Windows / Mac / Linux CPU)
 ├── requirements.txt     # GPU dependencies (CUDA 12.1 PyTorch index)
 ├── requirements-cpu.txt # CPU dependencies
-└── .env.example         # Environment template
+├── .env.example         # Environment template
+└── README.md            # Documentation & project manual
 ```
 
 ## Quick Start
