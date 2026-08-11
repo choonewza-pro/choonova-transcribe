@@ -467,7 +467,7 @@ async def compress_jobs_history_page(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="compress_jobs.html",
-        context={"active_page": "compress", "header_badge": "Compressor History"},
+        context={"active_page": "compress_jobs", "header_badge": "Compressor History"},
     )
 
 
