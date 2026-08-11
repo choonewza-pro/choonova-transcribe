@@ -677,3 +677,20 @@ def cleanup_expired_compress_jobs(hours: float = COMPRESS_RETENTION_HOURS) -> Li
         set_setting("COMPRESS_LAST_CLEANUP_COUNT", str(len(expired_ids)))
 
     return expired_ids
+
+
+def get_compress_retention_summary() -> Dict[str, Any]:
+    """
+    Returns summary of video compression retention settings and last cleanup info.
+    """
+    last_at = get_setting("COMPRESS_LAST_CLEANUP_AT")
+    try:
+        last_count = int(get_setting("COMPRESS_LAST_CLEANUP_COUNT", "0") or 0)
+    except (TypeError, ValueError):
+        last_count = 0
+    return {
+        "retention_hours": COMPRESS_RETENTION_HOURS,
+        "last_cleanup_at": last_at,
+        "last_cleanup_count": last_count,
+    }
+

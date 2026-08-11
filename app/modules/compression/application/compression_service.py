@@ -42,6 +42,11 @@ class CompressionService:
                 os.remove(job.output_path)
             except OSError:
                 pass
+        if getattr(job, "audio_extract_path", None) and os.path.exists(job.audio_extract_path):
+            try:
+                os.remove(job.audio_extract_path)
+            except OSError:
+                pass
         return self.repo.delete_job(job_id)
 
     def get_queued_jobs(self, limit: int = 10) -> List[CompressionJob]:

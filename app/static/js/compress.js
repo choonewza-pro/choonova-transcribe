@@ -1,10 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const API_KEY_STORAGE = 'typhoon_asr_api_key';
 
-  const apiKeyInput = document.getElementById('apiKeyInput');
-  const toggleApiKeyBtn = document.getElementById('toggleApiKeyBtn');
-  const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
-  const clearApiKeyLink = document.getElementById('clearApiKeyLink');
 
   const compressDropzone = document.getElementById('compressDropzone');
   const compressFileInput = document.getElementById('compressFileInput');
@@ -16,7 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const previewContainer = document.getElementById('compressPreviewContainer');
   const videoPreview = document.getElementById('compressVideoPreview');
   const sourceResInfo = document.getElementById('sourceResInfo');
-  const targetWidthInput = document.getElementById('targetWidth');
+  const targetWidthSelect = document.getElementById('targetWidthSelect');
+  const customTargetWidth = document.getElementById('customTargetWidth');
   const widthHint = document.getElementById('widthHint');
   const bitrateInput = document.getElementById('bitrateKbps');
   const crfSlider = document.getElementById('crfSlider');
@@ -114,48 +111,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let sourceWidth = 0;
   let sourceHeight = 0;
 
-  // --- API Key Management (same UX as the other pages) ---
   function getApiKey() {
-    return (apiKeyInput && apiKeyInput.value.trim()) || localStorage.getItem(API_KEY_STORAGE) || '';
+    return localStorage.getItem(API_KEY_STORAGE) || '';
   }
-  function maskApiKey(key) {
-    if (!key) return '••••••••';
-    if (key.length <= 8) return '•'.repeat(key.length);
-    return `${key.slice(0, 4)}••••${key.slice(-4)}`;
-  }
-  function initApiKeyUI() {
-    const inputGroup = document.getElementById('apiKeyInputGroup');
-    const savedState = document.getElementById('apiKeySavedState');
-    const mask = document.getElementById('apiKeyMask');
-    const saved = localStorage.getItem(API_KEY_STORAGE);
-    if (saved) {
-      if (inputGroup) inputGroup.style.display = 'none';
-      if (savedState) {
-        savedState.style.display = 'flex';
-        if (mask) mask.textContent = maskApiKey(saved);
-      }
-    } else {
-      if (inputGroup) inputGroup.style.display = 'block';
-      if (savedState) savedState.style.display = 'none';
-    }
-  }
-  if (saveApiKeyBtn) saveApiKeyBtn.addEventListener('click', () => {
-    const key = apiKeyInput ? apiKeyInput.value.trim() : '';
-    if (!key) { alert('Please enter an API key before saving.'); return; }
-    localStorage.setItem(API_KEY_STORAGE, key);
-    if (apiKeyInput) apiKeyInput.value = '';
-    initApiKeyUI();
-  });
-  if (clearApiKeyLink) clearApiKeyLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    localStorage.removeItem(API_KEY_STORAGE);
-    if (apiKeyInput) apiKeyInput.value = '';
-    initApiKeyUI();
-  });
-  if (toggleApiKeyBtn) toggleApiKeyBtn.addEventListener('click', () => {
-    if (apiKeyInput) apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
-  });
-  initApiKeyUI();
   loadRetentionInfo();
 
   // --- Formatting helpers ---
@@ -262,15 +220,62 @@ document.addEventListener('DOMContentLoaded', () => {
       if (sourceWidth && sourceHeight) {
         sourceResInfo.textContent = `ความละเอียดต้นฉบับ: ${sourceWidth} × ${sourceHeight}`;
       }
+      filterDropdownOptionsBySourceWidth();
       updateWidthHint();
     };
   }
 
-  // --- Live width preview (keeps aspect ratio, even height) ---
+  // --- Live width preview & option filtering ---
+  function filterDropdownOptionsBySourceWidth() {
+    if (!targetWidthSelect) return;
+    const options = targetWidthSelect.options;
+    let selectedWasHidden = false;
+
+    for (let i = 0; i < options.length; i++) {
+      const opt = options[i];
+      const val = parseInt(opt.value, 10);
+
+      // Skip 0 (Original) and 'custom'
+      if (opt.value === '0' || opt.value === 'custom') {
+        opt.hidden = false;
+        opt.disabled = false;
+        opt.style.display = '';
+        continue;
+      }
+
+      if (sourceWidth > 0 && val > sourceWidth) {
+        opt.hidden = true;
+        opt.disabled = true;
+        opt.style.display = 'none';
+        if (opt.selected) {
+          selectedWasHidden = true;
+        }
+      } else {
+        opt.hidden = false;
+        opt.disabled = false;
+        opt.style.display = '';
+      }
+    }
+
+    if (selectedWasHidden) {
+      targetWidthSelect.value = '0';
+      if (customTargetWidth) customTargetWidth.style.display = 'none';
+    }
+  }
+
+  function getSelectedTargetWidth() {
+    if (!targetWidthSelect) return 0;
+    const val = targetWidthSelect.value;
+    if (val === 'custom') {
+      return (customTargetWidth && parseInt(customTargetWidth.value, 10)) || 0;
+    }
+    return parseInt(val, 10) || 0;
+  }
+
   function updateWidthHint() {
-    const w = parseInt(targetWidthInput.value, 10) || 0;
+    const w = getSelectedTargetWidth();
     if (!w || !sourceWidth || !sourceHeight) {
-      widthHint.textContent = 'เว้นว่างหรือ 0 = ไม่ปรับขนาด • ระบบห้ามขยายเกินไฟล์ต้นฉบับ';
+      widthHint.textContent = 'เลือกขนาดมาตรฐาน หรือ 0 = ไม่ปรับขนาด • ระบบห้ามขยายเกินไฟล์ต้นฉบับ';
       return;
     }
     const clamped = Math.min(w, sourceWidth);
@@ -279,7 +284,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const suffix = clamped < w ? ' (จำกัดไม่เกินขนาดต้นฉบับ)' : '';
     widthHint.textContent = `→ ไฟล์จะถูกลดเหลือ ${clamped} × ${h} (คงอัตราส่วน)${suffix}`;
   }
-  targetWidthInput.addEventListener('input', updateWidthHint);
+
+  if (targetWidthSelect) {
+    targetWidthSelect.addEventListener('change', () => {
+      if (targetWidthSelect.value === 'custom') {
+        if (customTargetWidth) customTargetWidth.style.display = 'block';
+      } else {
+        if (customTargetWidth) customTargetWidth.style.display = 'none';
+      }
+      updateWidthHint();
+    });
+  }
+  if (customTargetWidth) {
+    customTargetWidth.addEventListener('input', updateWidthHint);
+  }
 
   crfSlider.addEventListener('input', () => { crfValue.textContent = crfSlider.value; });
 
@@ -359,12 +377,8 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     if (!selectedFile) return;
 
-    const widthVal = parseInt(targetWidthInput.value, 10) || 0;
+    const widthVal = getSelectedTargetWidth();
     const bitrateVal = parseInt(bitrateInput.value, 10) || 0;
-    if (!widthVal && !bitrateVal) {
-      openWarningModal('กรุณากรอกอย่างใดอย่างหนึ่ง: ความกว้างที่ต้องการ (px) หรือบิตเรต (kbps)');
-      return;
-    }
 
     const trimStartVal = parseTrimTimeSec(trimStartInput.value);
     const trimEndVal = parseTrimTimeSec(trimEndInput.value);
@@ -490,19 +504,64 @@ document.addEventListener('DOMContentLoaded', () => {
     sourceWidth = 0;
     sourceHeight = 0;
 
+    filterDropdownOptionsBySourceWidth();
     compressFileInput.value = '';
     compressFileName.textContent = '📁 ยังไม่ได้เลือกไฟล์';
     compressFileSize.textContent = '';
     previewContainer.style.display = 'none';
     videoPreview.src = '';
     sourceResInfo.textContent = '';
+    if (targetWidthSelect) targetWidthSelect.value = '0';
+    if (customTargetWidth) { customTargetWidth.value = ''; customTargetWidth.style.display = 'none'; }
+    updateWidthHint();
+
     startCompressBtn.disabled = true;
     startCompressBtn.innerHTML = '<span>🗜️ เริ่มบีบอัด</span>';
   }
 
   if (btnNewCompress) btnNewCompress.addEventListener('click', resetCompressUI);
 
+  let activeCompressJob = null;
+
+  async function downloadFileWithAuth(url, defaultFilename) {
+    try {
+      const headers = {};
+      const apiKey = getApiKey();
+      if (apiKey) headers['x-api-key'] = apiKey;
+
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const err = await res.json();
+          detail = err.detail || detail;
+        } catch (e2) {}
+        throw new Error(detail);
+      }
+
+      let filename = defaultFilename;
+      const disposition = res.headers.get('Content-Disposition');
+      if (disposition && disposition.includes('filename=')) {
+        const match = disposition.match(/filename=["']?([^"';]+)["']?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch (err) {
+      alert(`❌ ดาวน์โหลดล้มเหลว: ${err.message || err}`);
+    }
+  }
+
   function handleJobCompleted(job) {
+    activeCompressJob = job;
     resultSection.style.display = 'block';
     cancelCompressBtn.style.display = 'none';
 
@@ -521,16 +580,31 @@ document.addEventListener('DOMContentLoaded', () => {
     statJobId.textContent = `🆔 Job ID: ${job.job_id.substring(0, 8)}...`;
     statElapsed.textContent = `⚡ เวลาประมวลผล: ${formatSeconds(job.elapsed_seconds)}`;
 
-    btnDownload.href = `/v1/media/compress/jobs/${job.job_id}/download`;
-
     if (btnDownloadAudio && job.audio_extract_format && job.audio_exists) {
       btnDownloadAudio.style.display = 'inline-flex';
-      btnDownloadAudio.href = `/v1/media/compress/jobs/${job.job_id}/audio`;
     } else if (btnDownloadAudio) {
       btnDownloadAudio.style.display = 'none';
     }
 
     startCompressBtn.disabled = false;
     selectedFile = null;
+  }
+
+  if (btnDownload) {
+    btnDownload.addEventListener('click', () => {
+      if (!activeCompressJob) return;
+      const base = activeCompressJob.filename ? String(activeCompressJob.filename).replace(/\.[^/.]+$/, '') : activeCompressJob.job_id;
+      downloadFileWithAuth(`/v1/media/compress/jobs/${activeCompressJob.job_id}/download`, `${base}.mp4`);
+    });
+  }
+
+  if (btnDownloadAudio) {
+    btnDownloadAudio.addEventListener('click', () => {
+      if (!activeCompressJob) return;
+      const base = activeCompressJob.filename ? String(activeCompressJob.filename).replace(/\.[^/.]+$/, '') : activeCompressJob.job_id;
+      const fmt = activeCompressJob.audio_extract_format || 'wav';
+      const ext = fmt === 'mp3' ? 'mp3' : 'wav';
+      downloadFileWithAuth(`/v1/media/compress/jobs/${activeCompressJob.job_id}/audio`, `${base}_audio.${ext}`);
+    });
   }
 });

@@ -63,7 +63,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (toggleApiKeyBtn) {
     toggleApiKeyBtn.addEventListener('click', () => {
       if (apiKeyInput) {
-        apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
+        const isPassword = apiKeyInput.type === 'password';
+        apiKeyInput.type = isPassword ? 'text' : 'password';
+        toggleApiKeyBtn.textContent = isPassword ? '🙈' : '👁️';
+        toggleApiKeyBtn.title = isPassword ? 'ซ่อน API Key' : 'แสดง API Key';
       }
     });
   }

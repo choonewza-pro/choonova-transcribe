@@ -11,6 +11,9 @@ model/*.nemo
 .agents/skills/
 !.agents/skills/project-onboarding/
 !.agents/skills/project-onboarding/SKILL.md
+!.agents/skills/modular-hexagonal-architecture/
+!.agents/skills/modular-hexagonal-architecture/SKILL.md
+
 skills-lock.json
 .serena/
 

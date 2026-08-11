@@ -294,9 +294,19 @@
 
         <div class="option-grid">
           <div class="option-card">
-            <label class="option-label" for="targetWidth">📏 ลดความละเอียด (ความกว้าง px, คงอัตราส่วน)</label>
-            <input type="number" id="targetWidth" class="option-input" min="0" step="16" placeholder="เช่น 1280 (เว้นว่าง = ไม่ลด)">
-            <span class="option-hint" id="widthHint">เว้นว่างหรือ 0 = ไม่ปรับขนาด • ระบบห้ามขยายเกินไฟล์ต้นฉบับ</span>
+            <label class="option-label" for="targetWidthSelect">📏 ลดความละเอียด (ความกว้าง px, คงอัตราส่วน)</label>
+            <select id="targetWidthSelect" class="option-input">
+              <option value="0" selected>ไม่ปรับความละเอียด (Original / ต้นฉบับ)</option>
+              <option value="3840">4K Ultra HD (3840 px)</option>
+              <option value="2560">2K QHD (2560 px)</option>
+              <option value="1920">1080p Full HD (1920 px)</option>
+              <option value="1280">720p HD (1280 px)</option>
+              <option value="854">480p SD (854 px)</option>
+              <option value="640">360p SD (640 px)</option>
+              <option value="custom">⚙️ กำหนดเอง (Custom width px...)</option>
+            </select>
+            <input type="number" id="customTargetWidth" class="option-input" min="16" step="16" placeholder="ระบุความกว้าง px เช่น 1000" style="display: none; margin-top: 0.5rem;">
+            <span class="option-hint" id="widthHint">เลือกขนาดมาตรฐาน หรือ 0 = ไม่ปรับขนาด • ระบบห้ามขยายเกินไฟล์ต้นฉบับ</span>
           </div>
           <div class="option-card">
             <label class="option-label" for="bitrateKbps">🎚️ ลดบิตเรตวิดีโอ (kbps)</label>
@@ -387,8 +397,8 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
           <h3 style="font-size: 1.2rem;">✅ บีบอัดเสร็จสมบูรณ์</h3>
           <div style="display: flex; gap: 0.5rem;">
-            <a id="btnDownloadCompressed" class="btn-primary" href="#" target="_blank" style="text-decoration: none;">⬇️ ดาวน์โหลดไฟล์ MP4</a>
-            <a id="btnDownloadAudio" class="btn-primary" href="#" target="_blank" style="text-decoration: none; display: none;">🎵 ดาวน์โหลดเสียง</a>
+            <button type="button" id="btnDownloadCompressed" class="btn-primary">⬇️ ดาวน์โหลดไฟล์ MP4</button>
+            <button type="button" id="btnDownloadAudio" class="btn-primary" style="display: none;">🎵 ดาวน์โหลดเสียง</button>
             <button type="button" id="btnNewCompress" class="btn-secondary">🔄 บีบอัดไฟล์ใหม่</button>
           </div>
         </div>
@@ -466,6 +476,6 @@
     </div>
   </div>
 
-  <script src="/static/js/compress.js?v=4"></script>
+  <script src="/static/js/compress.js?v=5"></script>
 </body>
 </html>
