@@ -101,6 +101,162 @@
     }, intervalMs || 3000);
   }
 
+  // ============================================================
+  // Model Loading Dialog Modal Controller (Global)
+  // ============================================================
+  let dialogState = {
+    active: false,
+    timerId: null,
+    pollId: null,
+    startTime: 0,
+    onCancel: null,
+    targetEngine: 'auto',
+  };
+
+  const BADGE_CLASS = {
+    loaded: 'badge-loaded',
+    loading: 'badge-loading',
+    idle: 'badge-idle',
+  };
+
+  const BADGE_LABEL = {
+    loaded: '🟢 พร้อมใช้งาน',
+    loading: '🟡 กำลังโหลดเข้า VRAM...',
+    idle: '⚪ Idle (รอการโหลด)',
+  };
+
+  function updateModalBadges(data) {
+    const typhoonBadge = document.getElementById('modelLoadingTyphoonBadge');
+    const whisperBadge = document.getElementById('modelLoadingWhisperBadge');
+
+    if (typhoonBadge && data.typhoon_model_state) {
+      const state = data.typhoon_model_state;
+      typhoonBadge.className = `status-badge ${BADGE_CLASS[state] || 'badge-idle'}`;
+      typhoonBadge.textContent = BADGE_LABEL[state] || state;
+    }
+
+    if (whisperBadge && data.whisper_model_state) {
+      const state = data.whisper_model_state;
+      whisperBadge.className = `status-badge ${BADGE_CLASS[state] || 'badge-idle'}`;
+      whisperBadge.textContent = BADGE_LABEL[state] || state;
+    }
+  }
+
+  function formatTimer(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    const mm = String(mins).padStart(2, '0');
+    const ss = String(secs).padStart(2, '0');
+    return `${mm}:${ss}s`;
+  }
+
+  function showLoadingDialog(opts = {}) {
+    const backdrop = document.getElementById('modelLoadingBackdrop');
+    if (!backdrop) return;
+
+    dialogState.active = true;
+    dialogState.onCancel = typeof opts.onCancel === 'function' ? opts.onCancel : null;
+    dialogState.targetEngine = opts.engine || 'auto';
+    dialogState.startTime = Date.now();
+
+    const titleEl = document.getElementById('modelLoadingTitle');
+    const subtitleEl = document.getElementById('modelLoadingSubtitle');
+    const timerEl = document.getElementById('modelLoadingTimer');
+
+    if (titleEl && opts.title) titleEl.textContent = opts.title;
+    if (subtitleEl && opts.subtitle) subtitleEl.textContent = opts.subtitle;
+    if (timerEl) timerEl.textContent = '00:00s';
+
+    // Show backdrop
+    backdrop.style.display = 'flex';
+    backdrop.setAttribute('aria-hidden', 'false');
+
+    // Update initial status badges from last cached status
+    updateModalBadges(last);
+
+    // Timer tick
+    if (dialogState.timerId) clearInterval(dialogState.timerId);
+    dialogState.timerId = setInterval(() => {
+      if (!dialogState.active) return;
+      const elapsedSec = Math.floor((Date.now() - dialogState.startTime) / 1000);
+      if (timerEl) timerEl.textContent = formatTimer(elapsedSec);
+    }, 1000);
+
+    // Poll /healthz frequently (every 1s) while modal is open
+    if (dialogState.pollId) clearInterval(dialogState.pollId);
+    dialogState.pollId = setInterval(async () => {
+      if (!dialogState.active) return;
+      const data = await fetchStatus();
+      if (!data) return;
+
+      render(data);
+      updateModalBadges(data);
+
+      // Check if target engine is loaded
+      const target = dialogState.targetEngine;
+      let ready = false;
+      if (target === 'typhoon' && data.typhoon_model_state === 'loaded') ready = true;
+      else if (target === 'whisper' && data.whisper_model_state === 'loaded') ready = true;
+      else if (
+        (target === 'auto' || target === 'all') &&
+        (data.typhoon_model_state === 'loaded' || data.whisper_model_state === 'loaded')
+      ) {
+        ready = true;
+      }
+
+      if (ready && opts.autoClose !== false) {
+        // Automatically hide modal once model is loaded
+        hideLoadingDialog();
+      }
+    }, 1000);
+  }
+
+  function hideLoadingDialog() {
+    dialogState.active = false;
+    if (dialogState.timerId) {
+      clearInterval(dialogState.timerId);
+      dialogState.timerId = null;
+    }
+    if (dialogState.pollId) {
+      clearInterval(dialogState.pollId);
+      dialogState.pollId = null;
+    }
+
+    const backdrop = document.getElementById('modelLoadingBackdrop');
+    if (backdrop) {
+      backdrop.style.display = 'none';
+      backdrop.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function cancelLoadingDialog() {
+    const cancelCb = dialogState.onCancel;
+    hideLoadingDialog();
+    if (cancelCb) {
+      try {
+        cancelCb();
+      } catch (e) {
+        console.error('Error during ModelLoadingDialog cancel callback:', e);
+      }
+    }
+  }
+
+  // Setup DOM listener for Cancel button
+  function initModalEvents() {
+    const cancelBtn = document.getElementById('modelLoadingCancelBtn');
+    if (cancelBtn) {
+      cancelBtn.removeEventListener('click', cancelLoadingDialog);
+      cancelBtn.addEventListener('click', cancelLoadingDialog);
+    }
+  }
+
+  window.ModelLoadingDialog = {
+    show: showLoadingDialog,
+    hide: hideLoadingDialog,
+    cancel: cancelLoadingDialog,
+    isActive: () => dialogState.active,
+  };
+
   window.ModelStatus = {
     refresh: refresh,
     waitForReady: waitForReady,
@@ -111,9 +267,12 @@
 
   if (getBadgeEl()) {
     startPolling(3000);
+    initModalEvents();
   } else {
     document.addEventListener('DOMContentLoaded', function () {
       if (getBadgeEl()) startPolling(3000);
+      initModalEvents();
     });
   }
 })();
+

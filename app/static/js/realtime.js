@@ -347,13 +347,17 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Surface Typhoon model cold-load progress before connecting, so the user
-    // knows the first frames will be slow until the model is on VRAM.
-    if (window.ModelStatus) {
+    // Check if model loading dialog is needed
+    if (window.ModelStatus && window.ModelLoadingDialog) {
       const st = window.ModelStatus.getLast();
       if (st && st.typhoon_model_state !== 'loaded') {
-        micStatus.textContent = '⏳ กำลังโหลดโมเดลขึ้น VRAM (ครั้งแรก 10–60 วิ)... รอสักครู่';
-        micStatus.style.color = 'var(--accent-cyan)';
+        window.ModelLoadingDialog.show({
+          engine: 'typhoon',
+          title: 'กำลังโหลดโมเดล Typhoon ASR เข้า VRAM / RAM...',
+          onCancel: () => {
+            stopRecording();
+          }
+        });
       }
     }
 
@@ -405,11 +409,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (window.ModelStatus) {
         const st = window.ModelStatus.getLast();
         if (st && st.typhoon_model_state === 'loaded') {
+          if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
           setReadyMessage();
         } else {
           micStatus.textContent = '⏳ กำลังโหลดโมเดลขึ้น VRAM (ครั้งแรก 10–60 วิ)...';
           micStatus.style.color = 'var(--accent-cyan)';
           window.ModelStatus.waitForReady('typhoon', () => {
+            if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
             if (isRecording) setReadyMessage();
           });
         }
@@ -457,6 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function stopRecording() {
     isRecording = false;
+    if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
 
     if (interimTimer) {
       clearInterval(interimTimer);

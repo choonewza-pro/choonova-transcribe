@@ -175,6 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCancelBtn('failed');
     currentStageText.textContent = message;
     startJobBtn.disabled = false;
+    mediaDropzone.style.display = '';
   }
 
   function resetMediaUI() {
@@ -192,6 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
     mediaFileInput.value = '';
     mediaFileName.textContent = '📹 ลากไฟล์วิดีโอ/ไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์';
     mediaFileSize.textContent = '';
+    mediaDropzone.style.display = '';
     mediaPreviewContainer.style.display = 'none';
     videoPreview.src = '';
     audioPreview.src = '';
@@ -237,6 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!selectedFile) return;
 
     startJobBtn.disabled = true;
+    mediaDropzone.style.display = 'none';
     jobProgressSection.style.display = 'block';
     resultSection.style.display = 'none';
     updateProgress(0, 'อัปโหลดไฟล์ขึ้นเซิร์ฟเวอร์...');
@@ -280,22 +283,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = JSON.parse(xhr.responseText);
         activeJobId = data.job_id;
         updateProgress(10, 'เริ่มการประมวลผลเบื้องหลัง...');
+
+        // Check if model loading dialog should be shown
+        if (window.ModelStatus && window.ModelLoadingDialog) {
+          const st = window.ModelStatus.getLast();
+          const lang = (languageSelect && languageSelect.value) || 'th';
+          const targetEngine = lang === 'th' ? 'typhoon' : 'whisper';
+          if (st && st[targetEngine + '_model_state'] !== 'loaded') {
+            window.ModelLoadingDialog.show({
+              engine: targetEngine,
+              title: `กำลังโหลดโมเดล ${targetEngine === 'typhoon' ? 'Typhoon ASR' : 'Whisper'} เข้า VRAM / RAM...`,
+              onCancel: () => {
+                cancelActiveJob();
+              }
+            });
+          }
+        }
+
         startPollingJobStatus(activeJobId);
       } else {
+        if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
         try {
           const errData = JSON.parse(xhr.responseText);
           alert(`เกิดข้อผิดพลาดในการสร้างงาน: ${errData.detail || 'Unknown error'}`);
         } catch (ex) {
           alert(`เกิดข้อผิดพลาดในการอัปโหลด (${xhr.status})`);
         }
-    startJobBtn.disabled = false;
-    selectedFile = null;
-  }
+        startJobBtn.disabled = false;
+        mediaDropzone.style.display = '';
+        selectedFile = null;
+      }
     };
 
     xhr.onerror = () => {
+      if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
       alert('การเชื่อมต่อเครือข่ายล้มเหลวขณะอัปโหลดไฟล์');
       startJobBtn.disabled = false;
+      mediaDropzone.style.display = '';
     };
 
     xhr.send(formData);
@@ -330,14 +354,37 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStepper(job.current_stage, job.status);
         updateCancelBtn(job.status);
 
+        // Check if job is in model loading stage or model status is loading
+        if (job.status === 'processing' || job.status === 'queued') {
+          if (window.ModelStatus && window.ModelLoadingDialog) {
+            const st = window.ModelStatus.getLast();
+            const lang = (document.getElementById('languageSelect') && document.getElementById('languageSelect').value) || 'th';
+            const targetEngine = lang === 'th' ? 'typhoon' : 'whisper';
+            if (st && st[targetEngine + '_model_state'] === 'loading' && !window.ModelLoadingDialog.isActive()) {
+              window.ModelLoadingDialog.show({
+                engine: targetEngine,
+                title: 'กำลังโหลดโมเดลเข้า VRAM / RAM เพื่อถอดความวิดีโอ/สื่อ...',
+                onCancel: () => {
+                  if (typeof cancelActiveJob === 'function') {
+                    cancelActiveJob();
+                  }
+                }
+              });
+            }
+          }
+        }
+
         if (job.status === 'completed') {
+          if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
           stopPolling();
           handleJobCompleted(job);
         } else if (job.status === 'failed') {
+          if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
           stopPolling();
           alert(`กระบวนการถอดความล้มเหลว: ${job.error_message || 'Unknown error'}`);
           currentStageText.textContent = `❌ เกิดข้อผิดพลาด: ${job.error_message || 'Failed'}`;
           startJobBtn.disabled = false;
+          mediaDropzone.style.display = '';
         }
       } catch (err) {
         console.error('Error polling job status:', err);

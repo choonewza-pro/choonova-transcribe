@@ -105,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!selectedFile) return;
 
     transcribeBtn.disabled = true;
+    dropzone.style.display = 'none';
     cancelBtn.style.display = 'inline-flex';
     statusMessage.textContent = '⏳ กำลังส่งไฟล์และประมวลผลบน GPU...';
     statusMessage.style.color = 'var(--accent-cyan)';
@@ -126,27 +127,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // If the target engine is not resident on VRAM yet, surface the cold-start
     // load progress so the user knows why the first request takes longer.
     if (window.ModelStatus) {
-      const lang = (languageSelect && languageSelect.value) || 'th';
-      const engine = lang === 'th' ? 'typhoon' : 'whisper';
+    activeController = new AbortController();
+    const signal = activeController.signal;
+
+    // Check if model loading dialog is needed
+    const lang = (languageSelect && languageSelect.value) || 'th';
+    const targetEngine = lang === 'th' ? 'typhoon' : 'whisper';
+    let dialogShown = false;
+
+    if (window.ModelStatus && window.ModelLoadingDialog) {
       const st = window.ModelStatus.getLast();
-      if (st && st[engine + '_model_state'] && st[engine + '_model_state'] !== 'loaded') {
-        statusMessage.textContent = '⏳ กำลังโหลดโมเดลขึ้น VRAM (ครั้งแรกอาจใช้เวลา 10–60 วินาที)...';
-        statusMessage.style.color = 'var(--accent-cyan)';
-        window.ModelStatus.waitForReady(engine, () => {
-          statusMessage.textContent = '✅ โมเดลพร้อมแล้ว กำลังแปลงเสียง...';
-          statusMessage.style.color = 'var(--success)';
+      if (st && st[targetEngine + '_model_state'] !== 'loaded') {
+        dialogShown = true;
+        window.ModelLoadingDialog.show({
+          engine: targetEngine,
+          title: `กำลังโหลดโมเดล ${targetEngine === 'typhoon' ? 'Typhoon ASR' : 'Whisper'} เข้า VRAM / RAM...`,
+          onCancel: () => {
+            if (activeController) {
+              activeController.abort();
+            }
+          }
         });
       }
     }
-
-    const headers = {};
-    const apiKey = getApiKey();
-    if (apiKey) {
-      headers['x-api-key'] = apiKey;
-    }
-
-    activeController = new AbortController();
-    const signal = activeController.signal;
 
     try {
       const response = await fetch('/v1/audio/transcribe', {
@@ -155,6 +158,10 @@ document.addEventListener('DOMContentLoaded', () => {
         body: formData,
         signal: signal
       });
+
+      if (window.ModelLoadingDialog) {
+        window.ModelLoadingDialog.hide();
+      }
 
       const data = await response.json();
 
@@ -186,8 +193,13 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMessage.textContent = `❌ เกิดข้อผิดพลาด: ${data.detail || 'ไม่สามารถแปลงไฟล์เสียงได้'}`;
         statusMessage.style.color = 'var(--danger)';
         resultText.textContent = 'เกิดข้อผิดพลาดในการประมวลผล';
+        dropzone.style.display = '';
       }
     } catch (err) {
+      if (window.ModelLoadingDialog) {
+        window.ModelLoadingDialog.hide();
+      }
+      dropzone.style.display = '';
       if (err.name === 'AbortError') {
         statusMessage.textContent = '❌ ยกเลิกการแปลงเรียบร้อยแล้ว (Cancelled)';
         statusMessage.style.color = 'var(--danger)';
@@ -219,6 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     fileInput.value = '';
     fileNameDisplay.textContent = '📁 ลากไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์';
+    dropzone.style.display = '';
     transcribeBtn.disabled = true;
     transcribeBtn.innerHTML = '<span>🚀 เริ่มแปลงไฟล์เสียง (Transcribe)</span>';
     cancelBtn.style.display = 'none';

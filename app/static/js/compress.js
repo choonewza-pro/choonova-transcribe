@@ -334,6 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelCompressBtn.style.display = 'none';
     stageText.textContent = message;
     startCompressBtn.disabled = false;
+    compressDropzone.style.display = '';
   }
 
   async function cancelActiveJob() {
@@ -392,6 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     startCompressBtn.disabled = true;
+    compressDropzone.style.display = 'none';
     progressSection.style.display = 'block';
     resultSection.style.display = 'none';
     showQueueBanner(1, 1);
@@ -439,6 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
           detail
         );
         startCompressBtn.disabled = false;
+        compressDropzone.style.display = '';
         showQueueBanner(0, 0);
       }
     };
@@ -449,6 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'Network error — ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่ในภายหลัง'
       );
       startCompressBtn.disabled = false;
+      compressDropzone.style.display = '';
     };
     xhr.send(formData);
   });
@@ -483,6 +487,7 @@ document.addEventListener('DOMContentLoaded', () => {
           );
           startCompressBtn.disabled = false;
           cancelCompressBtn.style.display = 'none';
+          compressDropzone.style.display = '';
         }
       } catch (err) {
         console.error('Error polling compress job status:', err);
@@ -508,6 +513,7 @@ document.addEventListener('DOMContentLoaded', () => {
     compressFileInput.value = '';
     compressFileName.textContent = '📁 ยังไม่ได้เลือกไฟล์';
     compressFileSize.textContent = '';
+    compressDropzone.style.display = '';
     previewContainer.style.display = 'none';
     videoPreview.src = '';
     sourceResInfo.textContent = '';
