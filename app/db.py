@@ -98,11 +98,11 @@ def init_db() -> None:
             );
         """)
         cursor.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
             ("MODEL_LOAD_MODE", MODEL_LOAD_MODE_DEFAULT),
         )
         cursor.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
             ("MODEL_IDLE_TIMEOUT_SEC", str(MODEL_IDLE_TIMEOUT_SEC_DEFAULT)),
         )
         # Video compressor jobs (FFmpeg queue). Kept separate from the

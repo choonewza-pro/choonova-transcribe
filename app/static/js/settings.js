@@ -39,15 +39,40 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (saveApiKeyBtn) {
-    saveApiKeyBtn.addEventListener('click', () => {
+    saveApiKeyBtn.addEventListener('click', async () => {
       const key = apiKeyInput ? apiKeyInput.value.trim() : '';
       if (!key) {
-        alert('Please enter an API key before saving.');
+        alert('กรุณากรอก API Key ก่อนบันทึก');
         return;
       }
-      localStorage.setItem(API_KEY_STORAGE, key);
-      if (apiKeyInput) apiKeyInput.value = '';
-      initApiKeyUI();
+
+      saveApiKeyBtn.disabled = true;
+      const originalText = saveApiKeyBtn.textContent;
+      saveApiKeyBtn.textContent = '⏳ กำลังตรวจสอบ...';
+
+      try {
+        const testHeaders = {
+          'Content-Type': 'application/json',
+          'x-api-key': key
+        };
+        const res = await fetch('/v1/settings/model', { headers: testHeaders });
+        if (res.status === 401 || res.status === 403) {
+          alert('API Key ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง');
+          return;
+        } else if (!res.ok) {
+          throw new Error('HTTP ' + res.status);
+        }
+
+        localStorage.setItem(API_KEY_STORAGE, key);
+        if (apiKeyInput) apiKeyInput.value = '';
+        initApiKeyUI();
+        load();
+      } catch (e) {
+        alert('ไม่สามารถตรวจสอบ API Key ได้: ' + e.message);
+      } finally {
+        saveApiKeyBtn.textContent = originalText;
+        saveApiKeyBtn.disabled = false;
+      }
     });
   }
 
