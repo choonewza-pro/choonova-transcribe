@@ -60,21 +60,25 @@ ChooNova Transcribe follows a Pragmatic Modular Monolith + Hexagonal Architectur
 
 ## Quick Start
 
-The shortest path to running the service is via Docker. The image includes an empty SQLite database so it runs immediately without external dependencies. If you wish to persist job history across container restarts, mount the `./data:/app/data` volume in `docker-compose.yml`.
+### ขั้นตอนการติดตั้ง (Step by Step)
 
-**GPU (Requires NVIDIA Docker)**
-
-```bash
-docker compose up -d --build
-```
-
-**CPU (Windows / Mac / Linux)**
-
-```bash
-docker compose -f docker-compose-cpu.yml up -d --build
-```
-
-The service dashboard and API will be available at `http://localhost:8830/`.
+1. **ติดตั้ง Docker Desktop** (สำหรับ Windows ดูคำแนะนำและดาวน์โหลดได้ที่ [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/))
+2. **คัดลอกไฟล์ `.env.example` ไปเป็น `.env`**
+   ```bash
+   cp .env.example .env
+   ```
+3. **แก้ไขตัวแปร `GATEWAY_API_KEY` ในไฟล์ `.env`**  
+   โดยเปลี่ยนจาก `change-me-in-production` ไปเป็นรหัสผ่านสำหรับ authentication ที่คุณต้องการ
+4. **ติดตั้งและรันบน Docker Container**
+   - สำหรับ **Windows / Mac** ที่รันบน **CPU**:
+     ```bash
+     docker compose -f docker-compose-cpu.yml up -d --build
+     ```
+   - สำหรับ **Windows** ที่มี **NVIDIA GPU**:
+     ```bash
+     docker compose up -d --build
+     ```
+5. **เข้าใช้งาน** ที่ [http://localhost:8830](http://localhost:8830)
 
 ## Configuration
 
