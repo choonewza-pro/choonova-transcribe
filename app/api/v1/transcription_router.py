@@ -59,6 +59,12 @@ async def transcribe_audio(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+    if not check_disk_space(TEMP_JOBS_DIR, MIN_FREE_DISK_GB):
+        raise HTTPException(
+            status_code=507,
+            detail=f"Insufficient disk space. At least {MIN_FREE_DISK_GB} GB free disk space is required.",
+        )
+
     try:
         # Stream read in 1MB chunks, enforcing the max upload size (always > 0).
         max_audio_bytes = int(MAX_AUDIO_UPLOAD_SIZE_MB * 1024 * 1024)
