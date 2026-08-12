@@ -39,6 +39,8 @@ MAX_CHUNK_DURATION_SEC = float(os.getenv("MAX_CHUNK_DURATION_SEC", "60.0"))
 MAX_UPLOAD_SIZE_MB = float(os.getenv("MAX_UPLOAD_SIZE_MB", "0"))
 # Max upload size for the short audio endpoint in MB; always enforced (must be > 0).
 MAX_AUDIO_UPLOAD_SIZE_MB = float(os.getenv("MAX_AUDIO_UPLOAD_SIZE_MB", "50.0"))
+# Max duration in seconds for uploaded media to prevent GPU hogging (0 = unlimited, default 14400 = 4 hours)
+MAX_MEDIA_DURATION_SEC = float(os.getenv("MAX_MEDIA_DURATION_SEC", "14400.0"))
 
 # =========================================================================
 # Video Compressor (FFmpeg) configuration

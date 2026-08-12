@@ -3,6 +3,7 @@ import subprocess
 import logging
 import filetype
 from fastapi import HTTPException
+from app.core.config import MAX_MEDIA_DURATION_SEC
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,11 @@ def validate_with_ffprobe(filepath: str):
             duration = float(duration_str)
             if duration <= 0:
                 raise ValueError()
+            if MAX_MEDIA_DURATION_SEC > 0 and duration > MAX_MEDIA_DURATION_SEC:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Media duration ({duration:.1f}s) exceeds maximum allowed ({MAX_MEDIA_DURATION_SEC:.0f}s)."
+                )
         except ValueError:
             raise HTTPException(status_code=422, detail="Invalid media duration parsed.")
             
