@@ -26,9 +26,18 @@ ChooNova Transcribe is a high-performance audio transcription and media processi
 
 ChooNova Transcribe follows a Pragmatic Modular Monolith + Hexagonal Architecture:
 
-- **API Delivery**: FastAPI routers grouped by bounded context (Settings, Compression, Transcription, Realtime).
-- **Isolated Workers**: Long-running jobs (transcription and compression) execute in isolated subprocesses (`job_worker.py`, `run_compress_job.py`) to prevent top-level RAM/VRAM leaks. A watchdog process monitors and recovers from worker crashes.
+- **API Delivery**: FastAPI routers (`app/api/v1/`) use clean Hexagonal Architecture patterns, decoupling delivery from domain logic via service factories.
+- **Isolated Workers & Background Tasks (Legacy/Monolithic Hybrid)**: Long-running jobs (transcription and compression) and background watchdogs run as isolated subprocesses ([`job_worker.py`](file:///D:/_PROJECT_/choonova-transcribe/app/job_worker.py), [`compress_worker.py`](file:///D:/_PROJECT_/choonova-transcribe/app/compress_worker.py)) using monolithic connections ([`app/db.py`](file:///D:/_PROJECT_/choonova-transcribe/app/db.py)).
 - **CUDA Resilience**: Implements transient error retries (with backoff) and allocator corruption recovery via `cudaDeviceReset`.
+
+### Dual-Architecture Rationale (Mid-Migration)
+
+We intentionally maintain a hybrid architectural state where the API delivery layer is fully hexagonal, while worker subprocesses and background tasks utilize monolithic handlers. This design choice is driven by:
+
+1. **VRAM/RAM Containment**: Worker subprocesses require strict lazy loading of heavy deep learning packages (`PyTorch`/`NeMo`/`faster-whisper`). Keeping workers as lightweight monolithic CLI scripts prevents accidental package imports from polluting the main API process memory.
+2. **SQLite WAL Concurrency**: Subprocesses access the database concurrently with the FastAPI process. The monolithic database wrapper ([`app/db.py`](file:///D:/_PROJECT_/choonova-transcribe/app/db.py)) is production-hardened for SQLite concurrent write locks under WAL mode.
+3. **Pragmatic Complexity (Low ROI)**: Workers are simple linear CLI scripts (e.g., FFmpeg extraction -> Model Inference -> DB Update). Introducing interface port abstractions here would add boilerplates without real-world utility.
+
 
 ## Technology Stack
 
