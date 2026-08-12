@@ -39,5 +39,12 @@ class TestSettingsService(unittest.TestCase):
         self.assertEqual(repo.get_setting("MODEL_IDLE_TIMEOUT_SEC"), "600.0")
 
 
+    def test_get_real_execution_device(self):
+        from app.core.config import get_real_execution_device
+        device_str = get_real_execution_device()
+        self.assertIsInstance(device_str, str)
+        self.assertTrue(device_str.startswith("CPU") or device_str.startswith("GPU"))
+
+
 if __name__ == "__main__":
     unittest.main()

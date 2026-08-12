@@ -51,6 +51,7 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     service: str = "typhoon-asr-service"
     device: str
+    execution_device: str = "CPU"
     model_load_mode: str = "always"
     model_idle_timeout_sec: float = 900.0
     typhoon_model_state: str = "idle"
@@ -65,6 +66,8 @@ class ModelSettingsResponse(BaseModel):
     idle_timeout_sec: float
     typhoon_model_state: str
     whisper_model_state: str
+    execution_device: str = "CPU"
+
 
 class JobCreateResponse(BaseModel):
     status: str = "accepted"

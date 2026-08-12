@@ -70,3 +70,20 @@ MODEL_IDLE_TIMEOUT_SEC_DEFAULT = float(os.getenv("MODEL_IDLE_TIMEOUT_SEC", "900"
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "medium")
 WHISPER_COMPUTE_TYPE = "float16" if DEVICE == "cuda" else "int8"
 SUPPORTED_LANGUAGES = ("th", "en", "auto")
+
+
+def get_real_execution_device() -> str:
+    """
+    Detect actual compute device (CPU or GPU) at runtime using PyTorch CUDA check
+    and active GPU device name, rather than relying solely on the DEVICE env variable.
+    """
+    if DEVICE == "cuda":
+        try:
+            if torch.cuda.is_available():
+                gpu_name = torch.cuda.get_device_name(0)
+                return f"GPU ({gpu_name})" if gpu_name else "GPU"
+        except Exception:
+            pass
+        return "CPU (CUDA Unavailable)"
+    return "CPU"
+

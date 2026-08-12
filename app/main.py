@@ -38,6 +38,7 @@ from app.config import (
     HOST,
     PORT,
     DEVICE,
+    get_real_execution_device,
     GATEWAY_API_KEY,
     LOG_LEVEL,
     SERVICE_DIR,
@@ -531,6 +532,7 @@ async def health_check():
         status="ok",
         service="typhoon-asr-service",
         device=DEVICE,
+        execution_device=get_real_execution_device(),
         model_load_mode=current_model_load_mode(),
         model_idle_timeout_sec=current_idle_timeout_sec(),
         typhoon_model_state=states["typhoon"],
@@ -552,6 +554,7 @@ async def get_model_settings(authenticated: bool = Depends(verify_api_key)):
         idle_timeout_sec=current_idle_timeout_sec(),
         typhoon_model_state=states["typhoon"],
         whisper_model_state=states["whisper"],
+        execution_device=get_real_execution_device(),
     )
 
 
@@ -588,6 +591,7 @@ async def update_model_settings(
         idle_timeout_sec=timeout,
         typhoon_model_state=states["typhoon"],
         whisper_model_state=states["whisper"],
+        execution_device=get_real_execution_device(),
     )
 
 

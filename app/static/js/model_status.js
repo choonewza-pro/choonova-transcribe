@@ -41,9 +41,12 @@
     if (!badgeEl) return;
     const dot = (s) => `${STATE_DOT[s] || '⚪'} ${STATE_LABEL[s] || s}`;
     const modeLabel = MODE_LABEL[data.model_load_mode] || data.model_load_mode;
+    const execDevice = data.execution_device || (data.device ? data.device.toUpperCase() : 'CPU');
+    const deviceIcon = execDevice.includes('GPU') || execDevice.toLowerCase().includes('cuda') ? '🎮' : '💻';
     badgeEl.innerHTML =
-      `<div class="model-status-title">🌀 สถานะโมเดลบน VRAM</div>` +
+      `<div class="model-status-title">🌐 สถานะของเว็บไซต์</div>` +
       `<div class="model-status-body">` +
+      `<span class="model-status-item">${deviceIcon} ${execDevice}</span>` +
       `<span class="model-status-item">🌀 Typhoon: ${dot(data.typhoon_model_state)}</span>` +
       `<span class="model-status-item">🕊️ Whisper: ${dot(data.whisper_model_state)}</span>` +
       `<span class="model-status-item">⚙️ โหมด: ${modeLabel}</span>` +

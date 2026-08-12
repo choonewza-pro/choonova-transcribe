@@ -5,6 +5,7 @@ API Router for Runtime Model Settings.
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.core.config import get_real_execution_device
 from app.core.security import verify_api_key
 from app.modules.settings.adapters.outbound.sqlite_settings_repository import SQLiteSettingsRepository
 from app.modules.settings.application.settings_service import SettingsService
@@ -27,6 +28,7 @@ class ModelSettingsResponse(BaseModel):
     idle_timeout_sec: float
     typhoon_model_state: str = "unloaded"
     whisper_model_state: str = "unloaded"
+    execution_device: str = "CPU"
 
 
 @router.get("/model", response_model=ModelSettingsResponse)
@@ -46,6 +48,7 @@ async def get_model_settings(
         idle_timeout_sec=settings.model_idle_timeout_sec,
         typhoon_model_state=states.get("typhoon", "unloaded"),
         whisper_model_state=states.get("whisper", "unloaded"),
+        execution_device=get_real_execution_device(),
     )
 
 
@@ -70,4 +73,5 @@ async def update_model_settings(
         idle_timeout_sec=settings.model_idle_timeout_sec,
         typhoon_model_state=states.get("typhoon", "unloaded"),
         whisper_model_state=states.get("whisper", "unloaded"),
+        execution_device=get_real_execution_device(),
     )
