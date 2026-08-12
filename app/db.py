@@ -8,7 +8,7 @@ from datetime import datetime
 from app.config import (
     DATA_DIR,
     JOBS_DB_PATH,
-    CLEANUP_RETENTION_HOURS,
+    TRANSCRIBE_RETENTION_HOURS,
     TARGET_CHUNK_DURATION_SEC,
     MAX_CHUNK_DURATION_SEC,
     MODEL_LOAD_MODE_DEFAULT,
@@ -284,7 +284,7 @@ def delete_job(job_id: str) -> bool:
         return cursor.rowcount > 0
 
 
-def cleanup_expired_jobs(hours: int = CLEANUP_RETENTION_HOURS) -> List[str]:
+def cleanup_expired_jobs(hours: int = TRANSCRIBE_RETENTION_HOURS) -> List[str]:
     """
     Clean up jobs older than specified hours.
 

@@ -16,7 +16,7 @@
 
     <div class="glass-card">
       <div style="text-align: center; margin-bottom: 1.5rem;">
-        <img src="/static/choonova-transcribe-cover.jpg" alt="ChooNova Transcribe Cover" style="width: 100%; max-width: 860px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.4);">
+        <img src="/static/choonova-transcribe-cover-1.png" alt="ChooNova Transcribe Cover" style="width: 100%; max-width: 860px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.4);">
       </div>
       <h1>ChooNova Transcribe API Service</h1>
       <p class="subtitle">
@@ -70,7 +70,7 @@
         <a href="/media/transcribe" class="card-button">
           <div class="icon">🎬</div>
           <h3>3. ถอดไฟล์เสียงและวีดีโอ</h3>
-          <p>อัปโหลดวิดีโอ MP4, MKV, MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง) ประมวลผลเบื้องหลังอัตโนมัติ</p>
+          <p>อัปโหลดวิดีโอ MP4, MKV, MOV หรือไฟล์เสียงขนาดยาว (สูงสุด {% if max_upload_mb > 0 %}{{ max_upload_mb|int }}MB{% else %}ไม่จำกัดขนาด{% endif %}{% if max_media_duration_sec > 0 %} / {{ (max_media_duration_sec / 3600)|round(1) }} ชั่วโมง{% endif %}) ประมวลผลเบื้องหลังอัตโนมัติ</p>
         </a>
 
         <a href="/media/transcribe/jobs/history" class="card-button">

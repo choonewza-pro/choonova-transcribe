@@ -16,3 +16,4 @@ sentencepiece>=0.2.0
 transformers>=4.40.0
 numpy
 faster-whisper>=1.1.0
+filetype>=1.2.0

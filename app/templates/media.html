@@ -104,11 +104,7 @@
 
     <div class="glass-card">
       <h1>🎬 ถอดไฟล์เสียงและวีดีโอ</h1>
-      {% if max_upload_mb|default(0) > 0 %}
-      <p class="subtitle" style="margin-bottom: 1.5rem;">รองรับไฟล์วิดีโอ MP4, MKV, MOV หรือไฟล์เสียงขนาดยาว (สูงสุด {{ max_upload_mb|int }} MB / 3+ ชั่วโมง) ทำงานเบื้องหลังอัตโนมัติ</p>
-      {% else %}
-      <p class="subtitle" style="margin-bottom: 1.5rem;">รองรับไฟล์วิดีโอ MP4, MKV, MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง) ทำงานเบื้องหลังอัตโนมัติ</p>
-      {% endif %}
+      <p class="subtitle" style="margin-bottom: 1.5rem;">รองรับไฟล์วิดีโอ MP4, MKV, MOV หรือไฟล์เสียงขนาดยาว (สูงสุด {% if max_upload_mb > 0 %}{{ max_upload_mb|int }}MB{% else %}ไม่จำกัดขนาด{% endif %}{% if max_media_duration_sec > 0 %} / {{ (max_media_duration_sec / 3600)|round(1) }} ชั่วโมง{% endif %}) ทำงานเบื้องหลังอัตโนมัติ</p>
 
       
 

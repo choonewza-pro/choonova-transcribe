@@ -124,9 +124,14 @@ document.addEventListener('DOMContentLoaded', () => {
       formData.append('with_timestamps', 'true');
     }
 
+    const headers = {};
+    const apiKey = getApiKey();
+    if (apiKey) {
+      headers['x-api-key'] = apiKey;
+    }
+
     // If the target engine is not resident on VRAM yet, surface the cold-start
     // load progress so the user knows why the first request takes longer.
-    if (window.ModelStatus) {
     activeController = new AbortController();
     const signal = activeController.signal;
 
