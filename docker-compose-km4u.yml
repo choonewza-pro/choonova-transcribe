@@ -22,24 +22,11 @@ services:
     restart: unless-stopped
     # ports:
     #   - "8830:8830"
+    env_file:
+      - .env
     environment:
-      - HOST=0.0.0.0
-      - PORT=8830
-      - GATEWAY_API_KEY=${GATEWAY_API_KEY:-change-me-in-production}
+      - DEVICE=cpu
       - MODEL_PATH=/app/model/typhoon-asr-realtime.nemo
-      - DEVICE=cuda
-      - WHISPER_MODEL=large-v3-turbo
-      - HF_TOKEN=${HF_TOKEN:-}
-      - LOG_LEVEL=info
-      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-      - WATCHDOG_DELETE_ON_CRASH=false
-      - CUDA_RESET_BETWEEN_CHUNKS=true
-      # Model VRAM residency mode: always | idle. Seeded into the settings DB on first boot;
-      # afterwards it is editable at runtime via the dashboard / PUT /v1/settings/model.
-      - MODEL_LOAD_MODE=${MODEL_LOAD_MODE:-always}
-      - MODEL_IDLE_TIMEOUT_SEC=${MODEL_IDLE_TIMEOUT_SEC:-900}
-      - ALLOW_ACCESS_TRANSCRIBE_HISTORY=${ALLOW_ACCESS_TRANSCRIBE_HISTORY:-false}
-      - ALLOW_ACCESS_COMPRESS_HISTORY=${ALLOW_ACCESS_COMPRESS_HISTORY:-false}
       # Inject 'video' capability so NVENC libraries (libnvidia-encode.so.1 /
       # libnvcuvid.so.1) are mounted into the container.
       - NVIDIA_DRIVER_CAPABILITIES=video,compute,utility
