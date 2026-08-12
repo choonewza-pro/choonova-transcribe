@@ -19,7 +19,7 @@ from app.compress_utils import normalize_encoder, parse_trim_time
 from app.audio_utils import check_disk_space, safe_delete_dir
 from app.db import (
     create_compress_job, get_compress_job, list_compress_jobs, delete_compress_job, update_compress_job,
-    compress_job_queue_info, get_compress_retention_summary
+    compress_job_queue_info, get_compress_retention_summary, count_queued_compress_jobs
 )
 import logging
 logger = logging.getLogger("typhoon-asr-compress")
