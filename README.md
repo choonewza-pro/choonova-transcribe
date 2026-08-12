@@ -67,8 +67,11 @@ ChooNova Transcribe follows a Pragmatic Modular Monolith + Hexagonal Architectur
    ```bash
    cp .env.example .env
    ```
-3. **แก้ไขตัวแปร `GATEWAY_API_KEY` ในไฟล์ `.env`**  
-   โดยเปลี่ยนจาก `change-me-in-production` ไปเป็นรหัสผ่านสำหรับ authentication ที่คุณต้องการ
+3. **แก้ไขตัวแปรในไฟล์ `.env`**  
+   - เปลี่ยน `GATEWAY_API_KEY` จาก `change-me-in-production` ไปเป็นรหัสผ่านสำหรับ auth ที่ต้องการ
+   - กำหนดตัวแปร `DEVICE`:
+     - หากรันบน **CPU** ให้เปลี่ยนเป็น `DEVICE=cpu`
+     - หากรันบน **NVIDIA GPU** ให้เปลี่ยนเป็น `DEVICE=cuda`
 4. **ติดตั้งและรันบน Docker Container**
    - สำหรับ **Windows / Mac** ที่รันบน **CPU**:
      ```bash
