@@ -385,13 +385,13 @@
       <p class="subtitle" style="margin-bottom: 1.5rem;">เรียกดูข้อมูลการถอดเสียงของแต่ละรายการภายหลังได้ พร้อม export เป็นไฟล์ .txt / .srt / .json และจัดการไฟล์ media บนเครื่อง</p>
 
       {% if allow_access_transcribe_history %}
-      <div style="background: rgba(218, 54, 51, 0.08); border: 1px dashed var(--danger); border-radius: 12px; padding: 1.15rem 1.35rem; display: flex; align-items: flex-start; gap: 0.85rem; margin-bottom: 1.5rem; box-shadow: 0 8px 24px rgba(218, 54, 51, 0.05);">
-        <div style="font-size: 1.5rem; line-height: 1; color: #ff6b6b; animation: warning-pulse 1.5s infinite;">⚠️</div>
-        <div style="flex: 1;">
-          <h4 style="font-size: 0.95rem; font-weight: 600; color: #ff6b6b; margin-bottom: 0.25rem;">
+      <div style="background: rgba(218, 54, 51, 0.08); border: 1px dashed var(--danger); border-radius: 12px; padding: 1.15rem 1.35rem; display: flex; align-items: flex-start; gap: 0.85rem; margin-bottom: 1.5rem; box-shadow: 0 8px 24px rgba(218, 54, 51, 0.05); box-sizing: border-box; width: 100%;">
+        <div style="font-size: 1.5rem; line-height: 1; color: #ff6b6b; animation: warning-pulse 1.5s infinite; flex-shrink: 0;">⚠️</div>
+        <div style="flex: 1; min-width: 0; word-break: break-word; overflow-wrap: break-word;">
+          <h4 style="font-size: 0.95rem; font-weight: 600; color: #ff6b6b; margin-bottom: 0.25rem; word-break: break-word; overflow-wrap: break-word;">
             คำเตือน: หน้านี้เปิดให้เข้าถึงแบบสาธารณะ
           </h4>
-          <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">
+          <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4; word-break: break-word; overflow-wrap: break-word; margin: 0;">
             ระบบถูกกำหนดค่าให้ข้ามการตรวจจับ API Key ใน `.env` (`ALLOW_ACCESS_TRANSCRIBE_HISTORY=true`) ผู้ใช้งานทุกคนสามารถค้นหา ดาวน์โหลด และดูข้อความถอดเสียงได้ หากต้องการล็อกประวัติกรุณาเปลี่ยนเป็น `false`
           </p>
         </div>
