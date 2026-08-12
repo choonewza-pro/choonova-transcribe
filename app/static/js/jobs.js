@@ -262,12 +262,19 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeJobFilename = '';
 
   async function downloadFileWithAuth(url, defaultFilename) {
+    let cancelled = false;
+    const controller = new AbortController();
+    const overlay = _createDownloadOverlay(defaultFilename, () => {
+      cancelled = true;
+      controller.abort();
+    });
+    document.body.appendChild(overlay);
     try {
       const headers = {};
       const apiKey = getApiKey();
       if (apiKey) headers['x-api-key'] = apiKey;
 
-      const res = await fetch(url, { headers });
+      const res = await fetch(url, { headers, signal: controller.signal });
       if (!res.ok) {
         let detail = `HTTP ${res.status}`;
         try {
@@ -279,12 +286,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
       let filename = defaultFilename;
       const disposition = res.headers.get('Content-Disposition');
-      if (disposition && disposition.includes('filename=')) {
-        const match = disposition.match(/filename=["']?([^"';]+)["']?/);
-        if (match && match[1]) filename = match[1];
+      if (disposition) {
+        const utf8Match = disposition.match(/filename\*=UTF-8''([^;\s]+)/);
+        if (utf8Match && utf8Match[1]) {
+          filename = decodeURIComponent(utf8Match[1]);
+        } else if (disposition.includes('filename=')) {
+          const asciiMatch = disposition.match(/filename=["']?([^"';]+)["']?/);
+          if (asciiMatch && asciiMatch[1]) filename = asciiMatch[1];
+        }
       }
 
-      const blob = await res.blob();
+      const fnEl = overlay.querySelector('.download-filename');
+      if (fnEl) fnEl.textContent = filename;
+
+      const total = parseInt(res.headers.get('Content-Length') || '0', 10);
+      const reader = res.body.getReader();
+      const chunks = [];
+      let received = 0;
+      const indeterminate = total === 0;
+      const fill = overlay.querySelector('.progress-bar-fill');
+      const pctText = overlay.querySelector('.download-progress-text');
+      const container = overlay.querySelector('.progress-bar-container');
+
+      if (indeterminate && container) {
+        container.classList.add('download-progress-indeterminate');
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        if (!indeterminate && fill && pctText) {
+          const pct = Math.round((received / total) * 100);
+          fill.style.width = pct + '%';
+          pctText.textContent = pct + '%';
+        }
+      }
+
+      const blob = new Blob(chunks);
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
@@ -294,8 +334,32 @@ document.addEventListener('DOMContentLoaded', () => {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
     } catch (err) {
+      if (cancelled) return;
       alert(`❌ ดาวน์โหลดล้มเหลว: ${err.message || err}`);
+    } finally {
+      overlay.remove();
     }
+  }
+
+  function _createDownloadOverlay(filename, onCancel) {
+    const dlg = document.createElement('div');
+    dlg.className = 'model-loading-backdrop';
+    dlg.innerHTML = [
+      '<div class="download-progress-dialog">',
+      '  <div class="download-progress-title">กำลังดาวน์โหลด...</div>',
+      '  <div class="download-filename">' + filename.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') + '</div>',
+      '  <div class="progress-bar-container">',
+      '    <div class="progress-bar-fill" style="width:0%"></div>',
+      '  </div>',
+      '  <div class="download-progress-text">0%</div>',
+      '  <button class="download-cancel-btn">ยกเลิก</button>',
+      '</div>',
+    ].join('');
+    dlg.querySelector('.download-cancel-btn').addEventListener('click', function(e) {
+      onCancel();
+      dlg.remove();
+    });
+    return dlg;
   }
 
   // --- View Transcript Modal ---
