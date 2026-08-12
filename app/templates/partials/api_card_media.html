@@ -351,6 +351,16 @@
               <div class="code-header">Supported Formats</div>
               <pre>export_format: txt | srt | json</pre>
             </div>
+            <div class="code-container">
+              <div class="code-header">Response (200 OK)</div>
+              <pre>File stream (text/plain, text/plain, or application/json)</pre>
+            </div>
+            <div class="code-container">
+              <div class="code-header">Response JSON (404 Not Found)</div>
+              <pre>{
+  "detail": "Job not found or transcription not completed."
+}</pre>
+            </div>
           </div>
         </details>
       </div>
