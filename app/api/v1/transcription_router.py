@@ -211,7 +211,7 @@ async def create_transcription_job(
 
     # Insert job into SQLite
     create_job(
-        job_id=job_id,
+        id=job_id,
         filename=file.filename,
         file_size_bytes=total_bytes,
         language=lang,
@@ -228,7 +228,7 @@ async def create_transcription_job(
 
     return JobCreateResponse(
         status="accepted",
-        job_id=job_id,
+        id=job_id,
         filename=file.filename,
         language=lang,
         message="Job created and enqueued for long-form video transcription",
@@ -250,12 +250,11 @@ async def list_transcription_jobs(
     jobs = list_jobs(limit=limit, status_filter=status_filter)
     for job in jobs:
         job["media_files_exist"] = dir_has_files(
-            os.path.join(TEMP_JOBS_DIR, job["job_id"])
+            os.path.join(TEMP_JOBS_DIR, job["id"])
         )
         if not include_text:
-            job.pop("result_text", None)
-            job.pop("srt_text", None)
-            job.pop("timestamps_json", None)
+            job.pop("result", None)
+            job.pop("result_json", None)
     return jobs
 
 
@@ -297,7 +296,7 @@ async def cancel_transcription_job(
     job_dir = os.path.join(TEMP_JOBS_DIR, job_id)
     
     if job.get("status") in ["queued", "processing"]:
-        update_job_status(job_id, status="cancelled")
+        update_job_status(id=job_id, status="cancelled")
         safe_delete_dir(job_dir)
         return {"status": "success", "message": f"Job {job_id} cancelled."}
     else:
@@ -367,16 +366,19 @@ async def export_job_result(
 
     export_format = export_format.lower()
     safe_name = os.path.splitext(job.get("filename", "transcript"))[0]
+    result = job.get("result") or {}
 
     if export_format == "txt":
-        content = job.get("result_text") or ""
+        content = result.get("text", "")
         return Response(
             content=content,
             media_type="text/plain; charset=utf-8",
             headers={"Content-Disposition": _attachment_header(safe_name, "txt")},
         )
     elif export_format == "srt":
-        content = job.get("srt_text") or ""
+        from app.job_worker import build_srt_subtitles
+        segments = result.get("segments", [])
+        content = build_srt_subtitles(segments)
         return Response(
             content=content,
             media_type="application/x-subrip; charset=utf-8",
@@ -384,11 +386,11 @@ async def export_job_result(
         )
     elif export_format == "json":
         data = {
-            "job_id": job["job_id"],
+            "id": job["id"],
             "filename": job["filename"],
-            "duration_seconds": job["duration_seconds"],
-            "text": job.get("result_text"),
-            "timestamps": job.get("timestamps"),
+            "duration": job["duration"],
+            "text": result.get("text"),
+            "segments": result.get("segments"),
         }
         return JSONResponse(
             content=data,

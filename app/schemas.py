@@ -1,5 +1,38 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Literal
+from enum import Enum
+
+class JobStatus(str, Enum):
+    queued = "queued"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+    cancelled = "cancelled"
+
+class JobStage(str, Enum):
+    queued = "queued"
+    uploading = "uploading"
+    extracting_audio = "extracting_audio"
+    chunking = "chunking"
+    transcribing = "transcribing"
+    building_result = "building_result"
+    saving_result = "saving_result"
+    cleanup = "cleanup"
+    completed = "completed"
+
+class JobError(BaseModel):
+    code: str
+    message: str
+    retryable: bool = False
+
+class TranscriptionSegment(BaseModel):
+    text: str
+    start: float
+    end: float
+
+class TranscriptionResult(BaseModel):
+    text: str
+    segments: Optional[List[TranscriptionSegment]] = None
 
 class TimestampItem(BaseModel):
     word: str
@@ -35,38 +68,41 @@ class ModelSettingsResponse(BaseModel):
 
 class JobCreateResponse(BaseModel):
     status: str = "accepted"
-    job_id: str
+    id: str
     filename: str
     language: str = "th"
     message: str = "Job created and enqueued for background processing"
 
 class JobStatusResponse(BaseModel):
-    job_id: str
+    id: str
+    type: str = "transcription"
     filename: str
     file_size_bytes: int = 0
     language: str = "th"
-    status: str
-    progress_pct: float
-    current_stage: str
+    model: Optional[str] = None
+    status: JobStatus
+    stage: str
+    progress: float
     total_chunks: int = 0
     completed_chunks: int = 0
-    duration_seconds: float = 0.0
-    elapsed_seconds: float = 0.0
+    duration: float = 0.0
+    processing_time: float = 0.0
+    rtf: Optional[float] = None
     target_chunk_sec: float = 30.0
     max_chunk_sec: float = 60.0
-    result_text: Optional[str] = None
-    srt_text: Optional[str] = None
-    timestamps: Optional[List[TimestampItem]] = None
-    error_message: Optional[str] = None
+    result: Optional[TranscriptionResult] = None
+    error: Optional[JobError] = None
     created_at: str
     updated_at: str
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
 
 class JobListItem(BaseModel):
-    job_id: str
+    id: str
     filename: str
-    status: str
-    progress_pct: float
-    current_stage: str
+    status: JobStatus
+    progress: float
+    stage: str
     created_at: str
 
 class CompressJobCreateResponse(BaseModel):
