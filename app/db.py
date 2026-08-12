@@ -9,8 +9,10 @@ from app.config import (
     DATA_DIR,
     JOBS_DB_PATH,
     TRANSCRIBE_RETENTION_HOURS,
-    TARGET_CHUNK_DURATION_SEC,
-    MAX_CHUNK_DURATION_SEC,
+    TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC,
+    TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC,
+    TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC,
+    TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC,
     MODEL_LOAD_MODE_DEFAULT,
     MODEL_IDLE_TIMEOUT_SEC_DEFAULT,
     COMPRESS_RETENTION_HOURS,
@@ -62,11 +64,11 @@ def init_db() -> None:
             )
         if "target_chunk_sec" not in columns:
             cursor.execute(
-                f"ALTER TABLE jobs ADD COLUMN target_chunk_sec REAL DEFAULT {TARGET_CHUNK_DURATION_SEC}"
+                "ALTER TABLE jobs ADD COLUMN target_chunk_sec REAL DEFAULT 30.0"
             )
         if "max_chunk_sec" not in columns:
             cursor.execute(
-                f"ALTER TABLE jobs ADD COLUMN max_chunk_sec REAL DEFAULT {MAX_CHUNK_DURATION_SEC}"
+                "ALTER TABLE jobs ADD COLUMN max_chunk_sec REAL DEFAULT 60.0"
             )
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
@@ -153,12 +155,20 @@ def create_job(
     filename: str,
     file_size_bytes: int = 0,
     language: str = "th",
-    target_chunk_sec: float = TARGET_CHUNK_DURATION_SEC,
-    max_chunk_sec: float = MAX_CHUNK_DURATION_SEC,
+    target_chunk_sec: Optional[float] = None,
+    max_chunk_sec: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Insert a new job record in SQLite with status='queued'.
     """
+    if target_chunk_sec is None or max_chunk_sec is None:
+        if language == "th":
+            target_chunk_sec = target_chunk_sec or TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC
+            max_chunk_sec = max_chunk_sec or TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC
+        else:
+            target_chunk_sec = target_chunk_sec or TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC
+            max_chunk_sec = max_chunk_sec or TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC
+
     now = datetime.utcnow().isoformat()
     with get_db_connection() as conn:
         cursor = conn.cursor()

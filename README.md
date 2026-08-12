@@ -92,6 +92,10 @@ Application behavior is controlled via environment variables. Copy `.env.example
 | `COMPRESS_MAX_QUEUED`        | `10`                      | No       | Maximum jobs waiting in compression queue.                                  |
 | `COMPRESS_RETENTION_HOURS`   | `24`                      | No       | Hours to retain compressed output files on disk.                            |
 | `TRANSCRIBE_RETENTION_HOURS` | `24`                      | No       | Hours to retain transcription media files on disk.                          |
+| `TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC` | `45.0` | No | Target chunk size for Typhoon ASR (Thai) silence-based splitting. |
+| `TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC` | `90.0` | No | Max chunk size for Typhoon ASR (Thai) silence-based splitting. |
+| `TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC` | `25.0` | No | Target chunk size for Whisper (English/Auto) silence-based splitting. |
+| `TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC` | `30.0` | No | Max chunk size for Whisper (English/Auto) silence-based splitting. |
 | `MAX_AUDIO_UPLOAD_SIZE_MB`   | `50.0`                    | No       | Size limit for synchronous audio endpoint.                                  |
 | `MAX_UPLOAD_SIZE_MB`         | `0`                       | No       | Size limit for async long-form jobs (0 = unlimited).                        |
 | `MAX_MEDIA_DURATION_SEC`     | `21600.0`                 | No       | Max duration in seconds for uploaded media to prevent GPU hogging.          |

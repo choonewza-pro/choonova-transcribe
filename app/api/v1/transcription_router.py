@@ -13,7 +13,9 @@ from app.core.security import verify_api_key
 from app.core.state import _active_workers
 from app.core.media_validator import validate_magic_bytes, validate_extension, validate_with_ffprobe, secure_filename
 from app.config import (
-    MAX_AUDIO_UPLOAD_SIZE_MB, MAX_UPLOAD_SIZE_MB, TARGET_CHUNK_DURATION_SEC, MAX_CHUNK_DURATION_SEC,
+    MAX_AUDIO_UPLOAD_SIZE_MB, MAX_UPLOAD_SIZE_MB, 
+    TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC, TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC,
+    TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC, TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC,
     TEMP_JOBS_DIR, MIN_FREE_DISK_GB, SERVICE_DIR
 )
 from app.schemas import TranscribeResponse, JobCreateResponse, JobStatusResponse
@@ -117,8 +119,8 @@ async def transcribe_audio(
 async def create_transcription_job(
     file: UploadFile = File(...),
     language: str = Form("th"),
-    target_chunk_sec: float = Form(TARGET_CHUNK_DURATION_SEC),
-    max_chunk_sec: float = Form(MAX_CHUNK_DURATION_SEC),
+    target_chunk_sec: float = Form(None),
+    max_chunk_sec: float = Form(None),
     authenticated: bool = Depends(verify_api_key),
 ):
     """
@@ -129,7 +131,7 @@ async def create_transcription_job(
     'auto' (Whisper auto-detect for Thai/English mixed audio).
 
     target_chunk_sec / max_chunk_sec: chunk duration bounds for silence-based splitting.
-    Defaults come from env (TARGET_CHUNK_DURATION_SEC / MAX_CHUNK_DURATION_SEC).
+    Defaults come from env based on the selected language model.
     """
     if not file.filename:
         raise HTTPException(
@@ -138,16 +140,24 @@ async def create_transcription_job(
 
     validate_extension(file.filename)
 
+    try:
+        lang = normalize_language(language)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+        
+    if target_chunk_sec is None or max_chunk_sec is None:
+        if lang == "th":
+            target_chunk_sec = target_chunk_sec or TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC
+            max_chunk_sec = max_chunk_sec or TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC
+        else:
+            target_chunk_sec = target_chunk_sec or TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC
+            max_chunk_sec = max_chunk_sec or TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC
+
     if not (0 < target_chunk_sec <= max_chunk_sec):
         raise HTTPException(
             status_code=422,
             detail="target_chunk_sec must be greater than 0 and not exceed max_chunk_sec.",
         )
-
-    try:
-        lang = normalize_language(language)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
 
     if not check_disk_space(TEMP_JOBS_DIR, MIN_FREE_DISK_GB):
         raise HTTPException(

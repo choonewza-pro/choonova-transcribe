@@ -10,8 +10,8 @@ import soundfile as sf
 from app.config import (
     MODEL_PATH,
     DEVICE,
-    TARGET_CHUNK_DURATION_SEC,
-    MAX_CHUNK_DURATION_SEC,
+    TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC,
+    TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC,
 )
 
 logger = logging.getLogger("typhoon-asr-engine")
@@ -244,9 +244,9 @@ class TyphoonASREngine:
         try:
             # Auto-chunk long audio to avoid PyTorch CUDA Caching Allocator memory assertion errors.
             # Guarded by is_chunk flag to prevent infinite recursion.
-            if not is_chunk and audio_duration > MAX_CHUNK_DURATION_SEC:
+            if not is_chunk and audio_duration > TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC:
                 logger.info(
-                    f"Audio duration ({audio_duration:.1f}s) exceeds max chunk limit ({MAX_CHUNK_DURATION_SEC}s). "
+                    f"Audio duration ({audio_duration:.1f}s) exceeds max chunk limit ({TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC}s). "
                     f"Auto-chunking audio..."
                 )
                 from app.audio_utils import split_audio_silence, safe_delete_dir
@@ -256,8 +256,8 @@ class TyphoonASREngine:
                     chunks = split_audio_silence(
                         processed_file,
                         chunks_dir,
-                        target_chunk_sec=TARGET_CHUNK_DURATION_SEC,
-                        max_chunk_sec=MAX_CHUNK_DURATION_SEC,
+                        target_chunk_sec=TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC,
+                        max_chunk_sec=TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC,
                     )
                     combined_texts = []
                     combined_timestamps = []

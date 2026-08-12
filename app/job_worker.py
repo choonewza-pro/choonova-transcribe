@@ -8,8 +8,10 @@ from datetime import timedelta
 
 from app.config import (
     TEMP_JOBS_DIR,
-    TARGET_CHUNK_DURATION_SEC,
-    MAX_CHUNK_DURATION_SEC,
+    TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC,
+    TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC,
+    TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC,
+    TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC,
 )
 from app.db import update_job_status, get_job
 from app.audio_utils import (
@@ -245,14 +247,23 @@ async def process_transcription_job(
             current_stage="Extracting Audio",
         )
 
-        # Chunk settings: prefer per-job values stored in DB at creation time,
-        # fall back to env defaults for jobs created before the columns existed.
         job = get_job(job_id)
+        
+        # Fallback to language-specific defaults if job was created before columns existed
+        fallback_target = (
+            TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC if language == "th" 
+            else TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC
+        )
+        fallback_max = (
+            TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC if language == "th" 
+            else TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC
+        )
+        
         target_chunk_sec = (
-            job.get("target_chunk_sec") if job and job.get("target_chunk_sec") else TARGET_CHUNK_DURATION_SEC
+            job.get("target_chunk_sec") if job and job.get("target_chunk_sec") else fallback_target
         )
         max_chunk_sec = (
-            job.get("max_chunk_sec") if job and job.get("max_chunk_sec") else MAX_CHUNK_DURATION_SEC
+            job.get("max_chunk_sec") if job and job.get("max_chunk_sec") else fallback_max
         )
 
         extracted_wav = os.path.join(job_dir, "extracted_audio.wav")
