@@ -62,6 +62,19 @@ if requested_device == "cuda" and torch.cuda.is_available():
 else:
     DEVICE = "cpu"
 
+# Limit PyTorch CPU threads to prevent thread over-subscription / CPU thrashing in CPU mode
+if DEVICE == "cpu":
+    try:
+        cpu_threads = int(os.getenv("TORCH_THREAD_LIMIT", "4"))
+        torch.set_num_threads(cpu_threads)
+        os.environ["OMP_NUM_THREADS"] = str(cpu_threads)
+        os.environ["MKL_NUM_THREADS"] = str(cpu_threads)
+        os.environ["OPENBLAS_NUM_THREADS"] = str(cpu_threads)
+        os.environ["VECLIB_MAXIMUM_THREADS"] = str(cpu_threads)
+        os.environ["NUMEXPR_NUM_THREADS"] = str(cpu_threads)
+    except Exception:
+        pass
+
 # Model VRAM residency mode defaults
 MODEL_LOAD_MODE_DEFAULT = os.getenv("MODEL_LOAD_MODE", "always").lower()
 MODEL_IDLE_TIMEOUT_SEC_DEFAULT = float(os.getenv("MODEL_IDLE_TIMEOUT_SEC", "900"))
