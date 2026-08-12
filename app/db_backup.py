@@ -24,23 +24,6 @@ from app.config import (
 logger = logging.getLogger("typhoon-asr-db")
 
 
-VALID_TRANSITIONS = {
-    'queued': ['processing', 'cancelled'],
-    'processing': ['completed', 'failed', 'cancelled'],
-    'completed': [],
-    'failed': [],
-    'cancelled': [],
-}
-
-def validate_job_transition(current_status: str, new_status: str) -> None:
-    if current_status and new_status and current_status != new_status:
-        allowed = VALID_TRANSITIONS.get(current_status, [])
-        if new_status not in allowed:
-            logger.warning(f"Invalid state transition attempted: {current_status} -> {new_status}")
-            raise ValueError(f"Invalid state transition from {current_status} to {new_status}")
-
-
-
 from app.core.db import get_db_connection
 
 
@@ -70,11 +53,7 @@ def init_db() -> None:
                 srt_text TEXT,
                 error_message TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                started_at TIMESTAMP,
-                completed_at TIMESTAMP,
-                failed_at TIMESTAMP,
-                cancelled_at TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
         # Migrations for existing databases created before newer columns existed.
@@ -91,9 +70,6 @@ def init_db() -> None:
             cursor.execute(
                 "ALTER TABLE jobs ADD COLUMN max_chunk_sec REAL DEFAULT 60.0"
             )
-        for col in ["started_at", "completed_at", "failed_at", "cancelled_at"]:
-            if col not in columns:
-                cursor.execute(f"ALTER TABLE jobs ADD COLUMN {col} TIMESTAMP")
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
         """)
@@ -107,11 +83,7 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                started_at TIMESTAMP,
-                completed_at TIMESTAMP,
-                failed_at TIMESTAMP,
-                cancelled_at TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
         cursor.execute(
@@ -150,11 +122,7 @@ def init_db() -> None:
                 elapsed_seconds REAL DEFAULT 0.0,
                 error_message TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                started_at TIMESTAMP,
-                completed_at TIMESTAMP,
-                failed_at TIMESTAMP,
-                cancelled_at TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
         cursor.execute("""
@@ -178,9 +146,6 @@ def init_db() -> None:
             cursor.execute("ALTER TABLE compress_jobs ADD COLUMN audio_extract_path TEXT")
         if "audio_extract_size_bytes" not in compress_columns:
             cursor.execute("ALTER TABLE compress_jobs ADD COLUMN audio_extract_size_bytes INTEGER DEFAULT 0")
-        for col in ["started_at", "completed_at", "failed_at", "cancelled_at"]:
-            if col not in compress_columns:
-                cursor.execute(f"ALTER TABLE compress_jobs ADD COLUMN {col} TIMESTAMP")
         conn.commit()
     logger.info(f"SQLite DB initialized at {JOBS_DB_PATH}")
 
@@ -235,32 +200,12 @@ def update_job_status(
     error_message: Optional[str] = None,
 ) -> None:
     """
-    Dynamically update job fields in SQLite, enforcing state transitions.
+    Dynamically update job fields in SQLite.
     """
     fields = []
     values = []
 
     if status is not None:
-        # Validate transition and set timestamps
-        job = get_job(job_id)
-        if job:
-            current_status = job.get("status")
-            validate_job_transition(current_status, status)
-            
-            now_iso = datetime.utcnow().isoformat()
-            if status == "processing" and not job.get("started_at"):
-                fields.append("started_at = ?")
-                values.append(now_iso)
-            elif status == "completed":
-                fields.append("completed_at = ?")
-                values.append(now_iso)
-            elif status == "failed":
-                fields.append("failed_at = ?")
-                values.append(now_iso)
-            elif status == "cancelled":
-                fields.append("cancelled_at = ?")
-                values.append(now_iso)
-
         fields.append("status = ?")
         values.append(status)
     if progress_pct is not None:
@@ -327,16 +272,13 @@ def get_job(job_id: str) -> Optional[Dict[str, Any]]:
         return res
 
 
-def list_jobs(limit: int = 50, status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_jobs(limit: int = 50) -> List[Dict[str, Any]]:
     """
     List recent jobs ordered by created_at DESC.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        if status_filter:
-            cursor.execute("SELECT * FROM jobs WHERE status = ? ORDER BY created_at DESC LIMIT ?", (status_filter, limit))
-        else:
-            cursor.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,))
+        cursor.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,))
         rows = cursor.fetchall()
         return [dict(r) for r in rows]
 
@@ -401,7 +343,7 @@ def recover_zombie_jobs() -> int:
             SET status = 'failed',
                 error_message = 'Server restarted or crash occurred during processing',
                 updated_at = CURRENT_TIMESTAMP
-            WHERE status IN ('queued', 'processing');
+            WHERE status IN ('queued', 'extracting', 'chunking', 'transcribing');
         """)
         recovered_count = cursor.rowcount
         conn.commit()
@@ -514,32 +456,12 @@ def update_compress_job(
     audio_extract_size_bytes: Optional[int] = None,
 ) -> None:
     """
-    Dynamically update video compressor job fields in SQLite, enforcing state transitions.
+    Dynamically update video compressor job fields in SQLite.
     """
     fields = []
     values = []
 
     if status is not None:
-        # Validate transition and set timestamps
-        job = get_compress_job(job_id)
-        if job:
-            current_status = job.get("status")
-            validate_job_transition(current_status, status)
-            
-            now_iso = datetime.utcnow().isoformat()
-            if status == "processing" and not job.get("started_at"):
-                fields.append("started_at = ?")
-                values.append(now_iso)
-            elif status == "completed":
-                fields.append("completed_at = ?")
-                values.append(now_iso)
-            elif status == "failed":
-                fields.append("failed_at = ?")
-                values.append(now_iso)
-            elif status == "cancelled":
-                fields.append("cancelled_at = ?")
-                values.append(now_iso)
-
         fields.append("status = ?")
         values.append(status)
     if progress_pct is not None:
@@ -610,16 +532,15 @@ def get_compress_job(job_id: str) -> Optional[Dict[str, Any]]:
         return dict(row) if row else None
 
 
-def list_compress_jobs(limit: int = 50, status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_compress_jobs(limit: int = 50) -> List[Dict[str, Any]]:
     """
     List recent video compressor jobs ordered by created_at DESC.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        if status_filter:
-            cursor.execute("SELECT * FROM compress_jobs WHERE status = ? ORDER BY created_at DESC LIMIT ?", (status_filter, limit))
-        else:
-            cursor.execute("SELECT * FROM compress_jobs ORDER BY created_at DESC LIMIT ?", (limit,))
+        cursor.execute(
+            "SELECT * FROM compress_jobs ORDER BY created_at DESC LIMIT ?", (limit,)
+        )
         return [dict(r) for r in cursor.fetchall()]
 
 

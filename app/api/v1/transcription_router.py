@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
 import uuid
 import subprocess
@@ -21,7 +21,7 @@ from app.config import (
 from app.schemas import TranscribeResponse, JobCreateResponse, JobStatusResponse
 from app.engine_router import normalize_language, transcribe_bytes as router_transcribe_bytes
 from app.audio_utils import check_disk_space, safe_delete_dir
-from app.db import create_job, get_job, list_jobs, delete_job
+from app.db import create_job, get_job, list_jobs, delete_job, update_job_status
 import logging
 
 logger = logging.getLogger("typhoon-asr-transcription")
@@ -238,6 +238,7 @@ async def create_transcription_job(
 @router.get("/v1/media/transcribe/jobs", response_model=List[Dict[str, Any]])
 async def list_transcription_jobs(
     limit: int = 50,
+    status_filter: Optional[str] = None,
     include_text: bool = False,
     authenticated: bool = Depends(verify_api_key),
 ):
@@ -246,7 +247,7 @@ async def list_transcription_jobs(
     By default excludes heavy text columns (result_text/srt_text/timestamps_json).
     Each row includes 'media_files_exist' indicating whether the media files are still on disk.
     """
-    jobs = list_jobs(limit=limit)
+    jobs = list_jobs(limit=limit, status_filter=status_filter)
     for job in jobs:
         job["media_files_exist"] = dir_has_files(
             os.path.join(TEMP_JOBS_DIR, job["job_id"])
@@ -276,14 +277,13 @@ async def cancel_transcription_job(
     job_id: str, authenticated: bool = Depends(verify_api_key)
 ):
     """
-    Delete a transcription job record from SQLite and clean up temporary disk files.
+    Cancel a running transcription job, or delete a terminal job.
     """
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found.")
 
     # Terminate the worker subprocess so GPU/CPU resources are freed immediately
-    # instead of the orphaned worker churning through remaining chunks.
     proc = _active_workers.pop(job_id, None)
     if proc is not None and proc.poll() is None:
         logger.info(f"Terminating worker subprocess for job {job_id} (cancel request)")
@@ -294,10 +294,16 @@ async def cancel_transcription_job(
             logger.warning(f"Worker {job_id} did not exit after terminate; killing it")
             proc.kill()
 
-    delete_job(job_id)
     job_dir = os.path.join(TEMP_JOBS_DIR, job_id)
-    safe_delete_dir(job_dir)
-    return {"status": "success", "message": f"Job {job_id} deleted."}
+    
+    if job.get("status") in ["queued", "processing"]:
+        update_job_status(job_id, status="cancelled")
+        safe_delete_dir(job_dir)
+        return {"status": "success", "message": f"Job {job_id} cancelled."}
+    else:
+        delete_job(job_id)
+        safe_delete_dir(job_dir)
+        return {"status": "success", "message": f"Job {job_id} deleted."}
 
 
 @router.delete("/v1/media/transcribe/jobs/{job_id}/media")

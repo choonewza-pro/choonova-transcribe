@@ -273,9 +273,7 @@ async def watchdog_workers():
                     continue
                 if job and job.get("status") in (
                     "queued",
-                    "extracting",
-                    "chunking",
-                    "transcribing",
+                    "processing",
                 ):
                     update_job_status(
                         job_id,
