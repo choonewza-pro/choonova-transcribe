@@ -107,11 +107,7 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                started_at TIMESTAMP,
-                completed_at TIMESTAMP,
-                failed_at TIMESTAMP,
-                cancelled_at TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
         cursor.execute(
@@ -178,6 +174,10 @@ def init_db() -> None:
             cursor.execute("ALTER TABLE compress_jobs ADD COLUMN audio_extract_path TEXT")
         if "audio_extract_size_bytes" not in compress_columns:
             cursor.execute("ALTER TABLE compress_jobs ADD COLUMN audio_extract_size_bytes INTEGER DEFAULT 0")
+        
+        for col in ["started_at", "completed_at", "failed_at", "cancelled_at"]:
+            if col not in compress_columns:
+                cursor.execute(f"ALTER TABLE compress_jobs ADD COLUMN {col} TIMESTAMP")
         for col in ["started_at", "completed_at", "failed_at", "cancelled_at"]:
             if col not in compress_columns:
                 cursor.execute(f"ALTER TABLE compress_jobs ADD COLUMN {col} TIMESTAMP")
