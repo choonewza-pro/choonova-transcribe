@@ -110,9 +110,16 @@ document.addEventListener('DOMContentLoaded', () => {
   let pollInterval = null;
   let sourceWidth = 0;
   let sourceHeight = 0;
+  let fileDialogActive = false;
 
   function getApiKey() {
     return localStorage.getItem(API_KEY_STORAGE) || '';
+  }
+
+  function updateCompressBtnState() {
+    const hasKey = !!getApiKey();
+    startCompressBtn.disabled = !hasKey;
+    startCompressBtn.title = hasKey ? '' : 'กรุณาตั้งค่า API Key ในหน้า Settings ก่อนใช้งาน';
   }
   loadRetentionInfo();
 
@@ -187,12 +194,38 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Drag & drop ---
-  compressDropzone.addEventListener('click', () => compressFileInput.click());
+  compressDropzone.addEventListener('click', () => {
+    fileDialogActive = true;
+    compressFileInput.value = '';
+    compressFileInput.click();
+  });
+
+  // Detect file dialog cancel when focus returns but no file was selected
+  window.addEventListener('focus', () => {
+    if (fileDialogActive) {
+      fileDialogActive = false;
+      setTimeout(() => {
+        if (!compressFileInput.files || compressFileInput.files.length === 0) {
+          clearCompressPreview();
+        }
+      }, 0);
+    }
+  });
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(n => compressDropzone.addEventListener(n, preventDefaults, false));
   ['dragenter', 'dragover'].forEach(n => compressDropzone.addEventListener(n, () => compressDropzone.classList.add('dragover'), false));
   ['dragleave', 'drop'].forEach(n => compressDropzone.addEventListener(n, () => compressDropzone.classList.remove('dragover'), false));
   compressDropzone.addEventListener('drop', (e) => { if (e.dataTransfer.files.length > 0) handleFileSelected(e.dataTransfer.files[0]); });
-  compressFileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFileSelected(e.target.files[0]); });
+  compressFileInput.addEventListener('change', (e) => {
+    fileDialogActive = false;
+    if (e.target.files.length > 0) handleFileSelected(e.target.files[0]);
+  });
+
+  // API Key state management
+  updateCompressBtnState();
+  window.addEventListener('storage', (e) => {
+    if (e.key === API_KEY_STORAGE) updateCompressBtnState();
+  });
+  window.addEventListener('focus', updateCompressBtnState);
 
   function handleFileSelected(file) {
     const maxUploadMb = parseFloat(compressForm.dataset.maxUploadMb) || 0;
@@ -223,6 +256,23 @@ document.addEventListener('DOMContentLoaded', () => {
       filterDropdownOptionsBySourceWidth();
       updateWidthHint();
     };
+  }
+
+  function clearCompressPreview() {
+    selectedFile = null;
+    sourceWidth = 0;
+    sourceHeight = 0;
+    compressFileInput.value = '';
+    compressFileName.textContent = '📁 ยังไม่ได้เลือกไฟล์';
+    compressFileSize.textContent = '';
+    startCompressBtn.disabled = true;
+    previewContainer.style.display = 'none';
+    videoPreview.src = '';
+    sourceResInfo.textContent = '';
+    if (targetWidthSelect) targetWidthSelect.value = '0';
+    if (customTargetWidth) { customTargetWidth.value = ''; customTargetWidth.style.display = 'none'; }
+    updateWidthHint();
+    filterDropdownOptionsBySourceWidth();
   }
 
   // --- Live width preview & option filtering ---
@@ -378,6 +428,10 @@ document.addEventListener('DOMContentLoaded', () => {
   compressForm.addEventListener('submit', (e) => {
     e.preventDefault();
     if (!selectedFile) return;
+    if (!getApiKey()) {
+      alert('กรุณาตั้งค่า API Key ในหน้า Settings ก่อนทำรายการ');
+      return;
+    }
 
     const widthVal = getSelectedTargetWidth();
     const bitrateVal = parseInt(bitrateInput.value, 10) || 0;

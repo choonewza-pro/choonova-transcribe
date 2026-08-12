@@ -24,10 +24,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let selectedFile = null;
   let activeController = null;
+  let fileDialogActive = false;
 
   // --- API Key Management ---
   function getApiKey() {
     return localStorage.getItem(API_KEY_STORAGE) || '';
+  }
+
+  function updateTranscribeBtnState() {
+    const hasKey = !!getApiKey();
+    transcribeBtn.disabled = !hasKey;
+    transcribeBtn.title = hasKey ? '' : 'กรุณาตั้งค่า API Key ในหน้า Settings ก่อนใช้งาน';
   }
 
   // Copy text to clipboard handler
@@ -51,8 +58,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Dropzone click triggers file input
-  dropzone.addEventListener('click', () => fileInput.click());
+  // Dropzone click triggers file input with cancel detection
+  dropzone.addEventListener('click', () => {
+    fileDialogActive = true;
+    fileInput.value = '';
+    fileInput.click();
+  });
+
+  // Detect file dialog cancel when focus returns but no file was selected
+  window.addEventListener('focus', () => {
+    if (fileDialogActive) {
+      fileDialogActive = false;
+      setTimeout(() => {
+        if (!fileInput.files || fileInput.files.length === 0) {
+          clearFilePreview();
+        }
+      }, 0);
+    }
+  });
 
   // Drag & Drop handlers
   dropzone.addEventListener('dragover', (e) => {
@@ -73,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   fileInput.addEventListener('change', (e) => {
+    fileDialogActive = false;
     if (e.target.files.length > 0) {
       handleFileSelect(e.target.files[0]);
     }
@@ -99,10 +123,31 @@ document.addEventListener('DOMContentLoaded', () => {
     playerStatus.textContent = 'พร้อมเล่นไฟล์';
   }
 
+  function clearFilePreview() {
+    selectedFile = null;
+    fileInput.value = '';
+    fileNameDisplay.textContent = '📁 ลากไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์';
+    transcribeBtn.disabled = true;
+    document.getElementById('audioPlayerContainer').style.display = 'none';
+    audioPreview.src = '';
+    playerStatus.textContent = '';
+  }
+
+  // API Key state management
+  updateTranscribeBtnState();
+  window.addEventListener('storage', (e) => {
+    if (e.key === API_KEY_STORAGE) updateTranscribeBtnState();
+  });
+  window.addEventListener('focus', updateTranscribeBtnState);
+
   // Submit form handler
   uploadForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!selectedFile) return;
+    if (!getApiKey()) {
+      alert('กรุณาตั้งค่า API Key ในหน้า Settings ก่อนทำรายการ');
+      return;
+    }
 
     transcribeBtn.disabled = true;
     dropzone.style.display = 'none';

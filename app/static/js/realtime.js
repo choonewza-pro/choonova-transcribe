@@ -32,6 +32,20 @@ document.addEventListener('DOMContentLoaded', () => {
     return localStorage.getItem(API_KEY_STORAGE) || '';
   }
 
+  function updateMicButtonState() {
+    const hasKey = !!getApiKey();
+    micBtn.disabled = !hasKey;
+    micBtn.classList.toggle('btn-mic-disabled', !hasKey);
+    micBtn.title = hasKey ? '' : 'กรุณาตั้งค่า API Key ในหน้า Settings ก่อนใช้งาน';
+    if (!hasKey && !isRecording) {
+      micStatus.textContent = '⚠️ ต้องตั้งค่า API Key ในหน้า Settings ก่อนใช้งาน';
+      micStatus.style.color = 'var(--danger)';
+    } else if (!isRecording) {
+      micStatus.textContent = 'คลิกปุ่มด้านบนเพื่อเริ่มฟังเสียงพูด';
+      micStatus.style.color = 'var(--text-muted)';
+    }
+  }
+
   function saveSelectedMic(deviceId) {
     try {
       if (deviceId) {
@@ -79,6 +93,13 @@ document.addEventListener('DOMContentLoaded', () => {
   refreshMicsBtn.addEventListener('click', () => {
     populateMicrophones(true);
   });
+
+  // API Key state management
+  updateMicButtonState();
+  window.addEventListener('storage', (e) => {
+    if (e.key === API_KEY_STORAGE) updateMicButtonState();
+  });
+  window.addEventListener('focus', updateMicButtonState);
 
   // Automatically request/refresh device list when user interacts with mic dropdown
   micSelect.addEventListener('focus', () => {
@@ -327,6 +348,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   async function startRecording() {
+    if (!getApiKey()) {
+      alert('กรุณาตั้งค่า API Key ในหน้า Settings ก่อนใช้งาน Real-time Mic');
+      return;
+    }
+
     const selectedDeviceId = micSelect.value;
     const audioConstraints = selectedDeviceId
       ? { deviceId: { exact: selectedDeviceId } }
@@ -452,7 +478,13 @@ document.addEventListener('DOMContentLoaded', () => {
       wsConnectionBadge.style.color = 'var(--danger)';
     };
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
+      if (event.code === 4001) {
+        wsConnectionBadge.textContent = '❌ API Key ไม่ถูกต้อง — ตั้งค่าใน Settings';
+        wsConnectionBadge.style.color = 'var(--danger)';
+        if (isRecording) stopRecording();
+        return;
+      }
       wsConnectionBadge.textContent = '🔌 สถานะการเชื่อมต่อ: Disconnected';
       wsConnectionBadge.style.color = 'var(--text-muted)';
       if (isRecording) {

@@ -41,10 +41,17 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedFile = null;
   let activeJobId = null;
   let pollInterval = null;
+  let fileDialogActive = false;
 
   // --- API Key Management ---
   function getApiKey() {
     return localStorage.getItem(API_KEY_STORAGE) || '';
+  }
+
+  function updateMediaBtnState() {
+    const hasKey = !!getApiKey();
+    startJobBtn.disabled = !hasKey;
+    startJobBtn.title = hasKey ? '' : 'กรุณาตั้งค่า API Key ในหน้า Settings ก่อนใช้งาน';
   }
 
   // --- Formatting Helpers ---
@@ -67,7 +74,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Drag & Drop Handlers ---
-  mediaDropzone.addEventListener('click', () => mediaFileInput.click());
+  mediaDropzone.addEventListener('click', () => {
+    fileDialogActive = true;
+    mediaFileInput.value = '';
+    mediaFileInput.click();
+  });
+
+  // Detect file dialog cancel when focus returns but no file was selected
+  window.addEventListener('focus', () => {
+    if (fileDialogActive) {
+      fileDialogActive = false;
+      setTimeout(() => {
+        if (!mediaFileInput.files || mediaFileInput.files.length === 0) {
+          clearMediaPreview();
+        }
+      }, 0);
+    }
+  });
 
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
     mediaDropzone.addEventListener(eventName, preventDefaults, false);
@@ -95,6 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   mediaFileInput.addEventListener('change', (e) => {
+    fileDialogActive = false;
     if (e.target.files.length > 0) {
       handleFileSelected(e.target.files[0]);
     }
@@ -130,6 +154,24 @@ document.addEventListener('DOMContentLoaded', () => {
       videoPreview.style.display = 'none';
     }
   }
+
+  function clearMediaPreview() {
+    selectedFile = null;
+    mediaFileInput.value = '';
+    mediaFileName.textContent = '📹 ลากไฟล์วิดีโอ/ไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์';
+    mediaFileSize.textContent = '';
+    startJobBtn.disabled = true;
+    mediaPreviewContainer.style.display = 'none';
+    videoPreview.src = '';
+    audioPreview.src = '';
+  }
+
+  // API Key state management
+  updateMediaBtnState();
+  window.addEventListener('storage', (e) => {
+    if (e.key === API_KEY_STORAGE) updateMediaBtnState();
+  });
+  window.addEventListener('focus', updateMediaBtnState);
 
   // --- Stepper UI Update ---
   function updateStepper(stage, status) {
@@ -238,6 +280,10 @@ document.addEventListener('DOMContentLoaded', () => {
   mediaUploadForm.addEventListener('submit', (e) => {
     e.preventDefault();
     if (!selectedFile) return;
+    if (!getApiKey()) {
+      alert('กรุณาตั้งค่า API Key ในหน้า Settings ก่อนทำรายการ');
+      return;
+    }
 
     startJobBtn.disabled = true;
     mediaDropzone.style.display = 'none';
