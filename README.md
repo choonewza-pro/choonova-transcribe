@@ -14,7 +14,7 @@ ChooNova Transcribe is a high-performance audio transcription and media processi
 
 ## Key Features
 
-- **Real-time Transcription**: WebSocket endpoint (`/v1/realtime/stream`) for live microphone transcription in 250ms chunks (Thai only).
+- **Real-time Transcription**: High-performance WebSocket endpoint (`/v1/realtime/stream`) for zero-disk-write live microphone transcription with in-memory FFmpeg pipes, 600ms streaming updates, and sliding window preview (Thai only).
 - **Short Audio Transcription**: REST API for quick, synchronous processing of short multipart audio uploads.
 - **Long-form Media Pipeline**: Asynchronous processing for large video/audio files (up to 1GB+) with silence-aware chunking and automatic cleanup.
 - **Auto Language Detection**: Seamlessly fallback to faster-whisper for English or code-switched (Thai-English) content.

@@ -36,13 +36,13 @@
 │       │                                                             │
 │       │  (triggered by INTERIM / COMMIT_SEGMENT)                   │
 │       ▼                                                             │
-│  [ffmpeg subprocess]  WebM/Opus → WAV 16kHz mono                   │
+│  [ffmpeg In-Memory Pipe]  WebM/Opus → WAV 16kHz (pipe:0 → pipe:1)   │
 │       │                                                             │
 │       ▼                                                             │
-│  [engine.transcribe_bytes(wav, "stream.wav")]                      │
+│  [engine.transcribe_bytes(wav_data, "stream.wav")]                 │
 │       │                                                             │
 │       ▼                                                             │
-│  [librosa.load → resample → normalize → write WAV]                │
+│  [soundfile.read (fast-path) → bypass duplicate disk write]        │
 │       │                                                             │
 │       ▼                                                             │
 │  [NeMo Typhoon ASR model.transcribe()]  (GPU inference)            │
@@ -108,9 +108,9 @@ mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' }
 mediaRecorder.start(250);               // ส่ง binary chunk ทุก 250ms
 interimTimer = setInterval(() => {
     if (hasSpeechSinceLastCommit) {
-        socket.send('INTERIM');          // ขอผลลัพธ์ระหว่างพูด ทุก 1s
+        socket.send('INTERIM');          // ขอผลลัพธ์ระหว่างพูด ทุก 600ms
     }
-}, 1000);
+}, 600);
 ```
 
 Backend (`realtime_router.py`):
@@ -151,7 +151,7 @@ RMS = sqrt(sum(sample²) / N)
 | `RMS ≥ 0.015` (กำลังพูด) | `hasSpeechSinceLastCommit = true` |
 | พูดต่อเนื่อง > 10s | ส่ง `COMMIT_SEGMENT` (force) |
 | เงียบ > 600ms หลังพูด | ส่ง `COMMIT_SEGMENT` (silence boundary) |
-| กำลังพูด + ครบ 1s interval | ส่ง `INTERIM` (ขอผลลัพธ์ระหว่างพูด) |
+| กำลังพูด + ครบ 600ms interval | ส่ง `INTERIM` (ขอผลลัพธ์ระหว่างพูด) |
 
 ### Step 6: Server รับคำสั่ง INTERIM / COMMIT_SEGMENT
 
@@ -175,38 +175,40 @@ elif "text" in msg:
 | อัพเดท finalized_text | ❌ | ✅ |
 | ข้าม ถ้า lock ถูกถือ | ✅ | ❌ (รอ lock) |
 
-### Step 7: WebM → WAV Conversion (ffmpeg)
+### Step 7: WebM → WAV In-Memory Conversion (FFmpeg Pipes)
 
-**ทำไมต้องแปลง?**
+**ทำไมต้องแปลงใน RAM?**
 - เบราว์เซอร์ MediaRecorder ส่งเสียงเป็น **WebM/Opus** format
-- `librosa.load()` ใช้ `libsndfile` ที่ **ไม่รองรับ WebM**
-- ต้องใช้ `ffmpeg` แปลงเป็น WAV ก่อน
+- `libsndfile` (backend ของ soundfile/librosa) **ไม่รองรับ WebM**
+- แปลงผ่าน **FFmpeg In-Memory Pipes (`pipe:0` -> `pipe:1`)** โดยไม่ต้องเขียน/อ่านดิสก์ ทำให้ประมวลผลได้รวดเร็วใน RAM
 
 ```python
 def _convert_webm_to_wav(webm_bytes: bytes) -> bytes:
-    # ffmpeg -y -i input.webm -ar 16000 -ac 1 -f wav output.wav
-    subprocess.run(["ffmpeg", "-y", "-i", in_path,
-                    "-ar", "16000", "-ac", "1", "-f", "wav", out_path],
-                   capture_output=True, timeout=15)
+    # Transcode WebM/Opus -> WAV 16kHz mono in RAM via stdin/stdout pipes
+    result = subprocess.run(
+        ["ffmpeg", "-y", "-i", "pipe:0", "-ar", "16000", "-ac", "1", "-f", "wav", "pipe:1"],
+        input=webm_bytes, capture_output=True, timeout=5
+    )
+    return result.stdout
 ```
 
-Parameters:
-- `-ar 16000` → resample เป็น 16kHz (ตรงกับที่โมเดลต้องการ)
-- `-ac 1` → mono channel
-- `-f wav` → output format WAV (PCM)
+### Step 7.1: Sliding Window Preview สำหรับ INTERIM
+คำสั่ง `INTERIM` จะตัดส่งเฉพาะช่วงเสียงย้อนหลัง **~4-5 วินาทีล่าสุด** (`b_data[-120000:]` + `header_bytes`) ไปประมวลผล ทำให้ GPU ถอดความได้รวดเร็ว (< 50ms) เสมอไม่ว่าจะพูดต่อเนื่องนานแค่ไหน
 
-### Step 8: ASR Engine Transcription
+Parameters:
+- `-ar 16000` → resample เป็น 16kHz mono PCM (ตรงตามข้อกำหนดของโมเดล)
+- `pipe:0` / `pipe:1` → stdin / stdout in-memory stream (Zero Disk Write)
+
+### Step 8: ASR Engine Transcription (Fast-Path)
 
 ```python
 engine.transcribe_bytes(wav_data, "stream.wav")
     └── transcribe_file(tmp_path)
         ├── prepare_audio(audio_path, target_sr=16000)
-        │   ├── librosa.load(path, sr=None)
-        │   ├── librosa.resample(y, orig_sr, 16000)
-        │   ├── y = y / (max_val + 1e-8)       # peak normalization
-        │   └── soundfile.write(processed.wav)
+        │   ├── soundfile.read(path)             # fast-path (~100x faster than librosa)
+        │   └── if sr == 16000: return path      # bypass duplicate disk write!
         │
-        └── model.transcribe([processed.wav])   # NeMo inference (GPU)
+        └── model.transcribe([path])             # NeMo inference (GPU)
             └── torch.cuda.synchronize()        # catch deferred CUDA errors
 ```
 

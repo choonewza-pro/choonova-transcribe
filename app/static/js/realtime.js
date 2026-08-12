@@ -390,12 +390,12 @@ document.addEventListener('DOMContentLoaded', () => {
       // Stream continuous audio chunks every 250ms
       mediaRecorder.start(250);
 
-      // Trigger interim partial transcription every 1000ms ONLY when user is actively speaking
+      // Trigger interim partial transcription every 600ms ONLY when user is actively speaking
       interimTimer = setInterval(() => {
         if (hasSpeechSinceLastCommit && socket && socket.readyState === WebSocket.OPEN) {
           socket.send('INTERIM');
         }
-      }, 1000);
+      }, 600);
 
       isRecording = true;
       micBtn.classList.add('recording');

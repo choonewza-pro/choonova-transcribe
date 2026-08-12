@@ -49,52 +49,35 @@ def remove_text_overlap(t1: str, t2: str) -> str:
 
 def _convert_webm_to_wav(webm_bytes: bytes) -> bytes:
     """
-    Convert WebM/Opus audio bytes to 16kHz mono WAV using ffmpeg.
+    Convert WebM/Opus audio bytes to 16kHz mono WAV in memory using ffmpeg pipes.
 
     libsndfile (the backend for librosa.load / soundfile.read) does not
     support the WebM container format. The browser's MediaRecorder API
-    encodes audio as WebM/Opus, so we must transcode to WAV before the
-    ASR engine can process it.
+    encodes audio as WebM/Opus, so we transcode to WAV in RAM via stdin/stdout
+    pipes without touching the disk.
     """
-    in_fd, in_path = tempfile.mkstemp(suffix=".webm")
-    out_path = in_path.replace(".webm", ".wav")
     try:
-        os.write(in_fd, webm_bytes)
-        os.close(in_fd)
-        in_fd = -1
-
         result = subprocess.run(
             [
                 "ffmpeg", "-y",
-                "-i", in_path,
+                "-i", "pipe:0",
                 "-ar", "16000",
                 "-ac", "1",
                 "-f", "wav",
-                out_path,
+                "pipe:1",
             ],
+            input=webm_bytes,
             capture_output=True,
-            timeout=15,
+            timeout=5,
         )
         if result.returncode != 0:
             stderr = result.stderr.decode(errors="replace")[:200]
-            logger.warning(f"ffmpeg WebM→WAV conversion failed (rc={result.returncode}): {stderr}")
+            logger.warning(f"ffmpeg in-memory WebM→WAV failed (rc={result.returncode}): {stderr}")
             return b""
-        with open(out_path, "rb") as f:
-            return f.read()
+        return result.stdout
     except Exception as e:
-        logger.warning(f"WebM→WAV conversion error: {e}")
+        logger.warning(f"WebM→WAV in-memory conversion error: {e}")
         return b""
-    finally:
-        if in_fd >= 0:
-            try:
-                os.close(in_fd)
-            except OSError:
-                pass
-        for p in (in_path, out_path):
-            try:
-                os.remove(p)
-            except OSError:
-                pass
 
 
 @router.websocket("/stream")
@@ -220,6 +203,9 @@ async def websocket_stream(websocket: WebSocket):
                     if not transcribe_lock.locked():
                         async with transcribe_lock:
                             b_data = audio_buffer.getvalue()
+                            # Cap audio at recent ~4-5s (120KB) + header for fast interim preview
+                            if len(b_data) > 120000 and header_bytes:
+                                b_data = header_bytes + b_data[-120000:]
                             if len(b_data) > 4096:
                                 text = await _transcribe_bytes_async(b_data)
                                 if text:
