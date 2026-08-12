@@ -4,7 +4,7 @@
   <img src="app/static/choonova-transcribe-cover.png" alt="ChooNova Transcribe Cover" width="100%" style="max-width: 900px; border-radius: 12px;">
 </p>
 
-Thai Speech-to-Text API and video processing service powered by Typhoon ASR Realtime & Faster Whisper.
+Thai Speech-to-Text API and video processing service powered by Typhoon ASR Realtime & Faster Whisper (`large-v3-turbo`).
 
 > 💡 **For Developers & AI Agents:** See [project-onboarding SKILL.md](file://.agents/skills/project-onboarding/SKILL.md) for setup and [knowledges/](file://knowledges/) for deep-dive technical architecture documents.
 
@@ -17,7 +17,7 @@ ChooNova Transcribe is a high-performance audio transcription and media processi
 - **Real-time Transcription**: High-performance WebSocket endpoint (`/v1/realtime/stream`) for zero-disk-write live microphone transcription with in-memory FFmpeg pipes, 600ms streaming updates, and sliding window preview (Thai only).
 - **Short Audio Transcription**: REST API for quick, synchronous processing of short multipart audio uploads.
 - **Long-form Media Pipeline**: Asynchronous processing for large video/audio files (up to 1GB+) with silence-aware chunking and automatic cleanup.
-- **Auto Language Detection**: Seamlessly fallback to faster-whisper for English or code-switched (Thai-English) content.
+- **Auto Language Detection & Secondary ASR**: Uses **Faster Whisper (`large-v3-turbo`)** (~809M params) for English and code-switched (Thai-English) content, delivering 4-6x faster decoding speed than standard Large-v3 with low VRAM footprint (~3.5GB).
 - **Video Compression**: Asynchronous FFmpeg-based video compressor with queue management, supporting both CPU (libx264) and GPU (NVENC) encoding.
 - **Job History & Management**: Built-in SQLite tracking for transcription and compression jobs with a web-based dashboard.
 - **Dynamic VRAM Management**: Configurable model residency (Always-on vs. Idle timeout) to optimize GPU memory usage.
@@ -37,7 +37,7 @@ ChooNova Transcribe follows a Pragmatic Modular Monolith + Hexagonal Architectur
 | Language      | Python 3.12                | Core application logic                               |
 | Web Framework | FastAPI + Uvicorn          | High-performance async HTTP/WebSocket server         |
 | Deep Learning | PyTorch 2.5.1              | Tensor operations and model execution (CUDA 12.1)    |
-| ASR Models    | NeMo Toolkit ≥2.0          | Inference for Typhoon ASR and faster-whisper         |
+| ASR Models    | NeMo Toolkit & Faster Whisper | Typhoon ASR (114M) & Faster Whisper (`large-v3-turbo`) |
 | Audio/Video   | FFmpeg, librosa, soundfile | Media extraction, silence detection, and compression |
 | Storage       | SQLite (WAL mode)          | Transactional job history and settings persistence   |
 
@@ -91,7 +91,7 @@ Application behavior is controlled via environment variables. Copy `.env.example
 | ---------------------------- | ------------------------- | -------- | --------------------------------------------------------------------------- |
 | `GATEWAY_API_KEY`            | `change-me-in-production` | Yes      | Secret key for API authentication.                                          |
 | `DEVICE`                     | `cuda`                    | No       | Target device (`cuda` or `cpu`). Auto-detects if CUDA is missing.           |
-| `WHISPER_MODEL`              | `medium`                  | No       | faster-whisper size (`tiny/base/small/medium/large-v3`).                    |
+| `WHISPER_MODEL`              | `large-v3-turbo`          | No       | faster-whisper model size (`large-v3-turbo`, `large-v3`, `medium`, `small`, etc.). |
 | `MODEL_LOAD_MODE`            | `always`                  | No       | VRAM residency seed: `always` or `idle`.                                    |
 | `MODEL_IDLE_TIMEOUT_SEC`     | `900`                     | No       | Seconds of inactivity before unloading models (if `idle`).                  |
 | `COMPRESS_ENCODER`           | `libx264`                 | No       | Video encoder: `libx264` or `nvenc` (auto-falls back if NVENC unavailable). |

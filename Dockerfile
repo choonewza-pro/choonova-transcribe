@@ -36,14 +36,16 @@ print('=' * 70); \
 print()"
 
 # Pre-download Whisper model (for English / Thai-English mixed support via faster-whisper)
-ARG WHISPER_MODEL=medium
+ARG WHISPER_MODEL=large-v3-turbo
 RUN python3 -c "\
 from huggingface_hub import snapshot_download; \
 import os; \
-p = snapshot_download(repo_id='Systran/faster-whisper-' + os.getenv('WHISPER_MODEL', 'medium')); \
+m = os.getenv('WHISPER_MODEL', 'large-v3-turbo'); \
+repo_id = 'mobiuslabsgmbh/faster-whisper-large-v3-turbo' if m in ('turbo', 'large-v3-turbo') else f'Systran/faster-whisper-{m}'; \
+p = snapshot_download(repo_id=repo_id); \
 print(); \
 print('=' * 70); \
-print('  ✅ WHISPER MODEL DOWNLOAD COMPLETE — faster-whisper-' + os.getenv('WHISPER_MODEL', 'medium')); \
+print('  ✅ WHISPER MODEL DOWNLOAD COMPLETE — ' + repo_id); \
 print(f'  📁 {p}'); \
 print('=' * 70); \
 print()"

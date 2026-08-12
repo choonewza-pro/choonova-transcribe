@@ -25,7 +25,7 @@ services:
       - GATEWAY_API_KEY=change-me-in-production
       - MODEL_PATH=/app/model/typhoon-asr-realtime.nemo
       - DEVICE=cuda
-      - WHISPER_MODEL=medium
+      - WHISPER_MODEL=large-v3-turbo
       - LOG_LEVEL=info
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
       - WATCHDOG_DELETE_ON_CRASH=false

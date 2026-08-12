@@ -26,7 +26,7 @@ services:
       - GATEWAY_API_KEY=change-me-in-production
       - MODEL_PATH=/app/model/typhoon-asr-realtime.nemo
       - DEVICE=cpu
-      - WHISPER_MODEL=medium
+      - WHISPER_MODEL=large-v3-turbo
       - LOG_LEVEL=info
       # Model VRAM residency mode: always | idle. Seeded into the settings DB on first boot;
       # afterwards it is editable at runtime via the dashboard / PUT /v1/settings/model.
