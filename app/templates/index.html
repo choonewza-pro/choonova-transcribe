@@ -70,7 +70,7 @@
         <a href="/media/transcribe" class="card-button">
           <div class="icon">🎬</div>
           <h3>3. ถอดไฟล์เสียงและวีดีโอ</h3>
-          <p>อัปโหลดวิดีโอ MP4, MKV, MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง) ประมวลผลเบื้องหลังอัตโนมัติ</p>
+          <p>อัปโหลดวิดีโอ MP4, MKV, MOV หรือไฟล์เสียงขนาดยาว (สูงสุด {% if max_upload_mb > 0 %}{{ max_upload_mb|int }}MB{% else %}ไม่จำกัดขนาด{% endif %}{% if max_media_duration_sec > 0 %} / {{ (max_media_duration_sec / 3600)|round(1) }} ชั่วโมง{% endif %}) ประมวลผลเบื้องหลังอัตโนมัติ</p>
         </a>
 
         <a href="/media/transcribe/jobs/history" class="card-button">

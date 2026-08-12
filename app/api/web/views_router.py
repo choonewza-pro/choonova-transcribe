@@ -18,6 +18,7 @@ from app.core.config import (
     DEVICE,
     COMPRESS_MAX_CONCURRENT,
     COMPRESS_MAX_QUEUED,
+    MAX_MEDIA_DURATION_SEC,
 )
 
 router = APIRouter(tags=["Web Views"])
@@ -35,7 +36,11 @@ async def home_page(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={"max_audio_upload_mb": MAX_AUDIO_UPLOAD_SIZE_MB},
+        context={
+            "max_audio_upload_mb": MAX_AUDIO_UPLOAD_SIZE_MB,
+            "max_media_duration_sec": MAX_MEDIA_DURATION_SEC,
+            "max_upload_mb": MAX_UPLOAD_SIZE_MB,
+        },
     )
 
 
@@ -58,7 +63,10 @@ async def media_transcribe_page(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="media.html",
-        context={"max_upload_mb": MAX_UPLOAD_SIZE_MB},
+        context={
+            "max_upload_mb": MAX_UPLOAD_SIZE_MB,
+            "max_media_duration_sec": MAX_MEDIA_DURATION_SEC,
+        },
     )
 
 
@@ -70,6 +78,7 @@ async def media_compress_page(request: Request):
         name="compress.html",
         context={
             "max_upload_mb": MAX_UPLOAD_SIZE_MB,
+            "max_media_duration_sec": MAX_MEDIA_DURATION_SEC,
             "default_crf": COMPRESS_CRF,
             "default_preset": COMPRESS_PRESET,
             "encoder": COMPRESS_ENCODER,

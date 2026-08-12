@@ -4,7 +4,7 @@
           <span class="api-group-icon">🎬</span>
           <div>
             <h3 class="api-group-title">งานเบื้องหลังวิดีโอ/เสียงยาว (Long-form Media)</h3>
-            <p class="api-group-desc">อัปโหลด MP4/MKV/MOV หรือไฟล์เสียงยาว (สูงสุด 1GB+ / 3+ ชั่วโมง) ประมวลผลแบบ async ใน subprocess</p>
+            <p class="api-group-desc">อัปโหลด MP4/MKV/MOV หรือไฟล์เสียงยาว (สูงสุด {% if max_upload_mb > 0 %}{{ max_upload_mb|int }}MB{% else %}ไม่จำกัดขนาด{% endif %}{% if max_media_duration_sec > 0 %} / {{ (max_media_duration_sec / 3600)|round(1) }} ชั่วโมง{% endif %}) ประมวลผลแบบ async ใน subprocess</p>
           </div>
         </div>
 
@@ -149,7 +149,7 @@
           </summary>
           <div class="api-endpoint-body">
             <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-              สร้างงานถอดความแบบเบื้องหลังสำหรับไฟล์วิดีโอ MP4/MKV/MOV หรือไฟล์เสียงขนาดยาว (สูงสุด 1GB+ / 3+ ชั่วโมง)
+              สร้างงานถอดความแบบเบื้องหลังสำหรับไฟล์วิดีโอ MP4/MKV/MOV หรือไฟล์เสียงขนาดยาว (สูงสุด {% if max_upload_mb > 0 %}{{ max_upload_mb|int }}MB{% else %}ไม่จำกัดขนาด{% endif %}{% if max_media_duration_sec > 0 %} / {{ (max_media_duration_sec / 3600)|round(1) }} ชั่วโมง{% endif %})
               ระบบประมวลผลใน subprocess แยกต่างหาก คืน <code>job_id</code> ทันที (HTTP 202)
               <br><code>target_chunk_sec</code> / <code>max_chunk_sec</code> (ไม่บังคับ) กำหนดความยาวเป้าหมาย/สูงสุดต่อ chunk — default จาก env 30/60 วินาที
               <br>เพดานขนาดไฟล์ตั้งค่าได้ผ่าน env <code>MAX_UPLOAD_SIZE_MB</code> (default 0 = ไม่จำกัด, เกิน → HTTP 413)
