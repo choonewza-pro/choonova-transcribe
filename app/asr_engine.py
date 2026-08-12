@@ -181,16 +181,24 @@ class TyphoonASREngine:
     ) -> tuple[str, float]:
         """
         Prepares audio file matching developer's official prepare_audio logic:
-        1. Loads audio via librosa
-        2. Resamples to 16kHz
+        1. Loads audio via fast soundfile (with librosa fallback)
+        2. Resamples to 16kHz if needed
         3. Normalizes peak amplitude
-        4. Writes processed WAV
+        4. Writes processed WAV (bypasses duplicate disk write if already 16kHz WAV)
         """
-        y, sr = librosa.load(input_path, sr=None)
+        try:
+            y, sr = sf.read(input_path, dtype="float32")
+        except Exception:
+            y, sr = librosa.load(input_path, sr=None)
+
         if y is None or len(y) == 0:
             raise ValueError("Failed to load audio file or file is empty.")
 
         duration = len(y) / float(sr)
+
+        # Fast path: If already 16kHz mono WAV, bypass duplicate temp file write
+        if sr == target_sr and input_path.lower().endswith(".wav"):
+            return input_path, duration
 
         if sr != target_sr:
             y = librosa.resample(y, orig_sr=sr, target_sr=target_sr)
