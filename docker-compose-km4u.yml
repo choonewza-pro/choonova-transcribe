@@ -45,14 +45,7 @@ services:
       - km4u-network
     volumes:
       - ./data/jobs:/tmp/choonova-transcribe-jobs
-      # - ./data:/app/data   # Enable to persist the jobs DB on the host (baked empty DB is used otherwise)
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      - ./data:/app/data   # Enable to persist the jobs DB on the host (baked empty DB is used otherwise)
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8830/healthz"]
       interval: 120s
