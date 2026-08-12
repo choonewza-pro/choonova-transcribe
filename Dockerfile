@@ -17,10 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Upgrade pip and install all Python requirements with CUDA 12.1 index
-COPY requirements.txt .
+# Upgrade pip and install huggingface_hub for model downloading
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir huggingface_hub
 
 # Download model weights into Docker image layer (Option 1: Docker Build-time Caching)
 RUN python3 -c "\
@@ -48,6 +47,10 @@ print('  ✅ WHISPER MODEL DOWNLOAD COMPLETE — faster-whisper-' + os.getenv('W
 print(f'  📁 {p}'); \
 print('=' * 70); \
 print()"
+
+# Install all Python requirements with CUDA 12.1 index
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app /app/app
 

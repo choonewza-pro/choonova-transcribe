@@ -73,7 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
     chunking: { cls: 'status-processing', label: 'กำลังตัดแบ่ง' },
     transcribing: { cls: 'status-processing', label: 'กำลังถอดความ' },
     completed: { cls: 'status-completed', label: 'เสร็จสมบูรณ์' },
-    failed: { cls: 'status-failed', label: 'ล้มเหลว' }
+    failed: { cls: 'status-failed', label: 'ล้มเหลว' },
+    cancelled: { cls: 'status-cancelled', label: 'ถูกยกเลิก' },
+    processing: { cls: 'status-processing', label: 'กำลังประมวลผล' }
   };
 
   function statusBadge(status) {
@@ -82,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function isProcessing(status) {
-    return ['queued', 'extracting', 'chunking', 'transcribing'].includes(status);
+    return ['queued', 'processing'].includes(status);
   }
 
   // --- List Loading ---
@@ -93,7 +95,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const apiKey = getApiKey();
       if (apiKey) headers['x-api-key'] = apiKey;
 
-      const res = await fetch('/v1/media/transcribe/jobs?limit=50&include_text=false', { headers });
+      let url = '/v1/media/transcribe/jobs?limit=50&include_text=false';
+      if (state.statusFilter && state.statusFilter !== 'all') {
+        url += '&status_filter=' + encodeURIComponent(state.statusFilter);
+      }
+      const res = await fetch(url, { headers });
       if (!res.ok) {
         let detail = `HTTP ${res.status}`;
         try {
@@ -119,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (q && !String(job.filename || '').toLowerCase().includes(q)) return false;
       if (state.statusFilter === 'completed' && job.status !== 'completed') return false;
       if (state.statusFilter === 'failed' && job.status !== 'failed') return false;
+      if (state.statusFilter === 'cancelled' && job.status !== 'cancelled') return false;
       if (state.statusFilter === 'processing' && !isProcessing(job.status)) return false;
       return true;
     });
@@ -428,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (statusFilter) {
     statusFilter.addEventListener('change', () => {
       state.statusFilter = statusFilter.value;
-      renderJobs();
+      loadJobs();
     });
   }
   if (sortSelect) {

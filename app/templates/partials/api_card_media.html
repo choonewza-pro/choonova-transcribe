@@ -212,11 +212,11 @@
           </summary>
           <div class="api-endpoint-body">
             <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-              แสดงรายการงานถอดความล่าสุดตามเวลาสร้าง รองรับ <code>?limit=N</code> และ <code>?include_text=true</code>
+              แสดงรายการงานถอดความล่าสุดตามเวลาสร้าง รองรับ <code>?limit=N</code>, <code>?status_filter={queued,processing,completed,failed,cancelled}</code> และ <code>?include_text=true</code>
             </p>
             <div class="code-container">
               <div class="code-header">cURL Request</div>
-              <pre>curl -X GET "http://localhost:8830/v1/media/transcribe/jobs?limit=10&include_text=true" \
+              <pre>curl -X GET "http://localhost:8830/v1/media/transcribe/jobs?limit=10&status_filter=completed&include_text=true" \
   -H "x-api-key: change-me-in-production"</pre>
             </div>
             <div class="code-container">
@@ -285,7 +285,7 @@
           </summary>
           <div class="api-endpoint-body">
             <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-              ยกเลิก/ลบงานถอดความ: ยุติ worker subprocess ทันที (คืน GPU/CPU) ลบงานออกจากฐานข้อมูล SQLite และลบไฟล์ชั่วคราวบนดิสก์ทั้งหมดของงานนั้น
+              ยกเลิก/ลบงานถอดความ: ยุติ worker subprocess ทันที (คืน GPU/CPU) หากงานกำลังทำงานอยู่จะเปลี่ยนสถานะเป็น <code>cancelled</code> (Soft Cancel) แต่หากงานนั้นเสร็จสิ้น/ล้มเหลวไปแล้วจะลบข้อมูลออกจากฐานข้อมูล SQLite และลบไฟล์ชั่วคราวบนดิสก์ทั้งหมด
             </p>
             <div class="code-container">
               <div class="code-header">cURL Request</div>

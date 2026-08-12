@@ -242,7 +242,7 @@ async def process_transcription_job(
         # Step 1: Extract Audio (MP4 -> 16kHz WAV)
         update_job_status(
             job_id,
-            status="extracting",
+            status="processing",
             progress_pct=10.0,
             current_stage="Extracting Audio",
         )
@@ -278,7 +278,7 @@ async def process_transcription_job(
 
         # Step 2: Silence-Aware Audio Chunking
         update_job_status(
-            job_id, status="chunking", progress_pct=20.0, current_stage="Chunking Audio"
+            job_id, status="processing", progress_pct=20.0, current_stage="Chunking Audio"
         )
         chunks_dir = os.path.join(job_dir, "chunks")
         chunks = await loop.run_in_executor(
@@ -306,7 +306,7 @@ async def process_transcription_job(
             # otherwise the first chunk hides a 10-60s cold load inside "Transcribing".
             update_job_status(
                 job_id,
-                status="transcribing",
+                status="processing",
                 progress_pct=25.0,
                 current_stage="Loading Model onto VRAM",
             )
@@ -320,7 +320,7 @@ async def process_transcription_job(
                 stage_msg = f"Transcribing Chunk {idx}/{total_chunks}"
                 update_job_status(
                     job_id,
-                    status="transcribing",
+                    status="processing",
                     progress_pct=pct,
                     completed_chunks=idx - 1,
                     current_stage=stage_msg,

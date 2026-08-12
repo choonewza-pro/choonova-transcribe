@@ -17,9 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements-cpu.txt .
+# Upgrade pip and install huggingface_hub for model downloading
 RUN python3 -m pip install --no-cache-dir --upgrade pip \
-    && python3 -m pip install --no-cache-dir -r requirements-cpu.txt
+    && python3 -m pip install --no-cache-dir huggingface_hub
 
 # Download model weights into Docker image layer (Option 1: Docker Build-time Caching)
 RUN python3 -c "\
@@ -47,6 +47,9 @@ print('  ✅ WHISPER MODEL DOWNLOAD COMPLETE — faster-whisper-' + os.getenv('W
 print(f'  📁 {p}'); \
 print('=' * 70); \
 print()"
+
+COPY requirements-cpu.txt .
+RUN python3 -m pip install --no-cache-dir -r requirements-cpu.txt
 
 COPY app /app/app
 

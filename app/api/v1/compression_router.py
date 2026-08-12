@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
 import uuid
 import subprocess
@@ -18,7 +18,7 @@ from app.schemas import CompressJobCreateResponse, CompressJobStatusResponse
 from app.compress_utils import normalize_encoder, parse_trim_time
 from app.audio_utils import check_disk_space, safe_delete_dir
 from app.db import (
-    create_compress_job, get_compress_job, list_compress_jobs, delete_compress_job,
+    create_compress_job, get_compress_job, list_compress_jobs, delete_compress_job, update_compress_job,
     compress_job_queue_info, get_compress_retention_summary
 )
 import logging
