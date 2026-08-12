@@ -28,9 +28,6 @@ services:
     environment:
       - DEVICE=cpu
       - MODEL_PATH=/app/model/typhoon-asr-realtime.nemo
-      # Inject 'video' capability so NVENC libraries (libnvidia-encode.so.1 /
-      # libnvcuvid.so.1) are mounted into the container.
-      - NVIDIA_DRIVER_CAPABILITIES=video,compute,utility
     volumes:
       - ./data/jobs:/tmp/choonova-transcribe-jobs
       # - ./data:/app/data   # Enable to persist the jobs DB on the host (baked empty DB is used otherwise)
