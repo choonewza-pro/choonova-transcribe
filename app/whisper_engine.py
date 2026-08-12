@@ -214,3 +214,9 @@ class WhisperEngine:
 
 # Global singleton instance
 whisper_engine = WhisperEngine()
+
+
+def get_whisper_engine() -> WhisperEngine:
+    """Returns the global Whisper engine singleton instance."""
+    return whisper_engine
+

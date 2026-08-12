@@ -3,7 +3,7 @@ Compression domain ports.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from app.modules.compression.domain.entities import CompressionJob
 
 
@@ -29,11 +29,28 @@ class CompressionRepositoryPort(ABC):
         pass
 
     @abstractmethod
+    def update_job(self, job_id: str, **kwargs) -> None:
+        """General-purpose field update (mirrors legacy update_compress_job)."""
+        pass
+
+    @abstractmethod
     def get_queued_jobs(self, limit: int = 10) -> List[CompressionJob]:
         pass
 
     @abstractmethod
     def delete_job(self, job_id: str) -> bool:
+        pass
+
+    @abstractmethod
+    def job_queue_info(self, job_id: str) -> Dict[str, int]:
+        pass
+
+    @abstractmethod
+    def count_queued(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_retention_summary(self) -> Dict[str, Any]:
         pass
 
 

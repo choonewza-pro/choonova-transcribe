@@ -12,9 +12,9 @@ class WhisperAdapter(ASREnginePort):
 
     def transcribe(self, audio_path: str, language: str = "en") -> Dict[str, Any]:
         engine = get_whisper_engine()
-        text, timestamps = engine.transcribe_file(audio_path, language=language)
+        res = engine.transcribe_file(audio_path, language=language)
         return {
-            "text": text,
-            "timestamps": timestamps,
+            "text": res.get("text", ""),
+            "timestamps": res.get("timestamps", []),
             "engine": "whisper",
         }

@@ -13,20 +13,29 @@ from app.core.security import verify_api_key
 from app.core.state import _active_workers
 from app.core.media_validator import validate_magic_bytes, validate_extension, validate_with_ffprobe, secure_filename
 from app.config import (
-    MAX_AUDIO_UPLOAD_SIZE_MB, MAX_UPLOAD_SIZE_MB, 
+    MAX_AUDIO_UPLOAD_SIZE_MB, MAX_UPLOAD_SIZE_MB,
     TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC, TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC,
     TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC, TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC,
     TEMP_JOBS_DIR, MIN_FREE_DISK_GB, SERVICE_DIR
 )
 from app.schemas import TranscribeResponse, JobCreateResponse, JobStatusResponse
-from app.engine_router import normalize_language, transcribe_bytes as router_transcribe_bytes
-from app.audio_utils import check_disk_space, safe_delete_dir
-from app.db import create_job, get_job, list_jobs, delete_job, update_job_status
+from app.modules.transcription.adapters.outbound.repositories.sqlite_job_repository import SQLiteJobRepository
+from app.modules.transcription.adapters.outbound.media.ffmpeg_audio_adapter import FFmpegAudioAdapter
+from app.modules.transcription.adapters.outbound.engines.engine_router import EngineRouterAdapter
+from app.modules.transcription.application.transcription_service import TranscriptionService
 import logging
 
 logger = logging.getLogger("typhoon-asr-transcription")
 
 router = APIRouter(tags=["Transcription"])
+
+
+def get_transcription_service() -> TranscriptionService:
+    repo = SQLiteJobRepository()
+    engine = EngineRouterAdapter()
+    media = FFmpegAudioAdapter()
+    return TranscriptionService(repo, engine, media)
+
 
 def dir_has_files(dir_path: str) -> bool:
     try:
@@ -37,12 +46,41 @@ def dir_has_files(dir_path: str) -> bool:
         pass
     return False
 
+
+def _job_to_dict(job) -> Dict[str, Any]:
+    """Convert TranscriptionJob entity to a plain dict for JSON responses."""
+    from datetime import datetime
+    now_iso = datetime.utcnow().isoformat()
+    return {
+        "id": job.id,
+        "type": getattr(job, "type", None) or "transcription",
+        "filename": job.filename,
+        "file_size_bytes": job.file_size_bytes or 0,
+        "language": job.language or "th",
+        "status": job.status,
+        "progress": job.progress or 0.0,
+        "stage": job.stage or "queued",
+        "total_chunks": job.total_chunks or 0,
+        "completed_chunks": job.completed_chunks or 0,
+        "duration": job.duration or 0.0,
+        "processing_time": job.processing_time or 0.0,
+        "target_chunk_sec": getattr(job, "target_chunk_sec", None) or 30.0,
+        "max_chunk_sec": getattr(job, "max_chunk_sec", None) or 60.0,
+        "model": job.model,
+        "result": job.result,
+        "error": job.error,
+        "created_at": job.created_at or now_iso,
+        "updated_at": job.updated_at or now_iso,
+        "started_at": getattr(job, "started_at", None),
+        "completed_at": getattr(job, "completed_at", None),
+    }
+
+
 @router.post("/v1/audio/transcribe", response_model=TranscribeResponse)
 async def transcribe_audio(
     file: UploadFile = File(...),
     with_timestamps: bool = Form(False),
     language: str = Form("th"),
-    # Optional auth for API calls, skip if request comes from local dashboard
     authenticated: bool = Depends(verify_api_key),
 ):
     """
@@ -57,18 +95,19 @@ async def transcribe_audio(
     validate_extension(file.filename)
 
     try:
-        lang = normalize_language(language)
+        lang = TranscriptionService.normalize_language(language)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
-    if not check_disk_space(TEMP_JOBS_DIR, MIN_FREE_DISK_GB):
+    svc = get_transcription_service()
+
+    if not svc.check_disk_space(TEMP_JOBS_DIR, MIN_FREE_DISK_GB):
         raise HTTPException(
             status_code=507,
             detail=f"Insufficient disk space. At least {MIN_FREE_DISK_GB} GB free disk space is required.",
         )
 
     try:
-        # Stream read in 1MB chunks, enforcing the max upload size (always > 0).
         max_audio_bytes = int(MAX_AUDIO_UPLOAD_SIZE_MB * 1024 * 1024)
         content = bytearray()
         while chunk := await file.read(1024 * 1024):
@@ -81,6 +120,8 @@ async def transcribe_audio(
         content = bytes(content)
         validate_magic_bytes(content[:2048])
 
+        # Inline transcription via engine port (synchronous, fast-path)
+        from app.engine_router import transcribe_bytes as router_transcribe_bytes
         res = router_transcribe_bytes(
             audio_bytes=content,
             filename_hint=secure_filename(file.filename),
@@ -141,10 +182,10 @@ async def create_transcription_job(
     validate_extension(file.filename)
 
     try:
-        lang = normalize_language(language)
+        lang = TranscriptionService.normalize_language(language)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-        
+
     if target_chunk_sec is None or max_chunk_sec is None:
         if lang == "th":
             target_chunk_sec = target_chunk_sec or TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC
@@ -159,7 +200,9 @@ async def create_transcription_job(
             detail="target_chunk_sec must be greater than 0 and not exceed max_chunk_sec.",
         )
 
-    if not check_disk_space(TEMP_JOBS_DIR, MIN_FREE_DISK_GB):
+    svc = get_transcription_service()
+
+    if not svc.check_disk_space(TEMP_JOBS_DIR, MIN_FREE_DISK_GB):
         raise HTTPException(
             status_code=507,
             detail=f"Insufficient disk space. At least {MIN_FREE_DISK_GB} GB free disk space is required.",
@@ -173,8 +216,6 @@ async def create_transcription_job(
     file_ext = os.path.splitext(safe_name)[1] or ".mp4"
     save_path = os.path.join(job_dir, f"input{file_ext}")
 
-    # Stream file upload to disk in chunks of 1MB to prevent OOM.
-    # Enforce max upload size (MB) when configured (> 0); 0 = unlimited.
     max_upload_bytes = int(MAX_UPLOAD_SIZE_MB * 1024 * 1024)
     total_bytes = 0
     try:
@@ -188,30 +229,29 @@ async def create_transcription_job(
                     )
                 buffer.write(chunk)
     except HTTPException:
-        safe_delete_dir(job_dir)
+        svc.safe_delete_dir(job_dir)
         raise
     except Exception as e:
-        safe_delete_dir(job_dir)
+        svc.safe_delete_dir(job_dir)
         logger.error(f"Error saving upload file for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save upload file: {e}")
 
-    # Validate Magic Bytes and FFprobe for saved file
     try:
         with open(save_path, "rb") as f:
             header_bytes = f.read(2048)
         validate_magic_bytes(header_bytes)
         validate_with_ffprobe(save_path)
     except HTTPException:
-        safe_delete_dir(job_dir)
+        svc.safe_delete_dir(job_dir)
         raise
     except Exception as e:
-        safe_delete_dir(job_dir)
+        svc.safe_delete_dir(job_dir)
         logger.error(f"Validation error for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to validate media file")
 
-    # Insert job into SQLite
-    create_job(
-        id=job_id,
+    # Create job record via service → repository port
+    job = svc.create_job(
+        job_id=job_id,
         filename=file.filename,
         file_size_bytes=total_bytes,
         language=lang,
@@ -219,16 +259,15 @@ async def create_transcription_job(
         max_chunk_sec=max_chunk_sec,
     )
 
-    # Launch worker in an isolated subprocess so GPU/CPU memory or errors never affect FastAPI web server
+    # Launch worker subprocess (inbound adapter concern stays at router layer)
     import sys
-
-    cmd = [sys.executable, "-m", "app.run_job", job_id, save_path, lang]
+    cmd = [sys.executable, "-m", "app.run_job", job.id, save_path, lang]
     proc = subprocess.Popen(cmd, cwd=SERVICE_DIR)
-    _active_workers[job_id] = proc
+    _active_workers[job.id] = proc
 
     return JobCreateResponse(
         status="accepted",
-        id=job_id,
+        id=job.id,
         filename=file.filename,
         language=lang,
         message="Job created and enqueued for long-form video transcription",
@@ -247,15 +286,16 @@ async def list_transcription_jobs(
     By default excludes heavy text columns (result_text/srt_text/timestamps_json).
     Each row includes 'media_files_exist' indicating whether the media files are still on disk.
     """
-    jobs = list_jobs(limit=limit, status_filter=status_filter)
+    svc = get_transcription_service()
+    jobs = svc.list_jobs(limit=limit, status_filter=status_filter)
+    result = []
     for job in jobs:
-        job["media_files_exist"] = dir_has_files(
-            os.path.join(TEMP_JOBS_DIR, job["id"])
-        )
+        d = _job_to_dict(job)
+        d["media_files_exist"] = dir_has_files(os.path.join(TEMP_JOBS_DIR, job.id))
         if not include_text:
-            job.pop("result", None)
-            job.pop("result_json", None)
-    return jobs
+            d.pop("result", None)
+        result.append(d)
+    return result
 
 
 @router.get("/v1/media/transcribe/jobs/{job_id}", response_model=JobStatusResponse)
@@ -265,10 +305,11 @@ async def get_transcription_job_status(
     """
     Get the status, stage, progress %, and completed transcript result of a job.
     """
-    job = get_job(job_id)
+    svc = get_transcription_service()
+    job = svc.get_job_or_none(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found.")
-    return JobStatusResponse(**job)
+    return JobStatusResponse(**_job_to_dict(job))
 
 
 @router.delete("/v1/media/transcribe/jobs/{job_id}")
@@ -278,11 +319,11 @@ async def cancel_transcription_job(
     """
     Cancel a running transcription job, or delete a terminal job.
     """
-    job = get_job(job_id)
+    svc = get_transcription_service()
+    job = svc.get_job_or_none(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found.")
 
-    # Terminate the worker subprocess so GPU/CPU resources are freed immediately
     proc = _active_workers.pop(job_id, None)
     if proc is not None and proc.poll() is None:
         logger.info(f"Terminating worker subprocess for job {job_id} (cancel request)")
@@ -294,14 +335,14 @@ async def cancel_transcription_job(
             proc.kill()
 
     job_dir = os.path.join(TEMP_JOBS_DIR, job_id)
-    
-    if job.get("status") in ["queued", "processing"]:
-        update_job_status(id=job_id, status="cancelled")
-        safe_delete_dir(job_dir)
+
+    if job.status in ["queued", "processing"]:
+        svc.update_status(job_id=job_id, status="cancelled")
+        svc.safe_delete_dir(job_dir)
         return {"status": "success", "message": f"Job {job_id} cancelled."}
     else:
-        delete_job(job_id)
-        safe_delete_dir(job_dir)
+        svc.delete_job(job_id)
+        svc.safe_delete_dir(job_dir)
         return {"status": "success", "message": f"Job {job_id} deleted."}
 
 
@@ -313,7 +354,8 @@ async def delete_transcription_job_media(
     Delete only the on-disk media files of a job (free machine resources)
     while KEEPING the transcription record (text/SRT/timestamps) in SQLite.
     """
-    job = get_job(job_id)
+    svc = get_transcription_service()
+    job = svc.get_job_or_none(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found.")
 
@@ -325,7 +367,7 @@ async def delete_transcription_job_media(
             "message": "No media files found for this job (transcription record kept).",
         }
 
-    safe_delete_dir(job_dir)
+    svc.safe_delete_dir(job_dir)
     if dir_has_files(job_dir):
         raise HTTPException(status_code=500, detail="Failed to delete media files.")
 
@@ -358,15 +400,16 @@ async def export_job_result(
     """
     Download job transcription result as .txt, .srt subtitles, or .json timestamp format.
     """
-    job = get_job(job_id)
+    svc = get_transcription_service()
+    job = svc.get_job_or_none(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found.")
-    if job.get("status") != "completed":
+    if job.status != "completed":
         raise HTTPException(status_code=400, detail="Job is not completed yet.")
 
     export_format = export_format.lower()
-    safe_name = os.path.splitext(job.get("filename", "transcript"))[0]
-    result = job.get("result") or {}
+    safe_name = os.path.splitext(job.filename or "transcript")[0]
+    result = job.result or {}
 
     if export_format == "txt":
         content = result.get("text", "")
@@ -376,9 +419,8 @@ async def export_job_result(
             headers={"Content-Disposition": _attachment_header(safe_name, "txt")},
         )
     elif export_format == "srt":
-        from app.job_worker import build_srt_subtitles
         segments = result.get("segments", [])
-        content = build_srt_subtitles(segments)
+        content = TranscriptionService.build_srt_subtitles(segments)
         return Response(
             content=content,
             media_type="application/x-subrip; charset=utf-8",
@@ -386,9 +428,9 @@ async def export_job_result(
         )
     elif export_format == "json":
         data = {
-            "id": job["id"],
-            "filename": job["filename"],
-            "duration": job["duration"],
+            "id": job.id,
+            "filename": job.filename,
+            "duration": job.duration,
             "text": result.get("text"),
             "segments": result.get("segments"),
         }

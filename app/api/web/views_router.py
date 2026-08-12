@@ -27,8 +27,10 @@ templates = Jinja2Templates(directory=templates_dir)
 
 
 def _compress_retention_summary() -> dict:
-    from app.db import get_compress_retention_summary
-    return get_compress_retention_summary()
+    from app.modules.compression.adapters.outbound.repositories.sqlite_compress_repository import SQLiteCompressRepository
+    from app.modules.compression.application.compression_service import CompressionService
+    svc = CompressionService(SQLiteCompressRepository())
+    return svc.get_retention_summary()
 
 
 @router.get("/", response_class=HTMLResponse)

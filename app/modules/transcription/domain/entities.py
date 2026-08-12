@@ -19,20 +19,24 @@ class JobChunk:
 @dataclass
 class TranscriptionJob:
     id: str
-    type: str = "transcription"
     filename: str
     file_size_bytes: int
     language: str  # 'th' | 'en' | 'auto'
-    model: Optional[str] = None
     status: str    # 'queued' | 'processing' | 'completed' | 'failed'
+    type: str = "transcription"
+    model: Optional[str] = None
     progress: float = 0.0
     stage: str = "queued"
     total_chunks: int = 0
     completed_chunks: int = 0
     duration: float = 0.0
     processing_time: float = 0.0
+    target_chunk_sec: float = 30.0
+    max_chunk_sec: float = 60.0
     result: Optional[Dict[str, Any]] = None
     error: Optional[Dict[str, Any]] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
     chunks: List[JobChunk] = field(default_factory=list)

@@ -13,9 +13,9 @@ class TyphoonAdapter(ASREnginePort):
 
     def transcribe(self, audio_path: str, language: str = "th") -> Dict[str, Any]:
         engine = get_asr_engine()
-        text, timestamps = engine.transcribe_file(audio_path)
+        res = engine.transcribe_file(audio_path)
         return {
-            "text": text,
-            "timestamps": timestamps,
+            "text": res.get("text", ""),
+            "timestamps": res.get("timestamps", []),
             "engine": "typhoon",
         }

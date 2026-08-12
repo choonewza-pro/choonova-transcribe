@@ -15,16 +15,18 @@ from app.config import (
     COMPRESS_MAX_QUEUED, MIN_FREE_DISK_GB, COMPRESS_OUTPUT_DIR
 )
 from app.schemas import CompressJobCreateResponse, CompressJobStatusResponse
-from app.compress_utils import normalize_encoder, parse_trim_time
-from app.audio_utils import check_disk_space, safe_delete_dir
-from app.db import (
-    create_compress_job, get_compress_job, list_compress_jobs, delete_compress_job, update_compress_job,
-    compress_job_queue_info, get_compress_retention_summary, count_queued_compress_jobs
-)
+from app.modules.compression.adapters.outbound.repositories.sqlite_compress_repository import SQLiteCompressRepository
+from app.modules.compression.application.compression_service import CompressionService
 import logging
 logger = logging.getLogger("typhoon-asr-compress")
 
 router = APIRouter(tags=["Compression"])
+
+
+def get_compression_service() -> CompressionService:
+    repo = SQLiteCompressRepository()
+    return CompressionService(repo)
+
 
 def _attachment_header(safe_name: str, ext: str) -> str:
     import re
@@ -33,6 +35,47 @@ def _attachment_header(safe_name: str, ext: str) -> str:
     fallback = re.sub(r"[^ -~]", "_", safe_name).replace('"', "_").replace("\\", "_")
     fallback = fallback or "video"
     return f"attachment; filename=\"{fallback}.{ext}\"; filename*=UTF-8''{encoded}.{ext}"
+
+
+def _job_to_dict(job) -> Dict[str, Any]:
+    """Convert CompressionJob entity to a plain dict for JSON responses."""
+    return {
+        "job_id": job.job_id,
+        "filename": job.filename,
+        "input_path": job.input_path,
+        "file_size_bytes": job.file_size_bytes,
+        "status": job.status,
+        "target_width": job.target_width,
+        "bitrate_kbps": job.bitrate_kbps,
+        "crf": job.crf,
+        "preset": job.preset,
+        "encoder": job.encoder,
+        "trim_start": job.trim_start,
+        "trim_end": job.trim_end,
+        "audio_extract_format": job.audio_extract_format,
+        "progress_pct": job.progress_pct,
+        "current_stage": job.current_stage,
+        "duration_seconds": job.duration_seconds,
+        "elapsed_seconds": job.elapsed_seconds,
+        "input_width": job.input_width,
+        "input_height": job.input_height,
+        "output_path": job.output_path,
+        "output_size_bytes": job.output_size_bytes,
+        "output_width": job.output_width,
+        "output_height": job.output_height,
+        "compression_ratio": job.compression_ratio,
+        "encoder_used": job.encoder_used,
+        "audio_extract_path": job.audio_extract_path,
+        "audio_extract_size_bytes": job.audio_extract_size_bytes,
+        "error_message": job.error_message,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+        "started_at": job.started_at,
+        "completed_at": job.completed_at,
+        "failed_at": job.failed_at,
+        "cancelled_at": job.cancelled_at,
+    }
+
 
 # Video Compressor (FFmpeg) Jobs API Endpoints
 # =========================================================================
@@ -44,8 +87,8 @@ def compress_retention_summary() -> Dict[str, Any]:
     (COMPRESS_RETENTION_HOURS from env) and the last time the automatic
     cleanup actually removed on-disk files (tracked in the settings table).
     """
-    from app.db import get_compress_retention_summary
-    return get_compress_retention_summary()
+    svc = get_compression_service()
+    return svc.get_retention_summary()
 
 
 def _validate_compress_params(
@@ -107,15 +150,17 @@ async def create_compress_job_api(
 
     validate_extension(file.filename)
 
+    svc = get_compression_service()
+
     try:
-        trim_start = parse_trim_time(start)
-        trim_end = parse_trim_time(end)
+        trim_start = svc.parse_trim_time(start)
+        trim_end = svc.parse_trim_time(end)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
     _validate_compress_params(target_width, bitrate_kbps, crf, trim_start, trim_end)
 
-    enc = normalize_encoder(encoder)
+    enc = svc.normalize_encoder(encoder)
 
     if audio_extract not in ("", "wav", "mp3"):
         raise HTTPException(
@@ -123,7 +168,7 @@ async def create_compress_job_api(
             detail="audio_extract must be '', 'wav', or 'mp3'.",
         )
 
-    queued = count_queued_compress_jobs()
+    queued = svc.count_queued()
     if queued >= COMPRESS_MAX_QUEUED:
         raise HTTPException(
             status_code=429,
@@ -131,7 +176,7 @@ async def create_compress_job_api(
             "Wait for pending jobs to finish and try again.",
         )
 
-    if not check_disk_space(COMPRESS_OUTPUT_DIR, MIN_FREE_DISK_GB):
+    if not svc.check_disk_space(COMPRESS_OUTPUT_DIR, MIN_FREE_DISK_GB):
         raise HTTPException(
             status_code=507,
             detail=f"Insufficient disk space. At least {MIN_FREE_DISK_GB} GB free "
@@ -160,10 +205,10 @@ async def create_compress_job_api(
                     )
                 buffer.write(chunk)
     except HTTPException:
-        safe_delete_dir(job_dir)
+        svc.safe_delete_dir(job_dir)
         raise
     except Exception as e:
-        safe_delete_dir(job_dir)
+        svc.safe_delete_dir(job_dir)
         logger.error(f"Error saving upload file for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save upload file: {e}")
 
@@ -174,14 +219,15 @@ async def create_compress_job_api(
         validate_magic_bytes(header_bytes)
         validate_with_ffprobe(save_path)
     except HTTPException:
-        safe_delete_dir(job_dir)
+        svc.safe_delete_dir(job_dir)
         raise
     except Exception as e:
-        safe_delete_dir(job_dir)
+        svc.safe_delete_dir(job_dir)
         logger.error(f"Validation error for compress job {job_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to validate media file")
 
-    create_compress_job(
+    # Create job record via service → repository port
+    job = svc.create_job(
         job_id=job_id,
         filename=file.filename,
         input_path=save_path,
@@ -196,10 +242,10 @@ async def create_compress_job_api(
         audio_extract_format=audio_extract,
     )
 
-    qinfo = compress_job_queue_info(job_id)
+    qinfo = svc.job_queue_info(job.job_id)
     return CompressJobCreateResponse(
         status="accepted",
-        job_id=job_id,
+        job_id=job.job_id,
         filename=file.filename,
         queue_position=qinfo["queue_position"],
         queue_length=qinfo["queue_length"],
@@ -214,16 +260,20 @@ async def list_compress_jobs_api(
     """
     List recent video compressor jobs ordered by creation date (newest first).
     """
-    jobs = list_compress_jobs(limit=limit)
+    svc = get_compression_service()
+    jobs = svc.list_jobs(limit=limit)
+    result = []
     for job in jobs:
-        job.pop("input_path", None)
-        job["output_exists"] = bool(
-            job.get("output_path") and os.path.exists(job.get("output_path") or "")
+        d = _job_to_dict(job)
+        d.pop("input_path", None)
+        d["output_exists"] = bool(
+            job.output_path and os.path.exists(job.output_path or "")
         )
-        job["audio_exists"] = bool(
-            job.get("audio_extract_path") and os.path.exists(job.get("audio_extract_path") or "")
+        d["audio_exists"] = bool(
+            job.audio_extract_path and os.path.exists(job.audio_extract_path or "")
         )
-    return jobs
+        result.append(d)
+    return result
 
 
 @router.get("/v1/media/compress/retention")
@@ -245,16 +295,18 @@ async def get_compress_job_status(
     """
     Get the status, queue position, progress %, and result of a compressor job.
     """
-    job = get_compress_job(job_id)
+    svc = get_compression_service()
+    job = svc.get_job_or_none(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Compress job {job_id} not found.")
-    qinfo = compress_job_queue_info(job_id)
-    job["queue_position"] = qinfo["queue_position"] if job["status"] == "queued" else 0
-    job["queue_length"] = qinfo["queue_length"]
-    job["audio_exists"] = bool(
-        job.get("audio_extract_path") and os.path.exists(job.get("audio_extract_path") or "")
+    qinfo = svc.job_queue_info(job_id)
+    d = _job_to_dict(job)
+    d["queue_position"] = qinfo["queue_position"] if job.status == "queued" else 0
+    d["queue_length"] = qinfo["queue_length"]
+    d["audio_exists"] = bool(
+        job.audio_extract_path and os.path.exists(job.audio_extract_path or "")
     )
-    return CompressJobStatusResponse(**job)
+    return CompressJobStatusResponse(**d)
 
 
 @router.delete("/v1/media/compress/jobs/{job_id}")
@@ -265,7 +317,8 @@ async def cancel_compress_job(
     Cancel/delete a video compressor job: terminate the running FFmpeg worker,
     remove the job record, and delete ALL on-disk files (input + output).
     """
-    job = get_compress_job(job_id)
+    svc = get_compression_service()
+    job = svc.get_job_or_none(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Compress job {job_id} not found.")
 
@@ -279,12 +332,46 @@ async def cancel_compress_job(
             logger.warning(f"Compressor worker {job_id} did not exit after terminate; killing it")
             proc.kill()
 
-    delete_compress_job(job_id)
-    safe_delete_dir(os.path.join(COMPRESS_OUTPUT_DIR, job_id))
+    svc.delete_job(job_id)
+    svc.safe_delete_dir(os.path.join(COMPRESS_OUTPUT_DIR, job_id))
     return {
         "status": "success",
         "message": f"Compress job {job_id} deleted (input + output files removed).",
     }
+
+
+def _is_safe_job_path(
+    file_path: str,
+    job_id: str,
+    base_dir: str,
+    job_output_path: Optional[str] = None,
+    job_input_path: Optional[str] = None,
+) -> bool:
+    """Check that file_path is safely contained within a valid job directory for job_id to prevent path traversal."""
+    if not file_path or not job_id:
+        return False
+    try:
+        target_real = os.path.realpath(file_path)
+        allowed_dirs = []
+        if base_dir:
+            allowed_dirs.append(os.path.realpath(os.path.join(base_dir, job_id)))
+        if job_output_path:
+            allowed_dirs.append(os.path.realpath(os.path.dirname(job_output_path)))
+        if job_input_path:
+            allowed_dirs.append(os.path.realpath(os.path.dirname(job_input_path)))
+
+        for allowed_dir in allowed_dirs:
+            if os.path.basename(allowed_dir) != job_id:
+                continue
+            try:
+                rel = os.path.relpath(target_real, allowed_dir)
+                if not rel.startswith("..") and not os.path.isabs(rel):
+                    return True
+            except ValueError:
+                continue
+        return False
+    except Exception:
+        return False
 
 
 @router.delete("/v1/media/compress/jobs/{job_id}/output")
@@ -295,52 +382,77 @@ async def delete_compress_job_output(
     Delete ONLY the compressed output file(s) (video + extracted audio) of a completed job
     to free disk space, while keeping the job record (history) intact.
     """
-    job = get_compress_job(job_id)
+    svc = get_compression_service()
+    job = svc.get_job_or_none(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Compress job {job_id} not found.")
-    if job.get("status") != "completed":
+    if job.status != "completed":
         raise HTTPException(status_code=400, detail="Job has no output files.")
 
-    output_path = job.get("output_path")
-    audio_path = job.get("audio_extract_path")
+    output_path = job.output_path
+    audio_path = job.audio_extract_path
     if not output_path and not audio_path:
         raise HTTPException(status_code=400, detail="Job has no output files.")
 
-    base_real = os.path.realpath(COMPRESS_OUTPUT_DIR)
-    job_dir_real = os.path.realpath(os.path.join(COMPRESS_OUTPUT_DIR, job_id))
-
     freed = 0
     removed_any = False
+    errors = []
 
     # 1. Delete compressed video file if it exists
     if output_path:
         out_real = os.path.realpath(output_path)
-        if out_real.startswith(base_real + os.sep) and os.path.dirname(out_real) == job_dir_real:
-            if os.path.exists(out_real):
-                try:
-                    freed += os.path.getsize(out_real)
-                    os.remove(out_real)
-                    removed_any = True
-                except OSError as e:
-                    logger.error(f"Failed to delete output video file for compress job {job_id}: {e}")
+        if os.path.exists(out_real):
+            if not _is_safe_job_path(
+                output_path, job_id, COMPRESS_OUTPUT_DIR,
+                job_output_path=output_path, job_input_path=job.input_path
+            ):
+                raise HTTPException(
+                    status_code=403, detail="Access to output video path is not allowed."
+                )
+            try:
+                size = os.path.getsize(out_real)
+                os.remove(out_real)
+                freed += size
+                removed_any = True
+            except OSError as e:
+                logger.error(f"Failed to delete output video file for compress job {job_id}: {e}")
+                errors.append(f"video: {e}")
 
     # 2. Delete extracted audio file if it exists
     if audio_path:
         aud_real = os.path.realpath(audio_path)
-        if aud_real.startswith(base_real + os.sep) and os.path.dirname(aud_real) == job_dir_real:
-            if os.path.exists(aud_real):
-                try:
-                    freed += os.path.getsize(aud_real)
-                    os.remove(aud_real)
-                    removed_any = True
-                except OSError as e:
-                    logger.error(f"Failed to delete output audio file for compress job {job_id}: {e}")
+        if os.path.exists(aud_real):
+            if not _is_safe_job_path(
+                audio_path, job_id, COMPRESS_OUTPUT_DIR,
+                job_output_path=output_path, job_input_path=job.input_path
+            ):
+                raise HTTPException(
+                    status_code=403, detail="Access to output audio path is not allowed."
+                )
+            try:
+                size = os.path.getsize(aud_real)
+                os.remove(aud_real)
+                freed += size
+                removed_any = True
+            except OSError as e:
+                logger.error(f"Failed to delete output audio file for compress job {job_id}: {e}")
+                errors.append(f"audio: {e}")
+
+    # Verify if files still exist after deletion attempt
+    out_still_exists = bool(output_path and os.path.exists(os.path.realpath(output_path)))
+    aud_still_exists = bool(audio_path and os.path.exists(os.path.realpath(audio_path)))
+
+    if out_still_exists or aud_still_exists:
+        err_msg = ", ".join(errors) if errors else "File access error or locked file"
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete output file(s): {err_msg}"
+        )
 
     if not removed_any:
         return {
             "status": "success",
             "message": "Output files were already removed.",
-            "output_size_bytes": job.get("output_size_bytes") or 0,
+            "output_size_bytes": job.output_size_bytes or 0,
         }
 
     logger.info(f"Compress job {job_id}: output file(s) deleted manually (freed {freed} bytes)")
@@ -359,29 +471,30 @@ async def download_compress_job(
     Download the compressed MP4 output of a completed job. Returns 410 Gone if
     the output file has been cleaned up by the retention policy.
     """
-    job = get_compress_job(job_id)
+    svc = get_compression_service()
+    job = svc.get_job_or_none(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Compress job {job_id} not found.")
-    if job.get("status") != "completed" or not job.get("output_path"):
+    if job.status != "completed" or not job.output_path:
         raise HTTPException(status_code=400, detail="Job is not completed yet.")
 
-    output_path = job["output_path"]
+    output_path = job.output_path
     if not os.path.exists(output_path):
         raise HTTPException(
             status_code=410,
             detail="Compressed file has been removed by the retention policy.",
         )
 
-    # Path-safety: the output must live inside this job's own directory.
-    base_real = os.path.realpath(COMPRESS_OUTPUT_DIR)
-    job_dir_real = os.path.realpath(os.path.join(COMPRESS_OUTPUT_DIR, job_id))
-    out_real = os.path.realpath(output_path)
-    if not out_real.startswith(base_real + os.sep) or os.path.dirname(out_real) != job_dir_real:
+    if not _is_safe_job_path(
+        output_path, job_id, COMPRESS_OUTPUT_DIR,
+        job_output_path=output_path, job_input_path=job.input_path
+    ):
         raise HTTPException(
             status_code=403, detail="Access to this output path is not allowed."
         )
 
-    safe_name = os.path.splitext(job.get("filename", "video"))[0]
+    out_real = os.path.realpath(output_path)
+    safe_name = os.path.splitext(job.filename or "video")[0]
     response = FileResponse(out_real, media_type="video/mp4")
     response.headers["Content-Disposition"] = _attachment_header(safe_name, "mp4")
     return response
@@ -395,30 +508,32 @@ async def download_compress_job_audio(
     Download the extracted audio file (WAV or MP3) of a completed compress job.
     Returns 404 if no audio was extracted or the file has been cleaned up.
     """
-    job = get_compress_job(job_id)
+    svc = get_compression_service()
+    job = svc.get_job_or_none(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Compress job {job_id} not found.")
-    if job.get("status") != "completed":
+    if job.status != "completed":
         raise HTTPException(status_code=400, detail="Job is not completed yet.")
-    audio_path = job.get("audio_extract_path")
+    audio_path = job.audio_extract_path
     if not audio_path or not os.path.exists(audio_path):
         raise HTTPException(
             status_code=404,
             detail="Audio file not found (not extracted or removed by retention policy).",
         )
 
-    base_real = os.path.realpath(COMPRESS_OUTPUT_DIR)
-    job_dir_real = os.path.realpath(os.path.join(COMPRESS_OUTPUT_DIR, job_id))
-    out_real = os.path.realpath(audio_path)
-    if not out_real.startswith(base_real + os.sep) or os.path.dirname(out_real) != job_dir_real:
+    if not _is_safe_job_path(
+        audio_path, job_id, COMPRESS_OUTPUT_DIR,
+        job_output_path=output_path if 'output_path' in locals() else job.output_path, job_input_path=job.input_path
+    ):
         raise HTTPException(
             status_code=403, detail="Access to this audio path is not allowed."
         )
 
-    fmt = job.get("audio_extract_format", "wav")
+    out_real = os.path.realpath(audio_path)
+    fmt = job.audio_extract_format or "wav"
     media_type = "audio/wav" if fmt == "wav" else "audio/mpeg"
     ext = "wav" if fmt == "wav" else "mp3"
-    safe_name = os.path.splitext(job.get("filename", "audio"))[0]
+    safe_name = os.path.splitext(job.filename or "audio")[0]
     response = FileResponse(out_real, media_type=media_type)
     response.headers["Content-Disposition"] = _attachment_header(safe_name, ext)
     return response
