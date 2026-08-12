@@ -110,7 +110,14 @@ async def compress_jobs_history_page(request: Request):
 
 @router.get("/media/transcribe/jobs/history", response_class=HTMLResponse)
 async def jobs_history_page(request: Request):
-    return templates.TemplateResponse(request=request, name="jobs.html")
+    return templates.TemplateResponse(
+        request=request,
+        name="jobs.html",
+        context={
+            "max_upload_mb": MAX_UPLOAD_SIZE_MB,
+            "max_media_duration_sec": MAX_MEDIA_DURATION_SEC,
+        },
+    )
 
 
 @router.get("/setting", response_class=HTMLResponse)

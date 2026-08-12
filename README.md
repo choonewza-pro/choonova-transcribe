@@ -43,6 +43,11 @@ ChooNova Transcribe follows a Pragmatic Modular Monolith + Hexagonal Architectur
 
 ## Requirements
 
+**Required:**
+
+- Docker and Docker Compose
+- Minimum 5GB Free Disk Space (`MIN_FREE_DISK_GB`)
+
 **Recommended (GPU):**
 
 - NVIDIA GPU with at least 12GB VRAM (Tested on RTX 4080 Laptop GPU)
@@ -83,9 +88,14 @@ Application behavior is controlled via environment variables. Copy `.env.example
 | `MODEL_LOAD_MODE`          | `always`                  | No       | VRAM residency seed: `always` or `idle`.                                    |
 | `MODEL_IDLE_TIMEOUT_SEC`   | `900`                     | No       | Seconds of inactivity before unloading models (if `idle`).                  |
 | `COMPRESS_ENCODER`         | `libx264`                 | No       | Video encoder: `libx264` or `nvenc` (auto-falls back if NVENC unavailable). |
+| `COMPRESS_MAX_CONCURRENT`  | `1`                       | No       | Maximum concurrent compression jobs.                                        |
+| `COMPRESS_MAX_QUEUED`      | `10`                      | No       | Maximum jobs waiting in compression queue.                                  |
+| `COMPRESS_RETENTION_HOURS` | `24`                      | No       | Hours to retain compressed output files on disk.                            |
+| `TRANSCRIBE_RETENTION_HOURS`| `24`                     | No       | Hours to retain transcription media files on disk.                          |
 | `MAX_AUDIO_UPLOAD_SIZE_MB` | `50.0`                    | No       | Size limit for synchronous audio endpoint.                                  |
 | `MAX_UPLOAD_SIZE_MB`       | `0`                       | No       | Size limit for async long-form jobs (0 = unlimited).                        |
 | `MAX_MEDIA_DURATION_SEC`   | `21600.0`                 | No       | Max duration in seconds for uploaded media to prevent GPU hogging.          |
+| `MIN_FREE_DISK_GB`         | `5.0`                     | No       | Minimum required free disk space in GB before rejecting new jobs.           |
 
 _(Note: Environment variables for VRAM mode only seed the database on first boot. The database is the source of truth thereafter.)_
 
@@ -100,8 +110,17 @@ _(Note: Environment variables for VRAM mode only seed the database on first boot
   - Safe filename sanitization to prevent Path Traversal attacks.
 - **Subprocess & FFmpeg Security**: FFmpeg executions run securely without `shell=True` and enforce `-protocol_whitelist file,pipe,crypto` to completely eliminate Server-Side Request Forgery (SSRF) risks from malicious media playlists (e.g., weaponized `.m3u8`).
 
-## Usage: Model VRAM Residency
+## Usage
 
+### Web UI
+Navigate to `http://localhost:8830/` to access the built-in HTML dashboard where you can:
+- Transcribe short audio directly.
+- Stream microphone audio in real-time.
+- Upload long videos for asynchronous transcription and monitor progress.
+- Compress videos.
+- Adjust Model VRAM Settings.
+
+### Model VRAM Residency
 The ASR models (Typhoon + Whisper) consume significant GPU memory (~1GB+). Their lifecycle is managed in two modes:
 
 - **`always`** (Default): Models remain in VRAM permanently once loaded. Best for low latency.
@@ -193,6 +212,14 @@ run_compress_job.py (isolated subprocess)
    └─ 4. Delete input file immediately; retain output per schedule.
 ```
 
+## Data Lifecycle
+
+- **Creation**: Media is uploaded and temporarily saved to `TEMP_JOBS_DIR` (`/tmp/choonova-transcribe-jobs` inside the container).
+- **Processing**: A worker subprocess processes the media.
+- **Completion**: Extracted texts, SRTs, and timestamps are saved in the SQLite database (`choonova-transcribe.db`).
+- **Retention**: Media files are kept on disk based on `TRANSCRIBE_RETENTION_HOURS` or `COMPRESS_RETENTION_HOURS` (default 24 hours).
+- **Cleanup**: A background task automatically deletes old media files to save disk space. The database records are kept indefinitely unless manually deleted via `DELETE /v1/media/transcribe/jobs/{job_id}`. Container restart will not wipe the database if the `./data` volume is mounted.
+
 ## Development
 
 Local development setup requires manually installing dependencies:
@@ -232,6 +259,12 @@ tests/
 └── unit/            # Unit tests using in-memory Fake adapters
 ```
 
+## Deployment / Operations
+
+- **Container Deployment**: Docker Compose is the recommended deployment strategy. The `km4u-network` external network must be created beforehand (`docker network create km4u-network`) if integrating with other services, or you can remove the external network constraint in `docker-compose.yml` for standalone use.
+- **Persistent Storage**: Ensure you mount `./data:/app/data` to persist job histories and application settings across restarts.
+- **Observability**: Uvicorn access logs and application logs are outputted to `stdout` in the container. Docker is configured to use the `json-file` logging driver with rotation (`max-size: 10m`).
+
 ## Troubleshooting
 
 ### NVIDIA GPU / NVENC Availability
@@ -252,3 +285,9 @@ If video compression falls back to `libx264` unexpectedly, verify that your GPU 
    docker exec <container_name> ffmpeg -h encoder=h264_nvenc >/dev/null && echo "h264_nvenc OK"
    ```
    _Solution_: Ensure `NVIDIA_DRIVER_CAPABILITIES=video,compute,utility` is set in your `docker-compose.yml`.
+
+## Limitations
+
+- **Single-Node Persistence**: The system uses SQLite WAL mode. It is designed to run on a single instance/container and does not natively support horizontal scaling out-of-the-box due to local disk persistence and SQLite constraints.
+- **Real-time Streaming**: Real-time websocket streaming currently supports the Thai language only (via Typhoon ASR).
+- **GPU Constraints**: Multiple concurrent transcriptions might lead to CUDA OOM errors on GPUs with limited VRAM. The system handles this gracefully using process isolation and CUDA memory resets, but it is recommended to manage concurrent requests based on your hardware.
