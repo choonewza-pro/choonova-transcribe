@@ -9,7 +9,7 @@ import subprocess
 import re
 from urllib.parse import quote
 
-from app.core.security import verify_api_key
+from app.core.security import verify_api_key, verify_transcribe_history_api_key
 from app.core.state import _active_workers
 from app.core.media_validator import validate_magic_bytes, validate_extension, validate_with_ffprobe, secure_filename
 from app.config import (
@@ -279,7 +279,7 @@ async def list_transcription_jobs(
     limit: int = 50,
     status_filter: Optional[str] = None,
     include_text: bool = False,
-    authenticated: bool = Depends(verify_api_key),
+    authenticated: bool = Depends(verify_transcribe_history_api_key),
 ):
     """
     List recent transcription jobs ordered by creation date.
@@ -300,7 +300,7 @@ async def list_transcription_jobs(
 
 @router.get("/v1/media/transcribe/jobs/{job_id}", response_model=JobStatusResponse)
 async def get_transcription_job_status(
-    job_id: str, authenticated: bool = Depends(verify_api_key)
+    job_id: str, authenticated: bool = Depends(verify_transcribe_history_api_key)
 ):
     """
     Get the status, stage, progress %, and completed transcript result of a job.
@@ -395,7 +395,7 @@ def _attachment_header(safe_name: str, ext: str) -> str:
 
 @router.get("/v1/media/transcribe/jobs/{job_id}/export/{export_format}")
 async def export_job_result(
-    job_id: str, export_format: str, authenticated: bool = Depends(verify_api_key)
+    job_id: str, export_format: str, authenticated: bool = Depends(verify_transcribe_history_api_key)
 ):
     """
     Download job transcription result as .txt, .srt subtitles, or .json timestamp format.

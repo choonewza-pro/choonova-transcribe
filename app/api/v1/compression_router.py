@@ -7,7 +7,7 @@ import os
 import uuid
 import subprocess
 
-from app.core.security import verify_api_key
+from app.core.security import verify_api_key, verify_compress_history_api_key
 from app.core.state import _active_compress_workers
 from app.core.media_validator import validate_magic_bytes, validate_extension, validate_with_ffprobe, secure_filename
 from app.config import (
@@ -255,7 +255,7 @@ async def create_compress_job_api(
 
 @router.get("/v1/media/compress/jobs", response_model=List[Dict[str, Any]])
 async def list_compress_jobs_api(
-    limit: int = 50, authenticated: bool = Depends(verify_api_key)
+    limit: int = 50, authenticated: bool = Depends(verify_compress_history_api_key)
 ):
     """
     List recent video compressor jobs ordered by creation date (newest first).
@@ -278,7 +278,7 @@ async def list_compress_jobs_api(
 
 @router.get("/v1/media/compress/retention")
 async def get_compress_retention_info(
-    authenticated: bool = Depends(verify_api_key),
+    authenticated: bool = Depends(verify_compress_history_api_key),
 ):
     """
     Retention-policy info for the compressor dashboard: how long compressed
@@ -290,7 +290,7 @@ async def get_compress_retention_info(
 
 @router.get("/v1/media/compress/jobs/{job_id}", response_model=CompressJobStatusResponse)
 async def get_compress_job_status(
-    job_id: str, authenticated: bool = Depends(verify_api_key)
+    job_id: str, authenticated: bool = Depends(verify_compress_history_api_key)
 ):
     """
     Get the status, queue position, progress %, and result of a compressor job.
@@ -465,7 +465,7 @@ async def delete_compress_job_output(
 
 @router.get("/v1/media/compress/jobs/{job_id}/download")
 async def download_compress_job(
-    job_id: str, authenticated: bool = Depends(verify_api_key)
+    job_id: str, authenticated: bool = Depends(verify_compress_history_api_key)
 ):
     """
     Download the compressed MP4 output of a completed job. Returns 410 Gone if
@@ -502,7 +502,7 @@ async def download_compress_job(
 
 @router.get("/v1/media/compress/jobs/{job_id}/audio")
 async def download_compress_job_audio(
-    job_id: str, authenticated: bool = Depends(verify_api_key)
+    job_id: str, authenticated: bool = Depends(verify_compress_history_api_key)
 ):
     """
     Download the extracted audio file (WAV or MP3) of a completed compress job.

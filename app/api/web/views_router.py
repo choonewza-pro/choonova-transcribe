@@ -4,6 +4,7 @@ Renders HTML templates for the frontend interface.
 """
 
 import os
+import hmac
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -19,6 +20,9 @@ from app.core.config import (
     COMPRESS_MAX_CONCURRENT,
     COMPRESS_MAX_QUEUED,
     MAX_MEDIA_DURATION_SEC,
+    GATEWAY_API_KEY,
+    ALLOW_ACCESS_TRANSCRIBE_HISTORY,
+    ALLOW_ACCESS_COMPRESS_HISTORY,
 )
 
 router = APIRouter(tags=["Web Views"])
@@ -33,6 +37,34 @@ def _compress_retention_summary() -> dict:
     return svc.get_retention_summary()
 
 
+def check_history_access(request: Request, history_type: str) -> tuple[bool, str | None]:
+    """
+    Checks if the user is allowed to access the history page.
+    Returns (is_allowed, verified_api_key_to_set_in_cookie)
+    """
+    # 1. Check bypass flag
+    if history_type == "transcribe" and ALLOW_ACCESS_TRANSCRIBE_HISTORY:
+        return True, None
+    if history_type == "compress" and ALLOW_ACCESS_COMPRESS_HISTORY:
+        return True, None
+
+    # 2. Check API Key from query params, headers, or cookies
+    api_key = request.query_params.get("api_key") or request.query_params.get("x-api-key")
+    if not api_key:
+        api_key = request.headers.get("x-api-key")
+    if not api_key:
+        api_key = request.cookies.get("typhoon_asr_api_key") or request.cookies.get("api_key")
+
+    if not api_key:
+        return False, None
+
+    token = api_key.strip()
+    if hmac.compare_digest(token, GATEWAY_API_KEY):
+        return True, token
+
+    return False, None
+
+
 @router.get("/", response_class=HTMLResponse)
 async def home_page(request: Request):
     return templates.TemplateResponse(
@@ -42,6 +74,8 @@ async def home_page(request: Request):
             "max_audio_upload_mb": MAX_AUDIO_UPLOAD_SIZE_MB,
             "max_media_duration_sec": MAX_MEDIA_DURATION_SEC,
             "max_upload_mb": MAX_UPLOAD_SIZE_MB,
+            "allow_access_transcribe_history": ALLOW_ACCESS_TRANSCRIBE_HISTORY,
+            "allow_access_compress_history": ALLOW_ACCESS_COMPRESS_HISTORY,
         },
     )
 
@@ -96,8 +130,20 @@ async def media_compress_page(request: Request):
 
 @router.get("/media/compress/jobs/history", response_class=HTMLResponse)
 async def compress_jobs_history_page(request: Request):
+    is_allowed, api_key = check_history_access(request, "compress")
+    if not is_allowed:
+        return templates.TemplateResponse(
+            request=request,
+            name="unauthorized.html",
+            context={
+                "error_message": "ไม่พบ API Key หรือ API Key ของคุณไม่ถูกต้อง",
+                "active_page": "compress_jobs",
+            },
+            status_code=401,
+        )
+
     retention = _compress_retention_summary()
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request=request,
         name="compress_jobs.html",
         context={
@@ -106,20 +152,52 @@ async def compress_jobs_history_page(request: Request):
             "retention_hours": retention.get("retention_hours", 24),
             "last_cleanup_at": retention.get("last_cleanup_at"),
             "last_cleanup_count": retention.get("last_cleanup_count", 0),
+            "allow_access_compress_history": ALLOW_ACCESS_COMPRESS_HISTORY,
         },
     )
+    if api_key:
+        response.set_cookie(
+            key="typhoon_asr_api_key",
+            value=api_key,
+            max_age=31536000,
+            path="/",
+            samesite="lax",
+        )
+    return response
 
 
 @router.get("/media/transcribe/jobs/history", response_class=HTMLResponse)
 async def jobs_history_page(request: Request):
-    return templates.TemplateResponse(
+    is_allowed, api_key = check_history_access(request, "transcribe")
+    if not is_allowed:
+        return templates.TemplateResponse(
+            request=request,
+            name="unauthorized.html",
+            context={
+                "error_message": "ไม่พบ API Key หรือ API Key ของคุณไม่ถูกต้อง",
+                "active_page": "jobs",
+            },
+            status_code=401,
+        )
+
+    response = templates.TemplateResponse(
         request=request,
         name="jobs.html",
         context={
             "max_upload_mb": MAX_UPLOAD_SIZE_MB,
             "max_media_duration_sec": MAX_MEDIA_DURATION_SEC,
+            "allow_access_transcribe_history": ALLOW_ACCESS_TRANSCRIBE_HISTORY,
         },
     )
+    if api_key:
+        response.set_cookie(
+            key="typhoon_asr_api_key",
+            value=api_key,
+            max_age=31536000,
+            path="/",
+            samesite="lax",
+        )
+    return response
 
 
 @router.get("/setting", response_class=HTMLResponse)

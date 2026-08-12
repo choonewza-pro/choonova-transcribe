@@ -72,6 +72,10 @@ WHISPER_COMPUTE_TYPE = "float16" if DEVICE == "cuda" else "int8"
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip() or None
 SUPPORTED_LANGUAGES = ("th", "en", "auto")
 
+# Public share configurations for history pages
+ALLOW_ACCESS_TRANSCRIBE_HISTORY = os.getenv("ALLOW_ACCESS_TRANSCRIBE_HISTORY", "false").lower() in ("true", "1", "yes")
+ALLOW_ACCESS_COMPRESS_HISTORY = os.getenv("ALLOW_ACCESS_COMPRESS_HISTORY", "false").lower() in ("true", "1", "yes")
+
 
 def get_real_execution_device() -> str:
     """

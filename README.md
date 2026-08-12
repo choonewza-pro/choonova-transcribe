@@ -117,13 +117,17 @@ Application behavior is controlled via environment variables. Copy `.env.example
 | `MAX_UPLOAD_SIZE_MB`         | `0`                       | No       | Size limit for async long-form jobs (0 = unlimited).                        |
 | `MAX_MEDIA_DURATION_SEC`     | `21600.0`                 | No       | Max duration in seconds for uploaded media to prevent GPU hogging.          |
 | `MIN_FREE_DISK_GB`           | `5.0`                     | No       | Minimum required free disk space in GB before rejecting new jobs.           |
+| `ALLOW_ACCESS_TRANSCRIBE_HISTORY` | `false`              | No       | Bypasses API key authentication on ASR history. **⚠️ SECURITY RISK**: Enabling this allows public access to transcripts and media files. |
+| `ALLOW_ACCESS_COMPRESS_HISTORY` | `false`                | No       | Bypasses API key authentication on compress history. **⚠️ SECURITY RISK**: Enabling this allows public access to compression logs and videos. |
 
 _(Note: Environment variables for VRAM mode only seed the database on first boot. The database is the source of truth thereafter.)_
 
 ## Authentication / Security
 
 - **API Endpoints**: All `/v1` REST endpoints require a static API key passed via the `x-api-key` HTTP header. The system uses constant-time HMAC comparison to verify keys.
-- **Web UI & WebSockets**: Unauthenticated for ease of local access and streaming.
+- **History Dashboards**: The transcription history (`/media/transcribe/jobs/history`) and compression history (`/media/compress/jobs/history`) pages are secured by API key checks. You can log in via query parameter (`?api_key=YOUR_KEY`), browser cookie, or via the manual login form on the Access Denied page. The session is seamlessly synchronized between browser cookies and `localStorage`.
+- **Public Share Bypasses**: Bypasses can be enabled via `ALLOW_ACCESS_TRANSCRIBE_HISTORY=true` and `ALLOW_ACCESS_COMPRESS_HISTORY=true` to publicly share history dashboards. When active, a prominent security warning banner is displayed on the homepage and respective history dashboards to alert operators of the open access.
+- **Web UI & WebSockets**: The landing page, short transcription forms, microphone streaming page, and WebSockets remain unauthenticated for ease of local access and real-time streaming.
 - **Upload Validation (Defense-in-Depth)**: All file uploads undergo multi-layer inspection before processing:
   - Extension and Size verification.
   - Magic Bytes signature checking (`filetype`) to prevent file masking.

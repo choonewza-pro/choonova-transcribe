@@ -4,7 +4,11 @@ Core security & authentication mechanisms for ChooNova-Transcribe.
 
 import hmac
 from fastapi import Header, HTTPException, status
-from app.core.config import GATEWAY_API_KEY
+from app.core.config import (
+    GATEWAY_API_KEY,
+    ALLOW_ACCESS_TRANSCRIBE_HISTORY,
+    ALLOW_ACCESS_COMPRESS_HISTORY,
+)
 
 
 async def verify_api_key(
@@ -29,3 +33,28 @@ async def verify_api_key(
         )
 
     return True
+
+
+async def verify_transcribe_history_api_key(
+    x_api_key: str | None = Header(None, alias="x-api-key"),
+) -> bool:
+    """
+    Verifies authentication via x-api-key header for transcribe history endpoints,
+    or bypasses if ALLOW_ACCESS_TRANSCRIBE_HISTORY is True.
+    """
+    if ALLOW_ACCESS_TRANSCRIBE_HISTORY:
+        return True
+    return await verify_api_key(x_api_key)
+
+
+async def verify_compress_history_api_key(
+    x_api_key: str | None = Header(None, alias="x-api-key"),
+) -> bool:
+    """
+    Verifies authentication via x-api-key header for compress history endpoints,
+    or bypasses if ALLOW_ACCESS_COMPRESS_HISTORY is True.
+    """
+    if ALLOW_ACCESS_COMPRESS_HISTORY:
+        return True
+    return await verify_api_key(x_api_key)
+

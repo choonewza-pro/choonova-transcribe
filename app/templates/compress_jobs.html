@@ -300,7 +300,27 @@
 
       {% include 'partials/retention_banner.html' %}
 
-      
+      {% if allow_access_compress_history %}
+      <div style="background: rgba(218, 54, 51, 0.08); border: 1px dashed var(--danger); border-radius: 12px; padding: 1.15rem 1.35rem; display: flex; align-items: flex-start; gap: 0.85rem; margin-top: 1rem; margin-bottom: 1.5rem; box-shadow: 0 8px 24px rgba(218, 54, 51, 0.05);">
+        <div style="font-size: 1.5rem; line-height: 1; color: #ff6b6b; animation: warning-pulse 1.5s infinite;">⚠️</div>
+        <div style="flex: 1;">
+          <h4 style="font-size: 0.95rem; font-weight: 600; color: #ff6b6b; margin-bottom: 0.25rem;">
+            คำเตือน: หน้านี้เปิดให้เข้าถึงแบบสาธารณะ
+          </h4>
+          <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">
+            ระบบถูกกำหนดค่าให้ข้ามการตรวจจับ API Key ใน `.env` (`ALLOW_ACCESS_COMPRESS_HISTORY=true`) ผู้ใช้งานทุกคนสามารถค้นหา ดูผล และดาวน์โหลดไฟล์วิดีโอ/ไฟล์เสียงที่บีบอัดได้ หากต้องการล็อกประวัติกรุณาเปลี่ยนเป็น `false`
+          </p>
+        </div>
+      </div>
+      <style>
+        @keyframes warning-pulse {
+          0% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.08); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+      </style>
+      {% endif %}
+
 
       <div class="list-actions">
         <span class="list-meta" id="listMeta">กำลังโหลดรายการ...</span>

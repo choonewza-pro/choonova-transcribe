@@ -49,6 +49,33 @@
         </div>
       </div>
 
+      {% if allow_access_transcribe_history or allow_access_compress_history %}
+      <div class="security-warning-card" style="margin-bottom: 2rem; background: rgba(218, 54, 51, 0.08); border: 1px dashed var(--danger); border-radius: 12px; padding: 1.25rem 1.5rem; display: flex; align-items: flex-start; gap: 1rem; box-shadow: 0 8px 24px rgba(218, 54, 51, 0.05); position: relative; overflow: hidden;">
+        <div style="font-size: 1.75rem; line-height: 1; color: #ff6b6b; animation: warning-pulse 1.5s infinite;">⚠️</div>
+        <div style="flex: 1;">
+          <h4 style="font-size: 1rem; font-weight: 600; color: #ff6b6b; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem;">
+            แจ้งเตือนความปลอดภัยของข้อมูล (Security Warning)
+          </h4>
+          <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.5;">
+            {% if allow_access_transcribe_history and allow_access_compress_history %}
+              ตรวจพบการเปิดสิทธิ์ข้ามการตรวจจับ API Key ทั้ง **ประวัติการถอดความ** และ **ประวัติการบีบอัดวิดีโอ** ในไฟล์ `.env` (`ALLOW_ACCESS_TRANSCRIBE_HISTORY=true` และ `ALLOW_ACCESS_COMPRESS_HISTORY=true`) ผู้ใช้งานอื่นที่มี URL สามารถเข้าถึงข้อมูลประวัติการทำรายการและดาวน์โหลดไฟล์บนเซิร์ฟเวอร์ได้โดยตรง หากไม่ต้องการแชร์ข้อมูลโปรดเปลี่ยนเป็น `false` เพื่อความปลอดภัย
+            {% elif allow_access_transcribe_history %}
+              ตรวจพบการเปิดสิทธิ์ข้ามการตรวจจับ API Key สำหรับ **ประวัติการถอดความ** ในไฟล์ `.env` (`ALLOW_ACCESS_TRANSCRIBE_HISTORY=true`) ผู้ใช้งานอื่นที่มี URL สามารถเข้าถึงข้อมูลประวัติการถอดความและดาวน์โหลดไฟล์เสียงได้โดยตรง หากไม่ต้องการแชร์ข้อมูลโปรดเปลี่ยนเป็น `false` เพื่อความปลอดภัย
+            {% else %}
+              ตรวจพบการเปิดสิทธิ์ข้ามการตรวจจับ API Key สำหรับ **ประวัติการบีบอัดวิดีโอ** ในไฟล์ `.env` (`ALLOW_ACCESS_COMPRESS_HISTORY=true`) ผู้ใช้งานอื่นที่มี URL สามารถเข้าถึงข้อมูลประวัติการบีบอัดและดาวน์โหลดไฟล์วิดีโอได้โดยตรง หากไม่ต้องการแชร์ข้อมูลโปรดเปลี่ยนเป็น `false` เพื่อความปลอดภัย
+            {% endif %}
+          </p>
+        </div>
+      </div>
+      <style>
+        @keyframes warning-pulse {
+          0% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.08); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+      </style>
+      {% endif %}
+
       <h2 style="font-size: 1.4rem; margin-bottom: 1rem;">เลือกโหมดใช้งานระบบ (Interactive Tools)</h2>
 
       <div class="nav-cards" style="margin-bottom: 2rem;">

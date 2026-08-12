@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         localStorage.setItem(API_KEY_STORAGE, key);
+        document.cookie = `typhoon_asr_api_key=${encodeURIComponent(key)}; path=/; max-age=31536000; SameSite=Lax`;
         if (apiKeyInput) apiKeyInput.value = '';
         initApiKeyUI();
         load();
@@ -80,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
     clearApiKeyLink.addEventListener('click', (e) => {
       e.preventDefault();
       localStorage.removeItem(API_KEY_STORAGE);
+      document.cookie = "typhoon_asr_api_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
       if (apiKeyInput) apiKeyInput.value = '';
       initApiKeyUI();
     });
