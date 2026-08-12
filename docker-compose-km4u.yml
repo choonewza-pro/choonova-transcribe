@@ -25,7 +25,7 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=8830
-      - GATEWAY_API_KEY=change-me-in-production
+      - GATEWAY_API_KEY=${GATEWAY_API_KEY:-change-me-in-production}
       - MODEL_PATH=/app/model/typhoon-asr-realtime.nemo
       - DEVICE=cuda
       - WHISPER_MODEL=large-v3-turbo
