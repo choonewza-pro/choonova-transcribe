@@ -8,11 +8,11 @@ venv/
 ENV/
 *.nemo
 model/*.nemo
-.agents/skills/
+.agents/skills/*
 !.agents/skills/project-onboarding/
-!.agents/skills/project-onboarding/SKILL.md
 !.agents/skills/modular-hexagonal-architecture/
-!.agents/skills/modular-hexagonal-architecture/SKILL.md
+!.agents/skills/new-git-commit-guide/
+!.agents/skills/readme-engineering/
 
 
 skills-lock.json

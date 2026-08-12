@@ -140,6 +140,10 @@ app/
 > **4. WebSocket Streaming Fast-Path**
 > สำหรับ WebSocket Real-time Audio Stream ([`realtime_router.py`](file:///d:/_PROJECT_/choonova-transcribe/app/api/v1/realtime_router.py)) ให้ส่งผ่าน Audio Byte Chunks ตรงไปยัง ASR Engine โดยไม่ต้องผ่าน Full Database/Job Domain Entity Mapping ทุกๆ Chunk เพื่อรักษา Latency < 10ms
 
+> [!CAUTION]
+> **5. ห้ามรีแฟกเตอร์ Worker / Background Tasks ไปเป็น Hexagonal Services โดยพลการ**
+> โค้ดฝั่ง Worker Subprocesses (เช่น [`job_worker.py`](file:///d:/_PROJECT_/choonova-transcribe/app/job_worker.py), [`compress_worker.py`](file:///d:/_PROJECT_/choonova-transcribe/app/compress_worker.py)) และ Background Tasks ใน [`main.py`](file:///d:/_PROJECT_/choonova-transcribe/app/main.py) ยังคงทำงานในรูปแบบไฮบริด (Monolithic + Hexagonal Shim) เพื่อควบคุม VRAM และ SQLite Concurrency **ห้ามทำการรีแฟกเตอร์เป็น Hexagonal 100%** จนกว่าจะมี E2E Integration Test ครอบคลุมและผ่านการทดสอบเรื่อง GPU/DB lock อย่างละเอียด
+
 ---
 
 ## 🧪 5. การสอบทานและ Testing (Verification Standards)
