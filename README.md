@@ -85,6 +85,7 @@ Application behavior is controlled via environment variables. Copy `.env.example
 | `COMPRESS_ENCODER`         | `libx264`                 | No       | Video encoder: `libx264` or `nvenc` (auto-falls back if NVENC unavailable). |
 | `MAX_AUDIO_UPLOAD_SIZE_MB` | `50.0`                    | No       | Size limit for synchronous audio endpoint.                                  |
 | `MAX_UPLOAD_SIZE_MB`       | `0`                       | No       | Size limit for async long-form jobs (0 = unlimited).                        |
+| `MAX_MEDIA_DURATION_SEC`   | `14400.0`                 | No       | Max duration in seconds for uploaded media to prevent GPU hogging.          |
 
 _(Note: Environment variables for VRAM mode only seed the database on first boot. The database is the source of truth thereafter.)_
 
