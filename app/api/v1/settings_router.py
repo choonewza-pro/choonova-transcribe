@@ -4,6 +4,7 @@ API Router for Runtime Model Settings.
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+import asyncio
 
 from app.core.config import get_real_execution_device
 from app.core.security import verify_api_key
@@ -65,8 +66,8 @@ async def update_model_settings(
     )
 
     from app.engine_router import apply_model_mode, get_engines_state
-    apply_model_mode(settings.model_load_mode)
-    states = get_engines_state()
+    await asyncio.to_thread(apply_model_mode, settings.model_load_mode)
+    states = await asyncio.to_thread(get_engines_state)
 
     return ModelSettingsResponse(
         mode=settings.model_load_mode,

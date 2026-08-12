@@ -7,12 +7,14 @@ import io
 import os
 import asyncio
 import logging
+import hmac
 import subprocess
 import tempfile
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.asr_engine import get_asr_engine
 from app.cuda_utils import is_cuda_error, is_allocator_corruption
 from app.engine_router import cuda_device_reset_all, reset_all
+from app.core.config import GATEWAY_API_KEY
 
 logger = logging.getLogger("choonova.realtime")
 router = APIRouter(prefix="/v1/realtime", tags=["Realtime ASR"])
@@ -82,6 +84,11 @@ def _convert_webm_to_wav(webm_bytes: bytes) -> bytes:
 
 @router.websocket("/stream")
 async def websocket_stream(websocket: WebSocket):
+    api_key = websocket.cookies.get("typhoon_asr_api_key")
+    if not api_key or not hmac.compare_digest(api_key.strip(), GATEWAY_API_KEY):
+        await websocket.close(code=4001)
+        return
+
     await websocket.accept()
     logger.info("WebSocket client connected for real-time speech transcription.")
 

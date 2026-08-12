@@ -8,6 +8,7 @@ import uuid
 import subprocess
 import re
 from urllib.parse import quote
+import asyncio
 
 from app.core.security import verify_api_key, verify_transcribe_history_api_key
 from app.core.state import _active_workers
@@ -120,9 +121,10 @@ async def transcribe_audio(
         content = bytes(content)
         validate_magic_bytes(content[:2048])
 
-        # Inline transcription via engine port (synchronous, fast-path)
+        # Inline transcription via engine port (offloaded to thread to prevent blocking event loop)
         from app.engine_router import transcribe_bytes as router_transcribe_bytes
-        res = router_transcribe_bytes(
+        res = await asyncio.to_thread(
+            router_transcribe_bytes,
             audio_bytes=content,
             filename_hint=secure_filename(file.filename),
             language=lang,

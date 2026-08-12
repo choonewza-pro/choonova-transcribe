@@ -7,6 +7,7 @@ import asyncio
 import tempfile
 import re
 import logging
+import hmac
 import subprocess
 from urllib.parse import quote
 from typing import List, Dict, Any
@@ -149,6 +150,40 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Pure ASGI middleware to reject unauthorized uploads without consuming the body,
+# avoiding Starlette's BaseHTTPMiddleware stream hang bugs during file.read().
+class RejectUploadWithoutAuthMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["method"] in ("POST", "PUT") and scope["path"].startswith("/v1/"):
+            headers = dict(scope.get("headers", []))
+            api_key_bytes = headers.get(b"x-api-key")
+            api_key = api_key_bytes.decode("utf-8").strip() if api_key_bytes else None
+            
+            if not api_key or not hmac.compare_digest(api_key, GATEWAY_API_KEY):
+                response_body = b'{"detail": "Missing or invalid API key."}'
+                await send({
+                    "type": "http.response.start",
+                    "status": 401,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"content-length", str(len(response_body)).encode()),
+                    ]
+                })
+                await send({
+                    "type": "http.response.body",
+                    "body": response_body,
+                    "more_body": False
+                })
+                return
+
+        await self.app(scope, receive, send)
+
+app.add_middleware(RejectUploadWithoutAuthMiddleware)
+
 
 # Base directory paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -498,12 +533,12 @@ async def update_model_settings(
     )
 
     try:
-        states = apply_model_mode(mode)
+        states = await asyncio.to_thread(apply_model_mode, mode)
     except Exception as e:
         # Settings are already persisted; if eager loading fails (e.g. model
         # unavailable), the badge shows it and the next request lazy-loads.
         logger.error(f"apply_model_mode failed after saving settings: {e}")
-        states = get_engines_state()
+        states = await asyncio.to_thread(get_engines_state)
 
     return ModelSettingsResponse(
         mode=mode,
