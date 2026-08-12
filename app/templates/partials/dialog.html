@@ -8,6 +8,7 @@
       <p id="appDialogMessage"></p>
     </div>
     <div class="dialog-footer">
+      <button class="btn btn-secondary" id="appDialogCancelBtn" style="display: none;">ยกเลิก</button>
       <button class="btn btn-primary" id="appDialogOkBtn">ตกลง</button>
     </div>
   </div>
@@ -32,8 +33,8 @@
 .dialog-box {
   width: 90%;
   max-width: 400px;
-  background: var(--surface);
-  border: 1px solid var(--glass-border);
+  background: var(--surface, #1a1e2e);
+  border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
   transform: translateY(-20px);
@@ -45,7 +46,7 @@
 }
 .dialog-header {
   padding: 16px 20px;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.1));
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -53,7 +54,7 @@
 .dialog-header h3 {
   margin: 0;
   font-size: 1.1rem;
-  color: var(--primary);
+  color: var(--primary, #00f2fe);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -61,25 +62,43 @@
 .dialog-close {
   background: none;
   border: none;
-  color: var(--text-muted);
+  color: var(--text-muted, #94a3b8);
   font-size: 1.5rem;
   cursor: pointer;
   line-height: 1;
 }
 .dialog-close:hover {
-  color: var(--text);
+  color: var(--text-main, #fff);
 }
 .dialog-body {
   padding: 20px;
   font-size: 1rem;
-  color: var(--text);
+  color: var(--text-main, #fff);
   line-height: 1.5;
   white-space: pre-wrap;
 }
 .dialog-footer {
   padding: 16px 20px;
-  border-top: 1px solid var(--glass-border);
+  border-top: 1px solid var(--glass-border, rgba(255,255,255,0.1));
   text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.dialog-footer .btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: none;
+}
+.dialog-footer .btn-primary {
+  background: linear-gradient(90deg, #00f2fe, #4facfe);
+  color: #fff;
+}
+.dialog-footer .btn-secondary {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
 }
 </style>
 
@@ -90,19 +109,32 @@
   const messageEl = document.getElementById('appDialogMessage');
   const closeBtn = document.getElementById('appDialogCloseBtn');
   const okBtn = document.getElementById('appDialogOkBtn');
+  const cancelBtn = document.getElementById('appDialogCancelBtn');
 
-  function closeDialog() {
+  let currentResolve = null;
+
+  function closeDialog(result = undefined) {
     overlay.classList.remove('show');
     setTimeout(() => {
       overlay.style.display = 'none';
+      if (currentResolve) {
+        currentResolve(result);
+        currentResolve = null;
+      }
     }, 300);
   }
 
-  closeBtn.addEventListener('click', closeDialog);
-  okBtn.addEventListener('click', closeDialog);
+  function handleOk() { closeDialog(true); }
+  function handleCancel() { closeDialog(false); }
+
+  closeBtn.addEventListener('click', handleCancel);
+  okBtn.addEventListener('click', handleOk);
+  cancelBtn.addEventListener('click', handleCancel);
 
   // Override window.alert
   window.alert = function(message) {
+    if (currentResolve) currentResolve(); // Cancel previous dialog if any
+    
     let title = 'แจ้งเตือน';
     if (typeof message === 'string') {
       if (message.includes('❌') || message.toLowerCase().includes('fail') || message.toLowerCase().includes('error')) {
@@ -114,11 +146,27 @@
     
     titleEl.textContent = title;
     messageEl.textContent = message;
+    cancelBtn.style.display = 'none'; // Alert has no cancel button
     
     overlay.style.display = 'flex';
-    // trigger reflow
-    void overlay.offsetWidth;
+    void overlay.offsetWidth; // trigger reflow
     overlay.classList.add('show');
+  };
+
+  // Add custom confirm that returns a Promise
+  window.appConfirm = function(message, title = '❓ ยืนยันการทำงาน') {
+    return new Promise((resolve) => {
+      if (currentResolve) currentResolve(); // Cancel previous dialog if any
+      
+      currentResolve = resolve;
+      titleEl.textContent = title;
+      messageEl.textContent = message;
+      cancelBtn.style.display = 'inline-block'; // Show cancel button
+      
+      overlay.style.display = 'flex';
+      void overlay.offsetWidth; // trigger reflow
+      overlay.classList.add('show');
+    });
   };
 })();
 </script>

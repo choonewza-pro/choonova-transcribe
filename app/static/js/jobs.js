@@ -186,28 +186,28 @@ document.addEventListener('DOMContentLoaded', () => {
         ? '<span class="media-badge media-exists">✅ มีไฟล์</span>'
         : '<span class="media-badge media-gone">🗑 ถูกลบ</span>';
 
-      const deleteMediaBtn = `<button type="button" class="btn-row btn-danger" data-action="del-media" data-id="${job.job_id}" ${mediaExists ? '' : 'disabled title="ไม่มีไฟล์ media บนเครื่อง"'} title="${mediaExists ? 'ลบเฉพาะไฟล์ media (เก็บข้อมูลถอดความ)' : 'ไม่มีไฟล์ media บนเครื่อง'}">🗑 ลบเฉพาะ media</button>`;
-      const deleteRowBtn = `<button type="button" class="btn-row btn-danger" data-action="del-row" data-id="${job.job_id}" title="ลบทั้งแถว (ข้อมูลถอดความ + media)">❌ ลบทั้งแถว</button>`;
-      const viewBtn = `<button type="button" class="btn-row" data-action="view" data-id="${job.job_id}" ${canView ? '' : 'disabled title="งานยังไม่เสร็จหรือล้มเหลว"'} title="${canView ? 'ดูข้อความถอดความ + export' : 'ดูได้เฉพาะงานที่เสร็จสมบูรณ์'}">👁 ดูถอดความ</button>`;
+      const deleteMediaBtn = `<button type="button" class="btn-row btn-danger" data-action="del-media" data-id="${job.id}" ${mediaExists ? '' : 'disabled title="ไม่มีไฟล์ media บนเครื่อง"'} title="${mediaExists ? 'ลบเฉพาะไฟล์ media (เก็บข้อมูลถอดความ)' : 'ไม่มีไฟล์ media บนเครื่อง'}">🗑 ลบเฉพาะ media</button>`;
+      const deleteRowBtn = `<button type="button" class="btn-row btn-danger" data-action="del-row" data-id="${job.id}" title="ลบทั้งแถว (ข้อมูลถอดความ + media)">❌ ลบทั้งแถว</button>`;
+      const viewBtn = `<button type="button" class="btn-row" data-action="view" data-id="${job.id}" ${canView ? '' : 'disabled title="งานยังไม่เสร็จหรือล้มเหลว"'} title="${canView ? 'ดูข้อความถอดความ + export' : 'ดูได้เฉพาะงานที่เสร็จสมบูรณ์'}">👁 ดูถอดความ</button>`;
 
-      const shortId = escapeHtml((job.job_id || '').substring(0, 8));
+      const shortId = escapeHtml((job.id || '').substring(0, 8));
       const fileName = escapeHtml(job.filename || '-');
       const langMap = { th: '🇹🇭 ไทย', en: '🇬🇧 EN', auto: 'อัตโนมัติ' };
       const langBadge = langMap[job.language] || '🇹🇭 ไทย';
 
       let extra = '';
       if (processing) {
-        const pct = Math.min(100, Math.max(0, Math.round(job.progress_pct || 0)));
+        const pct = Math.min(100, Math.max(0, Math.round(job.progress || 0)));
         extra = `
           <div class="job-progress">
             <div class="job-progress-label">
-              <span>⏳ ${escapeHtml(job.current_stage || job.status)}</span>
+              <span>⏳ ${escapeHtml(job.stage || job.status)}</span>
               <span class="pct">${pct}%</span>
             </div>
             <div class="job-progress-track"><div class="job-progress-fill" style="width:${pct}%"></div></div>
           </div>`;
-      } else if (job.status === 'failed' && job.error_message) {
-        extra = `<div class="job-error">❌ ${escapeHtml(job.error_message)}</div>`;
+      } else if (job.status === 'failed' && job.error) {
+        extra = `<div class="job-error">❌ ${escapeHtml(job.error.message)}</div>`;
       }
 
       card.innerHTML = `
@@ -219,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${extra}
         <div class="job-card-meta">
           <span class="job-card-meta-item">🌐 ${langBadge}</span>
-          <span class="job-card-meta-item">⏱️ ${formatSeconds(job.duration_seconds)}</span>
+          <span class="job-card-meta-item">⏱️ ${formatSeconds(job.duration)}</span>
           <span class="job-card-meta-item">📦 ${formatBytes(job.file_size_bytes)}</span>
           <span class="job-card-meta-item">📅 ${formatDate(job.created_at)}</span>
         </div>
@@ -326,13 +326,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const job = await res.json();
-      activeJobFilename = (job.filename || job.job_id).replace(/\.[^/.]+$/, '');
+      activeJobFilename = (job.filename || job.id).replace(/\.[^/.]+$/, '');
       modalTitle.textContent = `📄 ดูข้อมูลการถอดความ — ${job.filename || jobId}`;
-      modalResultText.textContent = job.result_text || '(ไม่มีข้อความที่ถอดได้)';
-      statJobId.textContent = `🆔 Job ID: ${job.job_id.substring(0, 8)}...`;
+      modalResultText.textContent = job.result ? job.result.text : '(ไม่มีข้อความที่ถอดได้)';
+      statJobId.textContent = `🆔 Job ID: ${job.id.substring(0, 8)}...`;
       statStatus.textContent = `📌 สถานะ: ${(STATUS_MAP[job.status] || {}).label || job.status}`;
-      statDuration.textContent = `⏱️ ความยาว: ${formatSeconds(job.duration_seconds)}`;
-      statElapsed.textContent = `⚡ เวลาประมวลผลรวม: ${formatSeconds(job.elapsed_seconds)}`;
+      statDuration.textContent = `⏱️ ความยาว: ${formatSeconds(job.duration)}`;
+      statElapsed.textContent = `⚡ เวลาประมวลผลรวม: ${formatSeconds(job.processing_time)}`;
     } catch (err) {
       modalResultText.style.display = 'none';
       modalErrorBox.style.display = 'block';
@@ -383,9 +383,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Delete: media only (keep transcription record) ---
   async function deleteMediaOnly(jobId) {
-    const job = jobs.find(j => j.job_id === jobId);
+    const job = jobs.find(j => j.id === jobId);
     const filename = job ? job.filename : jobId;
-    if (!confirm(`🗑 ลบเฉพาะไฟล์ media ของ "${filename}" ?\n\nข้อมูลการถอดความ (ข้อความ/SRT/timestamps) จะถูกเก็บไว้\nหมายเหตุ: งานที่เสร็จแล้ว media ถูกลบไปแล้วโดยอัตโนมัติ`)) {
+    const ok = await appConfirm(`🗑 ลบเฉพาะไฟล์ media ของ "${filename}" ?\n\nข้อมูลการถอดความ (ข้อความ/SRT/timestamps) จะถูกเก็บไว้\nหมายเหตุ: งานที่เสร็จแล้ว media ถูกลบไปแล้วโดยอัตโนมัติ`);
+    if (!ok) {
       return;
     }
     await doDelete(`/v1/media/transcribe/jobs/${jobId}/media`, jobId, 'ลบเฉพาะ media');
@@ -393,9 +394,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Delete: entire row (record + media) ---
   async function deleteRow(jobId) {
-    const job = jobs.find(j => j.job_id === jobId);
+    const job = jobs.find(j => j.id === jobId);
     const filename = job ? job.filename : jobId;
-    if (!confirm(`❌ ลบทั้งแถว "${filename}" ?\n\nข้อมูลการถอดความทั้งหมด และไฟล์ media ที่เกี่ยวข้องจะถูกลบถาวร ไม่สามารถกู้คืนได้`)) {
+    const ok = await appConfirm(`❌ ลบทั้งแถว "${filename}" ?\n\nข้อมูลการถอดความทั้งหมด และไฟล์ media ที่เกี่ยวข้องจะถูกลบถาวร ไม่สามารถกู้คืนได้`);
+    if (!ok) {
       return;
     }
     await doDelete(`/v1/media/transcribe/jobs/${jobId}`, jobId, 'ลบทั้งแถว');

@@ -38,7 +38,7 @@ async def get_model_settings(
     settings = service.get_model_settings()
     
     # Deferred import to avoid circular dependency during transition
-    from app.asr_engine import get_engines_state
+    from app.engine_router import get_engines_state
     states = get_engines_state()
 
     return ModelSettingsResponse(
@@ -61,8 +61,8 @@ async def update_model_settings(
         idle_timeout_sec=payload.idle_timeout_sec,
     )
 
-    from app.asr_engine import apply_model_load_mode_change, get_engines_state
-    apply_model_load_mode_change(settings.model_load_mode)
+    from app.engine_router import apply_model_mode, get_engines_state
+    apply_model_mode(settings.model_load_mode)
     states = get_engines_state()
 
     return ModelSettingsResponse(

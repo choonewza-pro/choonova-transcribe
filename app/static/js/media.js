@@ -205,7 +205,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function cancelActiveJob() {
     if (!activeJobId) return;
-    if (!confirm('❌ ยกเลิกงานนี้?\n\nข้อมูลการถอดความทั้งหมด และไฟล์ชั่วคราวจะถูกลบถาวร ไม่สามารถกู้คืนได้')) {
+    const ok = await appConfirm('❌ ยกเลิกงานนี้?\n\nข้อมูลการถอดความทั้งหมด และไฟล์ชั่วคราวจะถูกลบถาวร ไม่สามารถกู้คืนได้');
+    if (!ok) {
       return;
     }
     try {
@@ -281,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
     xhr.onload = () => {
       if (xhr.status === 202) {
         const data = JSON.parse(xhr.responseText);
-        activeJobId = data.job_id;
+        activeJobId = data.id;
         updateProgress(10, 'เริ่มการประมวลผลเบื้องหลัง...');
 
 
@@ -335,8 +336,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!res.ok) return;
 
         const job = await res.json();
-        updateProgress(job.progress_pct, job.current_stage || job.status);
-        updateStepper(job.current_stage, job.status);
+        updateProgress(job.progress, job.stage || job.status);
+        updateStepper(job.stage, job.status);
         updateCancelBtn(job.status);
 
 
@@ -347,8 +348,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (job.status === 'failed') {
           if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
           stopPolling();
-          alert(`กระบวนการถอดความล้มเหลว: ${job.error_message || 'Unknown error'}`);
-          currentStageText.textContent = `❌ เกิดข้อผิดพลาด: ${job.error_message || 'Failed'}`;
+          const errMsg = job.error ? job.error.message : 'Unknown error';
+          alert(`กระบวนการถอดความล้มเหลว: ${errMsg}`);
+          currentStageText.textContent = `❌ เกิดข้อผิดพลาด: ${errMsg}`;
           startJobBtn.disabled = false;
           mediaDropzone.style.display = '';
         }
@@ -399,14 +401,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function handleJobCompleted(job) {
     resultSection.style.display = 'block';
-    resultText.textContent = job.result_text || '(ไม่มีข้อความที่ถอดได้)';
+    resultText.textContent = job.result ? job.result.text : '(ไม่มีข้อความที่ถอดได้)';
 
-    statJobId.textContent = `🆔 Job ID: ${job.job_id.substring(0, 8)}...`;
-    statDuration.textContent = `⏱️ ความยาววิดีโอ: ${formatSeconds(job.duration_seconds)}`;
-    statElapsed.textContent = `⚡ เวลาประมวลผลรวม: ${formatSeconds(job.elapsed_seconds)}`;
+    statJobId.textContent = `🆔 Job ID: ${job.id.substring(0, 8)}...`;
+    statDuration.textContent = `⏱️ ความยาววิดีโอ: ${formatSeconds(job.duration)}`;
+    statElapsed.textContent = `⚡ เวลาประมวลผลรวม: ${formatSeconds(job.processing_time)}`;
 
-    activeJobId = job.job_id;
-    activeJobFilename = (job.filename || job.job_id).replace(/\.[^/.]+$/, '');
+    activeJobId = job.id;
+    activeJobFilename = (job.filename || job.id).replace(/\.[^/.]+$/, '');
 
     startJobBtn.disabled = false;
   }

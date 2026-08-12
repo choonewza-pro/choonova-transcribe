@@ -193,7 +193,7 @@ _(Note: Real-time websocket streaming supports Thai language only via Typhoon)_
 
 ```
 POST /v1/media/transcribe/jobs (multipart)
-   │ (Returns 202 Accepted → job_id)
+   │ (Returns 202 Accepted → id)
    ▼
 job_worker.py (isolated subprocess)
    ├─ 1. FFmpeg extract → 16kHz mono 16-bit WAV
@@ -207,7 +207,7 @@ job_worker.py (isolated subprocess)
 
 ```
 POST /v1/media/compress/jobs (multipart)
-   │ (Returns 202 Accepted → job_id + queue position)
+   │ (Returns 202 Accepted → id + queue position)
    ▼
 compress_queue_dispatcher (FIFO queue)
    ▼
@@ -225,7 +225,7 @@ run_compress_job.py (isolated subprocess)
 - **Processing**: A worker subprocess processes the media.
 - **Completion**: Extracted texts, SRTs, and timestamps are saved in the SQLite database (`choonova-transcribe.db`).
 - **Retention**: Media files are kept on disk based on `TRANSCRIBE_RETENTION_HOURS` or `COMPRESS_RETENTION_HOURS` (default 24 hours).
-- **Cleanup**: A background task automatically deletes old media files to save disk space. The database records are kept indefinitely unless manually deleted via `DELETE /v1/media/transcribe/jobs/{job_id}`. Container restart will not wipe the database if the `./data` volume is mounted.
+- **Cleanup**: A background task automatically deletes old media files to save disk space. The database records are kept indefinitely unless manually deleted via `DELETE /v1/media/transcribe/jobs/{id}`. Container restart will not wipe the database if the `./data` volume is mounted.
 
 ## Development
 

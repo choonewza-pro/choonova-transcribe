@@ -54,21 +54,23 @@ def init_db() -> None:
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS jobs (
-                job_id TEXT PRIMARY KEY,
+                id TEXT PRIMARY KEY,
+                type TEXT DEFAULT 'transcription',
                 filename TEXT NOT NULL,
                 file_size_bytes INTEGER DEFAULT 0,
                 language TEXT DEFAULT 'th',
+                model TEXT,
                 status TEXT NOT NULL,
-                progress_pct REAL DEFAULT 0.0,
-                current_stage TEXT DEFAULT '',
+                progress REAL DEFAULT 0.0,
+                stage TEXT DEFAULT '',
                 total_chunks INTEGER DEFAULT 0,
                 completed_chunks INTEGER DEFAULT 0,
-                duration_seconds REAL DEFAULT 0.0,
-                elapsed_seconds REAL DEFAULT 0.0,
-                result_text TEXT,
-                timestamps_json TEXT,
-                srt_text TEXT,
-                error_message TEXT,
+                duration REAL DEFAULT 0.0,
+                processing_time REAL DEFAULT 0.0,
+                target_chunk_sec REAL DEFAULT 30.0,
+                max_chunk_sec REAL DEFAULT 60.0,
+                result_json TEXT,
+                error_json TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 started_at TIMESTAMP,
@@ -77,23 +79,8 @@ def init_db() -> None:
                 cancelled_at TIMESTAMP
             );
         """)
-        # Migrations for existing databases created before newer columns existed.
-        columns = [r["name"] for r in cursor.execute("PRAGMA table_info(jobs)").fetchall()]
-        if "language" not in columns:
-            cursor.execute(
-                "ALTER TABLE jobs ADD COLUMN language TEXT DEFAULT 'th'"
-            )
-        if "target_chunk_sec" not in columns:
-            cursor.execute(
-                "ALTER TABLE jobs ADD COLUMN target_chunk_sec REAL DEFAULT 30.0"
-            )
-        if "max_chunk_sec" not in columns:
-            cursor.execute(
-                "ALTER TABLE jobs ADD COLUMN max_chunk_sec REAL DEFAULT 60.0"
-            )
-        for col in ["started_at", "completed_at", "failed_at", "cancelled_at"]:
-            if col not in columns:
-                cursor.execute(f"ALTER TABLE jobs ADD COLUMN {col} TIMESTAMP")
+        # We assume database is fresh (deleted) or matching the schema.
+        # No migrations for old columns like job_id needed.
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
         """)
@@ -186,7 +173,7 @@ def init_db() -> None:
 
 
 def create_job(
-    job_id: str,
+    id: str,
     filename: str,
     file_size_bytes: int = 0,
     language: str = "th",
@@ -210,29 +197,30 @@ def create_job(
         cursor.execute(
             """
             INSERT INTO jobs (
-                job_id, filename, file_size_bytes, language, status, progress_pct,
-                current_stage, target_chunk_sec, max_chunk_sec, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, 'queued', 0.0, 'File Uploaded', ?, ?, ?, ?)
+                id, type, filename, file_size_bytes, language, status, progress,
+                stage, target_chunk_sec, max_chunk_sec, created_at, updated_at
+            ) VALUES (?, 'transcription', ?, ?, ?, 'queued', 0.0, 'queued', ?, ?, ?, ?)
         """,
-            (job_id, filename, file_size_bytes, language, target_chunk_sec, max_chunk_sec, now, now),
+            (id, filename, file_size_bytes, language, target_chunk_sec, max_chunk_sec, now, now),
         )
         conn.commit()
-    return get_job(job_id)
+    return get_job(id)
+
+
 
 
 def update_job_status(
-    job_id: str,
+    id: str,
     status: Optional[str] = None,
-    progress_pct: Optional[float] = None,
-    current_stage: Optional[str] = None,
+    progress: Optional[float] = None,
+    stage: Optional[str] = None,
     completed_chunks: Optional[int] = None,
     total_chunks: Optional[int] = None,
-    duration_seconds: Optional[float] = None,
-    elapsed_seconds: Optional[float] = None,
-    result_text: Optional[str] = None,
-    timestamps_json: Optional[str] = None,
-    srt_text: Optional[str] = None,
-    error_message: Optional[str] = None,
+    duration: Optional[float] = None,
+    processing_time: Optional[float] = None,
+    result_json: Optional[str] = None,
+    error_json: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> None:
     """
     Dynamically update job fields in SQLite, enforcing state transitions.
@@ -242,7 +230,7 @@ def update_job_status(
 
     if status is not None:
         # Validate transition and set timestamps
-        job = get_job(job_id)
+        job = get_job(id)
         if job:
             current_status = job.get("status")
             validate_job_transition(current_status, status)
@@ -263,67 +251,82 @@ def update_job_status(
 
         fields.append("status = ?")
         values.append(status)
-    if progress_pct is not None:
-        fields.append("progress_pct = ?")
-        values.append(round(progress_pct, 2))
-    if current_stage is not None:
-        fields.append("current_stage = ?")
-        values.append(current_stage)
+    if progress is not None:
+        fields.append("progress = ?")
+        values.append(round(progress, 2))
+    if stage is not None:
+        fields.append("stage = ?")
+        values.append(stage)
     if completed_chunks is not None:
         fields.append("completed_chunks = ?")
         values.append(completed_chunks)
     if total_chunks is not None:
         fields.append("total_chunks = ?")
         values.append(total_chunks)
-    if duration_seconds is not None:
-        fields.append("duration_seconds = ?")
-        values.append(round(duration_seconds, 2))
-    if elapsed_seconds is not None:
-        fields.append("elapsed_seconds = ?")
-        values.append(round(elapsed_seconds, 3))
-    if result_text is not None:
-        fields.append("result_text = ?")
-        values.append(result_text)
-    if timestamps_json is not None:
-        fields.append("timestamps_json = ?")
-        values.append(timestamps_json)
-    if srt_text is not None:
-        fields.append("srt_text = ?")
-        values.append(srt_text)
-    if error_message is not None:
-        fields.append("error_message = ?")
-        values.append(error_message)
+    if duration is not None:
+        fields.append("duration = ?")
+        values.append(round(duration, 2))
+    if processing_time is not None:
+        fields.append("processing_time = ?")
+        values.append(round(processing_time, 3))
+    if result_json is not None:
+        fields.append("result_json = ?")
+        values.append(result_json)
+    if error_json is not None:
+        fields.append("error_json = ?")
+        values.append(error_json)
+    if model is not None:
+        fields.append("model = ?")
+        values.append(model)
 
     if not fields:
         return
 
     fields.append("updated_at = ?")
     values.append(datetime.utcnow().isoformat())
-    values.append(job_id)
+    values.append(id)
 
-    query = f"UPDATE jobs SET {', '.join(fields)} WHERE job_id = ?"
+    query = f"UPDATE jobs SET {', '.join(fields)} WHERE id = ?"
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(query, values)
         conn.commit()
 
 
-def get_job(job_id: str) -> Optional[Dict[str, Any]]:
+def get_job(id: str) -> Optional[Dict[str, Any]]:
     """
-    Fetch a job record by job_id.
+    Fetch a job record by id.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,))
+        cursor.execute("SELECT * FROM jobs WHERE id = ?", (id,))
         row = cursor.fetchone()
         if not row:
             return None
         res = dict(row)
-        if res.get("timestamps_json"):
+        
+        # Calculate RTF
+        if res.get("duration") and res.get("processing_time"):
+            res["rtf"] = round(res["processing_time"] / res["duration"], 5)
+        else:
+            res["rtf"] = None
+            
+        if res.get("result_json"):
             try:
-                res["timestamps"] = json.loads(res["timestamps_json"])
+                res["result"] = json.loads(res["result_json"])
             except Exception:
-                res["timestamps"] = None
+                res["result"] = None
+        else:
+            res["result"] = None
+            
+        if res.get("error_json"):
+            try:
+                res["error"] = json.loads(res["error_json"])
+            except Exception:
+                res["error"] = None
+        else:
+            res["error"] = None
+            
         return res
 
 
@@ -337,17 +340,28 @@ def list_jobs(limit: int = 50, status_filter: Optional[str] = None) -> List[Dict
             cursor.execute("SELECT * FROM jobs WHERE status = ? ORDER BY created_at DESC LIMIT ?", (status_filter, limit))
         else:
             cursor.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,))
-        rows = cursor.fetchall()
-        return [dict(r) for r in rows]
+        
+        results = []
+        for row in cursor.fetchall():
+            res = dict(row)
+            if res.get("result_json"):
+                try:
+                    res["result"] = json.loads(res["result_json"])
+                except Exception:
+                    res["result"] = None
+            else:
+                res["result"] = None
+            results.append(res)
+        return results
 
 
-def delete_job(job_id: str) -> bool:
+def delete_job(id: str) -> bool:
     """
     Delete a job record from SQLite.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM jobs WHERE job_id = ?", (job_id,))
+        cursor.execute("DELETE FROM jobs WHERE id = ?", (id,))
         conn.commit()
         return cursor.rowcount > 0
 
@@ -366,20 +380,20 @@ def cleanup_expired_jobs(hours: int = TRANSCRIBE_RETENTION_HOURS) -> List[str]:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT job_id, status FROM jobs
+            SELECT id, status FROM jobs
             WHERE created_at < datetime('now', '-' || ? || ' hours')
         """,
             (hours,),
         )
         rows = cursor.fetchall()
 
-        expired_ids = [r["job_id"] for r in rows]
-        non_completed_ids = [r["job_id"] for r in rows if r["status"] != "completed"]
+        expired_ids = [r["id"] for r in rows]
+        non_completed_ids = [r["id"] for r in rows if r["status"] != "completed"]
 
         if non_completed_ids:
             placeholders = ",".join("?" * len(non_completed_ids))
             cursor.execute(
-                f"DELETE FROM jobs WHERE job_id IN ({placeholders})", non_completed_ids
+                f"DELETE FROM jobs WHERE id IN ({placeholders})", non_completed_ids
             )
             conn.commit()
             logger.info(
@@ -399,7 +413,7 @@ def recover_zombie_jobs() -> int:
         cursor.execute("""
             UPDATE jobs 
             SET status = 'failed',
-                error_message = 'Server restarted or crash occurred during processing',
+                error_json = '{"code": "SERVER_CRASH", "message": "Server restarted or crash occurred during processing"}',
                 updated_at = CURRENT_TIMESTAMP
             WHERE status IN ('queued', 'processing');
         """)

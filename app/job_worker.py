@@ -241,10 +241,10 @@ async def process_transcription_job(
     try:
         # Step 1: Extract Audio (MP4 -> 16kHz WAV)
         update_job_status(
-            job_id,
+            id=job_id,
             status="processing",
-            progress_pct=10.0,
-            current_stage="Extracting Audio",
+            progress=10.0,
+            stage="extracting_audio",
         )
 
         job = get_job(job_id)
@@ -274,11 +274,11 @@ async def process_transcription_job(
         )
 
         total_duration = get_audio_duration_ffmpeg(extracted_wav)
-        update_job_status(job_id, duration_seconds=total_duration)
+        update_job_status(id=job_id, duration=total_duration)
 
         # Step 2: Silence-Aware Audio Chunking
         update_job_status(
-            job_id, status="processing", progress_pct=20.0, current_stage="Chunking Audio"
+            id=job_id, status="processing", progress=20.0, stage="chunking"
         )
         chunks_dir = os.path.join(job_dir, "chunks")
         chunks = await loop.run_in_executor(
@@ -291,7 +291,7 @@ async def process_transcription_job(
         )
 
         total_chunks = len(chunks)
-        update_job_status(job_id, total_chunks=total_chunks, progress_pct=25.0)
+        update_job_status(id=job_id, total_chunks=total_chunks, progress=25.0)
 
         combined_text_parts = []
         global_timestamps = []
@@ -305,10 +305,10 @@ async def process_transcription_job(
             # Load the engine model explicitly so the UI can surface this stage;
             # otherwise the first chunk hides a 10-60s cold load inside "Transcribing".
             update_job_status(
-                job_id,
+                id=job_id,
                 status="processing",
-                progress_pct=25.0,
-                current_stage="Loading Model onto VRAM",
+                progress=25.0,
+                stage="transcribing",
             )
             if language == "th":
                 await loop.run_in_executor(None, engine.load_model)
@@ -317,13 +317,12 @@ async def process_transcription_job(
 
             for idx, chunk in enumerate(chunks, 1):
                 pct = 25.0 + (idx / total_chunks) * 65.0
-                stage_msg = f"Transcribing Chunk {idx}/{total_chunks}"
                 update_job_status(
-                    job_id,
+                    id=job_id,
                     status="processing",
-                    progress_pct=pct,
+                    progress=pct,
                     completed_chunks=idx - 1,
-                    current_stage=stage_msg,
+                    stage="transcribing",
                 )
 
                 chunk_path = chunk["path"]
@@ -359,7 +358,7 @@ async def process_transcription_job(
                 # ⚡ Immediate Intermediate Cleanup: Delete chunk WAV file after inference & clear VRAM
                 safe_delete_file(chunk_path)
                 engine.clear_cuda_cache()
-                update_job_status(job_id, completed_chunks=idx)
+                update_job_status(id=job_id, completed_chunks=idx)
 
                 # 🔧 Prevent CUDACachingAllocator corruption from consecutive
                 # transcribe() calls — the canonical failure mode is "CUDA error:
@@ -381,18 +380,30 @@ async def process_transcription_job(
         safe_delete_dir(job_dir)
 
         full_text = " ".join(combined_text_parts)
-        srt_subtitles = build_srt_subtitles(global_timestamps)
+        
+        # Rename global_timestamps `word` to `text` to match the new Contract
+        segments = []
+        for ts in global_timestamps:
+            segments.append({
+                "text": ts["word"],
+                "start": ts["start"],
+                "end": ts["end"]
+            })
+            
+        result_obj = {
+            "text": full_text,
+            "segments": segments
+        }
+        
         elapsed = time.time() - start_time
 
         update_job_status(
-            job_id,
+            id=job_id,
             status="completed",
-            progress_pct=100.0,
-            current_stage="Completed",
-            result_text=full_text,
-            timestamps_json=json.dumps(global_timestamps),
-            srt_text=srt_subtitles,
-            elapsed_seconds=elapsed,
+            progress=100.0,
+            stage="completed",
+            result_json=json.dumps(result_obj),
+            processing_time=elapsed,
         )
         logger.info(
             f"Job {job_id} completed successfully in {elapsed:.2f}s (Duration: {total_duration:.2f}s)"
@@ -401,6 +412,11 @@ async def process_transcription_job(
     except Exception as e:
         logger.error(f"Job {job_id} failed with error: {e}", exc_info=True)
         safe_delete_dir(job_dir)
+        error_obj = {
+            "code": "INTERNAL_ERROR",
+            "message": str(e),
+            "retryable": False
+        }
         update_job_status(
-            job_id, status="failed", current_stage="Failed", error_message=str(e)
+            id=job_id, status="failed", stage="completed", error_json=json.dumps(error_obj)
         )
