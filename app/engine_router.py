@@ -11,10 +11,39 @@ logger = logging.getLogger("engine-router")
 def get_engines_state() -> Dict[str, str]:
     """
     Current residency state of both engines: 'loading' | 'loaded' | 'idle'.
+    Also checks active background jobs to accurately reflect models loaded in isolated workers.
     """
+    typhoon_state = engine.get_state()
+    whisper_state = whisper_engine.get_state()
+
+    # Check background workers
+    try:
+        from app.core.db import get_db_connection
+        import sqlite3
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT language, current_stage FROM jobs WHERE status = 'processing'")
+            for row in cursor.fetchall():
+                lang = row["language"]
+                stage = row["current_stage"]
+                target = "typhoon" if lang == "th" else "whisper"
+                
+                if stage == "Loading Model onto VRAM":
+                    if target == "typhoon" and typhoon_state != "loaded":
+                        typhoon_state = "loading"
+                    elif target == "whisper" and whisper_state != "loaded":
+                        whisper_state = "loading"
+                elif stage in ("Transcribing", "Finalizing"):
+                    if target == "typhoon":
+                        typhoon_state = "loaded"
+                    elif target == "whisper":
+                        whisper_state = "loaded"
+    except Exception as e:
+        logger.debug(f"Failed to fetch active job status for engine states: {e}")
+
     return {
-        "typhoon": engine.get_state(),
-        "whisper": whisper_engine.get_state(),
+        "typhoon": typhoon_state,
+        "whisper": whisper_state,
     }
 
 
