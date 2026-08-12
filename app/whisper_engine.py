@@ -34,7 +34,7 @@ class WhisperEngine:
 
     @property
     def is_loaded(self) -> bool:
-        return self._is_loaded and self._model is not None
+        return self._is_loaded
 
     def get_state(self) -> str:
         """
@@ -47,7 +47,7 @@ class WhisperEngine:
         return "idle"
 
     def load_model(self):
-        if self._is_loaded and self._model is not None:
+        if self._is_loaded:
             return
 
         logger.info(
@@ -138,7 +138,7 @@ class WhisperEngine:
         with self._lifecycle_lock:
             self._last_used = time.monotonic()
             self._in_flight += 1
-            if not self._is_loaded or self._model is None:
+            if not self._is_loaded:
                 self.load_model()
             model = self._model
 

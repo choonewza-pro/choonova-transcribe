@@ -284,21 +284,6 @@ document.addEventListener('DOMContentLoaded', () => {
         activeJobId = data.job_id;
         updateProgress(10, 'เริ่มการประมวลผลเบื้องหลัง...');
 
-        // Check if model loading dialog should be shown
-        if (window.ModelStatus && window.ModelLoadingDialog) {
-          const st = window.ModelStatus.getLast();
-          const lang = (languageSelect && languageSelect.value) || 'th';
-          const targetEngine = lang === 'th' ? 'typhoon' : 'whisper';
-          if (st && st[targetEngine + '_model_state'] !== 'loaded') {
-            window.ModelLoadingDialog.show({
-              engine: targetEngine,
-              title: `กำลังโหลดโมเดล ${targetEngine === 'typhoon' ? 'Typhoon ASR' : 'Whisper'} เข้า VRAM / RAM...`,
-              onCancel: () => {
-                cancelActiveJob();
-              }
-            });
-          }
-        }
 
         startPollingJobStatus(activeJobId);
       } else {
@@ -354,25 +339,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStepper(job.current_stage, job.status);
         updateCancelBtn(job.status);
 
-        // Check if job is in model loading stage or model status is loading
-        if (job.status === 'processing' || job.status === 'queued') {
-          if (window.ModelStatus && window.ModelLoadingDialog) {
-            const st = window.ModelStatus.getLast();
-            const lang = (document.getElementById('languageSelect') && document.getElementById('languageSelect').value) || 'th';
-            const targetEngine = lang === 'th' ? 'typhoon' : 'whisper';
-            if (st && st[targetEngine + '_model_state'] === 'loading' && !window.ModelLoadingDialog.isActive()) {
-              window.ModelLoadingDialog.show({
-                engine: targetEngine,
-                title: 'กำลังโหลดโมเดลเข้า VRAM / RAM เพื่อถอดความวิดีโอ/สื่อ...',
-                onCancel: () => {
-                  if (typeof cancelActiveJob === 'function') {
-                    cancelActiveJob();
-                  }
-                }
-              });
-            }
-          }
-        }
 
         if (job.status === 'completed') {
           if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
