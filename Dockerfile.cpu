@@ -37,12 +37,14 @@ print()"
 
 # Pre-download Whisper model (for English / Thai-English mixed support via faster-whisper)
 ARG WHISPER_MODEL=large-v3-turbo
+ARG HF_TOKEN=""
 RUN python3 -c "\
 from huggingface_hub import snapshot_download; \
 import os; \
 m = os.getenv('WHISPER_MODEL', 'large-v3-turbo'); \
+t = os.getenv('HF_TOKEN', '').strip() or None; \
 repo_id = 'mobiuslabsgmbh/faster-whisper-large-v3-turbo' if m in ('turbo', 'large-v3-turbo') else f'Systran/faster-whisper-{m}'; \
-p = snapshot_download(repo_id=repo_id); \
+p = snapshot_download(repo_id=repo_id, token=t); \
 print(); \
 print('=' * 70); \
 print('  ✅ WHISPER MODEL DOWNLOAD COMPLETE — ' + repo_id); \

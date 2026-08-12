@@ -92,6 +92,7 @@ Application behavior is controlled via environment variables. Copy `.env.example
 | `GATEWAY_API_KEY`            | `change-me-in-production` | Yes      | Secret key for API authentication.                                          |
 | `DEVICE`                     | `cuda`                    | No       | Target device (`cuda` or `cpu`). Auto-detects if CUDA is missing.           |
 | `WHISPER_MODEL`              | `large-v3-turbo`          | No       | faster-whisper model size (`large-v3-turbo`, `large-v3`, `medium`, `small`, etc.). |
+| `HF_TOKEN`                   | *(Empty)*                 | No       | Optional Hugging Face Hub token to prevent unauthenticated download warnings and rate limits. |
 | `MODEL_LOAD_MODE`            | `always`                  | No       | VRAM residency seed: `always` or `idle`.                                    |
 | `MODEL_IDLE_TIMEOUT_SEC`     | `900`                     | No       | Seconds of inactivity before unloading models (if `idle`).                  |
 | `COMPRESS_ENCODER`           | `libx264`                 | No       | Video encoder: `libx264` or `nvenc` (auto-falls back if NVENC unavailable). |

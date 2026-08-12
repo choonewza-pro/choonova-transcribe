@@ -14,7 +14,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cpu
-    image: choonova-transcribe:cpu
+      args:
+        - WHISPER_MODEL=${WHISPER_MODEL:-large-v3-turbo}
+        - HF_TOKEN=${HF_TOKEN:-}
+    image: choonova-transcribe-cpu:latest
     container_name: choonova-transcribe-cpu
     <<: *default-logging
     restart: unless-stopped
@@ -27,6 +30,7 @@ services:
       - MODEL_PATH=/app/model/typhoon-asr-realtime.nemo
       - DEVICE=cpu
       - WHISPER_MODEL=large-v3-turbo
+      - HF_TOKEN=${HF_TOKEN:-}
       - LOG_LEVEL=info
       # Model VRAM residency mode: always | idle. Seeded into the settings DB on first boot;
       # afterwards it is editable at runtime via the dashboard / PUT /v1/settings/model.
