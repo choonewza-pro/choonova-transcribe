@@ -127,7 +127,8 @@ _(Note: Environment variables for VRAM mode only seed the database on first boot
 - **API Endpoints**: All `/v1` REST endpoints require a static API key passed via the `x-api-key` HTTP header. The system uses constant-time HMAC comparison to verify keys.
 - **History Dashboards**: The transcription history (`/media/transcribe/jobs/history`) and compression history (`/media/compress/jobs/history`) pages are secured by API key checks. You can log in via query parameter (`?api_key=YOUR_KEY`), browser cookie, or via the manual login form on the Access Denied page. The session is seamlessly synchronized between browser cookies and `localStorage`.
 - **Public Share Bypasses**: Bypasses can be enabled via `ALLOW_ACCESS_TRANSCRIBE_HISTORY=true` and `ALLOW_ACCESS_COMPRESS_HISTORY=true` to publicly share history dashboards. When active, a prominent security warning banner is displayed on the homepage and respective history dashboards to alert operators of the open access.
-- **Web UI & WebSockets**: The landing page, short transcription forms, microphone streaming page, and WebSockets remain unauthenticated for ease of local access and real-time streaming.
+- **Web UI**: The landing page, short transcription forms, and microphone streaming page remain unauthenticated for ease of local access.
+- **WebSockets**: The real-time streaming endpoint (`/v1/realtime/stream`) requires API key authentication via the `typhoon_asr_api_key` **cookie** (set automatically when you save your API key in the Settings page at `/setting`). The cookie is sent by the browser with the WebSocket upgrade request — no query parameter needed. If the cookie is missing or invalid, the server rejects the connection with close code `4001` before loading any ASR model.
 - **Upload Validation (Defense-in-Depth)**: All file uploads undergo multi-layer inspection before processing:
   - Extension and Size verification.
   - Magic Bytes signature checking (`filetype`) to prevent file masking.
@@ -198,6 +199,8 @@ curl -X POST http://localhost:8830/v1/media/compress/jobs \
 ```
 
 ### WebSocket Streaming
+
+Authentication is handled automatically via the `typhoon_asr_api_key` cookie (set from the Settings page). The browser sends it with the WebSocket upgrade request — no extra step needed.
 
 ```javascript
 const ws = new WebSocket(`ws://localhost:8830/v1/realtime/stream`);
