@@ -32,7 +32,7 @@ if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
 
 # Operational Limits
 MIN_FREE_DISK_GB = float(os.getenv("MIN_FREE_DISK_GB", "5.0"))
-CLEANUP_RETENTION_HOURS = int(os.getenv("CLEANUP_RETENTION_HOURS", "24"))
+TRANSCRIBE_RETENTION_HOURS = int(os.getenv("TRANSCRIBE_RETENTION_HOURS", "24"))
 TARGET_CHUNK_DURATION_SEC = float(os.getenv("TARGET_CHUNK_DURATION_SEC", "30.0"))
 MAX_CHUNK_DURATION_SEC = float(os.getenv("MAX_CHUNK_DURATION_SEC", "60.0"))
 # Max upload size for long-form media jobs in MB; 0 = unlimited.

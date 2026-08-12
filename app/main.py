@@ -43,7 +43,7 @@ from app.config import (
     SERVICE_DIR,
     TEMP_JOBS_DIR,
     MIN_FREE_DISK_GB,
-    CLEANUP_RETENTION_HOURS,
+    TRANSCRIBE_RETENTION_HOURS,
     TARGET_CHUNK_DURATION_SEC,
     MAX_CHUNK_DURATION_SEC,
     MAX_UPLOAD_SIZE_MB,
@@ -197,7 +197,7 @@ async def periodic_cleanup_task():
     while True:
         try:
             await asyncio.sleep(3600)
-            expired_ids = cleanup_expired_jobs(CLEANUP_RETENTION_HOURS)
+            expired_ids = cleanup_expired_jobs(TRANSCRIBE_RETENTION_HOURS)
             for j_id in expired_ids:
                 j_dir = os.path.join(TEMP_JOBS_DIR, j_id)
                 safe_delete_dir(j_dir)
