@@ -385,7 +385,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function deleteMediaOnly(jobId) {
     const job = jobs.find(j => j.id === jobId);
     const filename = job ? job.filename : jobId;
-    if (!confirm(`🗑 ลบเฉพาะไฟล์ media ของ "${filename}" ?\n\nข้อมูลการถอดความ (ข้อความ/SRT/timestamps) จะถูกเก็บไว้\nหมายเหตุ: งานที่เสร็จแล้ว media ถูกลบไปแล้วโดยอัตโนมัติ`)) {
+    const ok = await appConfirm(`🗑 ลบเฉพาะไฟล์ media ของ "${filename}" ?\n\nข้อมูลการถอดความ (ข้อความ/SRT/timestamps) จะถูกเก็บไว้\nหมายเหตุ: งานที่เสร็จแล้ว media ถูกลบไปแล้วโดยอัตโนมัติ`);
+    if (!ok) {
       return;
     }
     await doDelete(`/v1/media/transcribe/jobs/${jobId}/media`, jobId, 'ลบเฉพาะ media');
@@ -395,7 +396,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function deleteRow(jobId) {
     const job = jobs.find(j => j.id === jobId);
     const filename = job ? job.filename : jobId;
-    if (!confirm(`❌ ลบทั้งแถว "${filename}" ?\n\nข้อมูลการถอดความทั้งหมด และไฟล์ media ที่เกี่ยวข้องจะถูกลบถาวร ไม่สามารถกู้คืนได้`)) {
+    const ok = await appConfirm(`❌ ลบทั้งแถว "${filename}" ?\n\nข้อมูลการถอดความทั้งหมด และไฟล์ media ที่เกี่ยวข้องจะถูกลบถาวร ไม่สามารถกู้คืนได้`);
+    if (!ok) {
       return;
     }
     await doDelete(`/v1/media/transcribe/jobs/${jobId}`, jobId, 'ลบทั้งแถว');

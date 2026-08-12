@@ -339,7 +339,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function cancelActiveJob() {
     if (!activeJobId) return;
-    if (!confirm('❌ ยกเลิกงานนี้?\n\nไฟล์ต้นฉบับและไฟล์ที่บีบอัดแล้วจะถูกลบถาวร ไม่สามารถกู้คืนได้')) return;
+    const ok = await appConfirm('❌ ยกเลิกงานนี้?\n\nไฟล์ต้นฉบับและไฟล์ที่บีบอัดแล้วจะถูกลบถาวร ไม่สามารถกู้คืนได้');
+    if (!ok) return;
     try {
       const headers = {};
       const apiKey = getApiKey();

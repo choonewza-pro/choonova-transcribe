@@ -205,7 +205,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function cancelActiveJob() {
     if (!activeJobId) return;
-    if (!confirm('❌ ยกเลิกงานนี้?\n\nข้อมูลการถอดความทั้งหมด และไฟล์ชั่วคราวจะถูกลบถาวร ไม่สามารถกู้คืนได้')) {
+    const ok = await appConfirm('❌ ยกเลิกงานนี้?\n\nข้อมูลการถอดความทั้งหมด และไฟล์ชั่วคราวจะถูกลบถาวร ไม่สามารถกู้คืนได้');
+    if (!ok) {
       return;
     }
     try {

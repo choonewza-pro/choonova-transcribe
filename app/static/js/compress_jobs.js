@@ -421,7 +421,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function deleteOutputOnly(jobId) {
     const job = jobs.find(j => j.job_id === jobId);
     const filename = job ? job.filename : jobId;
-    if (!confirm(`🗑 ลบไฟล์ผลลัพธ์ของ "${filename}" ?\n\nจะลบไฟล์ผลลัพธ์ทั้งหมด (ทั้งวิดีโอ MP4 และไฟล์เสียงที่สกัดไว้) เพื่อประหยัดพื้นที่\nประวัติการบีบอัด (ขนาด/ความละเอียด/อัตราการลด) จะถูกเก็บไว้`)) {
+    const ok = await appConfirm(`🗑 ลบไฟล์ผลลัพธ์ของ "${filename}" ?\n\nจะลบไฟล์ผลลัพธ์ทั้งหมด (ทั้งวิดีโอ MP4 และไฟล์เสียงที่สกัดไว้) เพื่อประหยัดพื้นที่\nประวัติการบีบอัด (ขนาด/ความละเอียด/อัตราการลด) จะถูกเก็บไว้`);
+    if (!ok) {
       return;
     }
     await doDelete(`/v1/media/compress/jobs/${jobId}/output`, jobId, 'ลบไฟล์ผลลัพธ์');
@@ -430,7 +431,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function deleteRow(jobId) {
     const job = jobs.find(j => j.job_id === jobId);
     const filename = job ? job.filename : jobId;
-    if (!confirm(`❌ ลบรายการ "${filename}" ?\n\nประวัติทั้งหมด และไฟล์ที่เกี่ยวข้องจะถูกลบถาวร ไม่สามารถกู้คืนได้`)) {
+    const ok = await appConfirm(`❌ ลบรายการ "${filename}" ?\n\nประวัติทั้งหมด และไฟล์ที่เกี่ยวข้องจะถูกลบถาวร ไม่สามารถกู้คืนได้`);
+    if (!ok) {
       return;
     }
     await doDelete(`/v1/media/compress/jobs/${jobId}`, jobId, 'ลบรายการ');
