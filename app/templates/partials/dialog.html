@@ -1,0 +1,124 @@
+<div id="appDialogOverlay" class="dialog-overlay" style="display: none;">
+  <div class="dialog-box glass-card">
+    <div class="dialog-header">
+      <h3 id="appDialogTitle">แจ้งเตือน</h3>
+      <button class="dialog-close" id="appDialogCloseBtn">&times;</button>
+    </div>
+    <div class="dialog-body">
+      <p id="appDialogMessage"></p>
+    </div>
+    <div class="dialog-footer">
+      <button class="btn btn-primary" id="appDialogOkBtn">ตกลง</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.dialog-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.dialog-overlay.show {
+  opacity: 1;
+}
+.dialog-box {
+  width: 90%;
+  max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  transform: translateY(-20px);
+  transition: transform 0.3s ease;
+  overflow: hidden;
+}
+.dialog-overlay.show .dialog-box {
+  transform: translateY(0);
+}
+.dialog-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--glass-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.dialog-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dialog-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.dialog-close:hover {
+  color: var(--text);
+}
+.dialog-body {
+  padding: 20px;
+  font-size: 1rem;
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.dialog-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--glass-border);
+  text-align: right;
+}
+</style>
+
+<script>
+(function() {
+  const overlay = document.getElementById('appDialogOverlay');
+  const titleEl = document.getElementById('appDialogTitle');
+  const messageEl = document.getElementById('appDialogMessage');
+  const closeBtn = document.getElementById('appDialogCloseBtn');
+  const okBtn = document.getElementById('appDialogOkBtn');
+
+  function closeDialog() {
+    overlay.classList.remove('show');
+    setTimeout(() => {
+      overlay.style.display = 'none';
+    }, 300);
+  }
+
+  closeBtn.addEventListener('click', closeDialog);
+  okBtn.addEventListener('click', closeDialog);
+
+  // Override window.alert
+  window.alert = function(message) {
+    let title = 'แจ้งเตือน';
+    if (typeof message === 'string') {
+      if (message.includes('❌') || message.toLowerCase().includes('fail') || message.toLowerCase().includes('error')) {
+        title = '❌ ข้อผิดพลาด';
+      } else if (message.includes('✅') || message.toLowerCase().includes('success')) {
+        title = '✅ สำเร็จ';
+      }
+    }
+    
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    
+    overlay.style.display = 'flex';
+    // trigger reflow
+    void overlay.offsetWidth;
+    overlay.classList.add('show');
+  };
+})();
+</script>

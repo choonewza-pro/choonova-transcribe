@@ -20,6 +20,11 @@ def validate_magic_bytes(header_bytes: bytes) -> str:
     """
     kind = filetype.guess(header_bytes)
     if kind is None:
+        # Fallback for raw MP3 (MPEG Audio Layer I/II/III) or ADTS AAC frame sync headers
+        # Frame sync is 11 or 12 set bits: 0xFF followed by top 3 bits set (0xE0)
+        if len(header_bytes) >= 2 and header_bytes[0] == 0xFF and (header_bytes[1] & 0xE0) == 0xE0:
+            return "audio/mpeg"
+            
         raise HTTPException(status_code=422, detail="Cannot determine file type from magic bytes. File may be corrupted or not a valid media file.")
     
     mime = kind.mime

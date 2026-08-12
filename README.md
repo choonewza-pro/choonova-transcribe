@@ -1,7 +1,7 @@
 # ChooNova Transcribe
 
 <p align="center">
-  <img src="app/static/choonova-transcribe-cover-1.png" alt="ChooNova Transcribe Cover" width="100%" style="max-width: 900px; border-radius: 12px;">
+  <img src="app/static/choonova-transcribe-cover.png" alt="ChooNova Transcribe Cover" width="100%" style="max-width: 900px; border-radius: 12px;">
 </p>
 
 Thai Speech-to-Text API and video processing service powered by Typhoon ASR Realtime & Faster Whisper.
@@ -80,22 +80,22 @@ The service dashboard and API will be available at `http://localhost:8830/`.
 
 Application behavior is controlled via environment variables. Copy `.env.example` to `.env` to configure the service.
 
-| Variable                   | Default                   | Required | Description                                                                 |
-| -------------------------- | ------------------------- | -------- | --------------------------------------------------------------------------- |
-| `GATEWAY_API_KEY`          | `change-me-in-production` | Yes      | Secret key for API authentication.                                          |
-| `DEVICE`                   | `cuda`                    | No       | Target device (`cuda` or `cpu`). Auto-detects if CUDA is missing.           |
-| `WHISPER_MODEL`            | `medium`                  | No       | faster-whisper size (`tiny/base/small/medium/large-v3`).                    |
-| `MODEL_LOAD_MODE`          | `always`                  | No       | VRAM residency seed: `always` or `idle`.                                    |
-| `MODEL_IDLE_TIMEOUT_SEC`   | `900`                     | No       | Seconds of inactivity before unloading models (if `idle`).                  |
-| `COMPRESS_ENCODER`         | `libx264`                 | No       | Video encoder: `libx264` or `nvenc` (auto-falls back if NVENC unavailable). |
-| `COMPRESS_MAX_CONCURRENT`  | `1`                       | No       | Maximum concurrent compression jobs.                                        |
-| `COMPRESS_MAX_QUEUED`      | `10`                      | No       | Maximum jobs waiting in compression queue.                                  |
-| `COMPRESS_RETENTION_HOURS` | `24`                      | No       | Hours to retain compressed output files on disk.                            |
-| `TRANSCRIBE_RETENTION_HOURS`| `24`                     | No       | Hours to retain transcription media files on disk.                          |
-| `MAX_AUDIO_UPLOAD_SIZE_MB` | `50.0`                    | No       | Size limit for synchronous audio endpoint.                                  |
-| `MAX_UPLOAD_SIZE_MB`       | `0`                       | No       | Size limit for async long-form jobs (0 = unlimited).                        |
-| `MAX_MEDIA_DURATION_SEC`   | `21600.0`                 | No       | Max duration in seconds for uploaded media to prevent GPU hogging.          |
-| `MIN_FREE_DISK_GB`         | `5.0`                     | No       | Minimum required free disk space in GB before rejecting new jobs.           |
+| Variable                     | Default                   | Required | Description                                                                 |
+| ---------------------------- | ------------------------- | -------- | --------------------------------------------------------------------------- |
+| `GATEWAY_API_KEY`            | `change-me-in-production` | Yes      | Secret key for API authentication.                                          |
+| `DEVICE`                     | `cuda`                    | No       | Target device (`cuda` or `cpu`). Auto-detects if CUDA is missing.           |
+| `WHISPER_MODEL`              | `medium`                  | No       | faster-whisper size (`tiny/base/small/medium/large-v3`).                    |
+| `MODEL_LOAD_MODE`            | `always`                  | No       | VRAM residency seed: `always` or `idle`.                                    |
+| `MODEL_IDLE_TIMEOUT_SEC`     | `900`                     | No       | Seconds of inactivity before unloading models (if `idle`).                  |
+| `COMPRESS_ENCODER`           | `libx264`                 | No       | Video encoder: `libx264` or `nvenc` (auto-falls back if NVENC unavailable). |
+| `COMPRESS_MAX_CONCURRENT`    | `1`                       | No       | Maximum concurrent compression jobs.                                        |
+| `COMPRESS_MAX_QUEUED`        | `10`                      | No       | Maximum jobs waiting in compression queue.                                  |
+| `COMPRESS_RETENTION_HOURS`   | `24`                      | No       | Hours to retain compressed output files on disk.                            |
+| `TRANSCRIBE_RETENTION_HOURS` | `24`                      | No       | Hours to retain transcription media files on disk.                          |
+| `MAX_AUDIO_UPLOAD_SIZE_MB`   | `50.0`                    | No       | Size limit for synchronous audio endpoint.                                  |
+| `MAX_UPLOAD_SIZE_MB`         | `0`                       | No       | Size limit for async long-form jobs (0 = unlimited).                        |
+| `MAX_MEDIA_DURATION_SEC`     | `21600.0`                 | No       | Max duration in seconds for uploaded media to prevent GPU hogging.          |
+| `MIN_FREE_DISK_GB`           | `5.0`                     | No       | Minimum required free disk space in GB before rejecting new jobs.           |
 
 _(Note: Environment variables for VRAM mode only seed the database on first boot. The database is the source of truth thereafter.)_
 
@@ -113,7 +113,9 @@ _(Note: Environment variables for VRAM mode only seed the database on first boot
 ## Usage
 
 ### Web UI
+
 Navigate to `http://localhost:8830/` to access the built-in HTML dashboard where you can:
+
 - Transcribe short audio directly.
 - Stream microphone audio in real-time.
 - Upload long videos for asynchronous transcription and monitor progress.
@@ -121,6 +123,7 @@ Navigate to `http://localhost:8830/` to access the built-in HTML dashboard where
 - Adjust Model VRAM Settings.
 
 ### Model VRAM Residency
+
 The ASR models (Typhoon + Whisper) consume significant GPU memory (~1GB+). Their lifecycle is managed in two modes:
 
 - **`always`** (Default): Models remain in VRAM permanently once loaded. Best for low latency.
