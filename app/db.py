@@ -413,7 +413,7 @@ def recover_zombie_jobs() -> int:
         cursor.execute("""
             UPDATE jobs 
             SET status = 'failed',
-                error_message = 'Server restarted or crash occurred during processing',
+                error_json = '{"code": "SERVER_CRASH", "message": "Server restarted or crash occurred during processing"}',
                 updated_at = CURRENT_TIMESTAMP
             WHERE status IN ('queued', 'processing');
         """)
