@@ -41,7 +41,7 @@ services:
       # - ./data:/app/data   # Enable to persist the jobs DB on the host (baked empty DB is used otherwise)
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8830/healthz"]
-      interval: 30s
+      interval: 120s
       timeout: 5s
       retries: 3
       start_period: 15s
