@@ -20,8 +20,8 @@ services:
     container_name: choonova-transcribe
     <<: *default-logging
     restart: unless-stopped
-    ports:
-      - "8830:8830"
+    # ports:
+    #   - "8830:8830"
     environment:
       - HOST=0.0.0.0
       - PORT=8830
