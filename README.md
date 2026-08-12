@@ -6,7 +6,7 @@
 
 Thai Speech-to-Text API and video processing service powered by Typhoon ASR Realtime & Faster Whisper.
 
-> 💡 **For AI Coding Agents:** Please read [project-onboarding SKILL.md](file://.agents/skills/project-onboarding/SKILL.md) for setup instructions and architecture details before modifying this project.
+> 💡 **For Developers & AI Agents:** See [project-onboarding SKILL.md](file://.agents/skills/project-onboarding/SKILL.md) for setup and [knowledges/](file://knowledges/) for deep-dive technical architecture documents.
 
 ## Overview
 
@@ -262,6 +262,7 @@ app/
 │   └── web/         # HTML Dashboard view routers
 ├── templates/       # Jinja2 HTML templates
 └── static/          # Vanilla CSS & JS assets
+knowledges/          # 📚 Technical knowledge base & architecture deep-dives for study/reference
 tests/
 └── unit/            # Unit tests using in-memory Fake adapters
 ```

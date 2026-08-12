@@ -4,8 +4,11 @@ Handles audio chunks and commands (INTERIM, COMMIT_SEGMENT, CLEAR) matching real
 """
 
 import io
+import os
 import asyncio
 import logging
+import subprocess
+import tempfile
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.asr_engine import get_asr_engine
 from app.cuda_utils import is_cuda_error, is_allocator_corruption
@@ -44,12 +47,69 @@ def remove_text_overlap(t1: str, t2: str) -> str:
     return (t1 + " " + t2).strip()
 
 
+def _convert_webm_to_wav(webm_bytes: bytes) -> bytes:
+    """
+    Convert WebM/Opus audio bytes to 16kHz mono WAV using ffmpeg.
+
+    libsndfile (the backend for librosa.load / soundfile.read) does not
+    support the WebM container format. The browser's MediaRecorder API
+    encodes audio as WebM/Opus, so we must transcode to WAV before the
+    ASR engine can process it.
+    """
+    in_fd, in_path = tempfile.mkstemp(suffix=".webm")
+    out_path = in_path.replace(".webm", ".wav")
+    try:
+        os.write(in_fd, webm_bytes)
+        os.close(in_fd)
+        in_fd = -1
+
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", in_path,
+                "-ar", "16000",
+                "-ac", "1",
+                "-f", "wav",
+                out_path,
+            ],
+            capture_output=True,
+            timeout=15,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.decode(errors="replace")[:200]
+            logger.warning(f"ffmpeg WebM→WAV conversion failed (rc={result.returncode}): {stderr}")
+            return b""
+        with open(out_path, "rb") as f:
+            return f.read()
+    except Exception as e:
+        logger.warning(f"WebM→WAV conversion error: {e}")
+        return b""
+    finally:
+        if in_fd >= 0:
+            try:
+                os.close(in_fd)
+            except OSError:
+                pass
+        for p in (in_path, out_path):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
+
 @router.websocket("/stream")
 async def websocket_stream(websocket: WebSocket):
     await websocket.accept()
     logger.info("WebSocket client connected for real-time speech transcription.")
 
     engine = get_asr_engine()
+
+    # Eagerly warm up the model in a background thread on WebSocket connect.
+    # Without this, the model only loads on the first INTERIM/COMMIT command,
+    # but the frontend waits for the model-loaded healthz signal before the
+    # user starts speaking — causing a deadlock where neither side proceeds.
+    asyncio.get_event_loop().run_in_executor(None, engine.load_model)
+
     audio_buffer = io.BytesIO()
     header_bytes = b""
     finalized_text = ""
@@ -60,15 +120,22 @@ async def websocket_stream(websocket: WebSocket):
         if len(b_data) < 4096:
             return ""
         loop = asyncio.get_event_loop()
+
+        # Convert WebM/Opus → WAV (16kHz mono) via ffmpeg because libsndfile
+        # (used by librosa) does not support WebM containers.
+        wav_data = await loop.run_in_executor(None, _convert_webm_to_wav, b_data)
+        if not wav_data:
+            return ""
+
         for attempt in range(1, CUDA_RETRY_ATTEMPTS + 1):
             try:
                 res = await loop.run_in_executor(
-                    None, engine.transcribe_bytes, b_data, "stream.webm"
+                    None, engine.transcribe_bytes, wav_data, "stream.wav"
                 )
                 return res.get("text", "")
             except Exception as ex:
                 if not is_cuda_error(ex):
-                    logger.debug(f"Transcribe frame error (handled safely): {ex}")
+                    logger.warning(f"Transcribe frame error (non-CUDA): {type(ex).__name__}: {ex}")
                     return ""
                 if is_allocator_corruption(ex):
                     logger.warning(
@@ -78,11 +145,11 @@ async def websocket_stream(websocket: WebSocket):
                     await loop.run_in_executor(None, cuda_device_reset_all)
                     try:
                         res = await loop.run_in_executor(
-                            None, engine.transcribe_bytes, b_data, "stream.webm"
+                            None, engine.transcribe_bytes, wav_data, "stream.wav"
                         )
                         return res.get("text", "")
                     except Exception as ex2:
-                        logger.debug(f"Realtime retry failed: {ex2}")
+                        logger.warning(f"Realtime retry after CUDA reset failed: {ex2}")
                         return ""
                 if attempt == CUDA_RETRY_ATTEMPTS:
                     logger.warning(f"Realtime transcribe failed with CUDA error: {ex}")
@@ -90,7 +157,7 @@ async def websocket_stream(websocket: WebSocket):
                     await loop.run_in_executor(None, engine.clear_cuda_cache)
                     try:
                         res = await loop.run_in_executor(
-                            None, engine.transcribe_bytes, b_data, "stream.webm"
+                            None, engine.transcribe_bytes, wav_data, "stream.wav"
                         )
                         return res.get("text", "")
                     except Exception:
@@ -173,3 +240,4 @@ async def websocket_stream(websocket: WebSocket):
             await websocket.close()
         except Exception:
             pass
+
