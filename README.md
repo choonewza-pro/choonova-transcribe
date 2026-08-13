@@ -81,6 +81,16 @@ We intentionally maintain a hybrid architectural state where the API delivery la
    - กำหนดตัวแปร `DEVICE`:
      - หากรันบน **CPU** ให้เปลี่ยนเป็น `DEVICE=cpu`
      - หากรันบน **NVIDIA GPU** ให้เปลี่ยนเป็น `DEVICE=cuda`
+   - **กำหนดขีดจำกัดคิวและจำนวนงานที่ประมวลผลพร้อมกัน (Important Queue Limits):**
+     ```env
+     # ควบคุมคิวงานถอดความ (Transcription Queue)
+     TRANSCRIBE_MAX_CONCURRENT=1
+     TRANSCRIBE_MAX_QUEUED=10
+
+     # ควบคุมคิวงานบีบอัดวิดีโอ (Compression Queue)
+     COMPRESS_MAX_CONCURRENT=1
+     COMPRESS_MAX_QUEUED=10
+     ```
 4. **ติดตั้งและรันบน Docker Container**
    - สำหรับ **Windows / Mac** ที่รันบน **CPU**:
      ```bash
@@ -108,6 +118,8 @@ Application behavior is controlled via environment variables. Copy `.env.example
 | `COMPRESS_MAX_CONCURRENT`    | `1`                       | No       | Maximum concurrent compression jobs.                                        |
 | `COMPRESS_MAX_QUEUED`        | `10`                      | No       | Maximum jobs waiting in compression queue.                                  |
 | `COMPRESS_RETENTION_HOURS`   | `24`                      | No       | Hours to retain compressed output files on disk.                            |
+| `TRANSCRIBE_MAX_CONCURRENT`  | `1`                       | No       | Maximum concurrent transcription jobs.                                      |
+| `TRANSCRIBE_MAX_QUEUED`      | `10`                      | No       | Maximum jobs waiting in transcription queue before returning 429.          |
 | `TRANSCRIBE_RETENTION_HOURS` | `24`                      | No       | Hours to retain transcription media files on disk.                          |
 | `TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC` | `45.0` | No | Target chunk size for Typhoon ASR (Thai) silence-based splitting. |
 | `TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC` | `90.0` | No | Max chunk size for Typhoon ASR (Thai) silence-based splitting. |

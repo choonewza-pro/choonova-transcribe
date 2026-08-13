@@ -17,6 +17,7 @@ from app.config import (
     MAX_AUDIO_UPLOAD_SIZE_MB, MAX_UPLOAD_SIZE_MB,
     TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC, TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC,
     TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC, TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC,
+    TRANSCRIBE_MAX_QUEUED,
     TEMP_JOBS_DIR, MIN_FREE_DISK_GB, SERVICE_DIR
 )
 from app.schemas import TranscribeResponse, JobCreateResponse, JobStatusResponse
@@ -204,6 +205,14 @@ async def create_transcription_job(
 
     svc = get_transcription_service()
 
+    queued = svc.count_queued()
+    if queued >= TRANSCRIBE_MAX_QUEUED:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Transcription queue is full ({TRANSCRIBE_MAX_QUEUED} jobs). "
+            "Wait for pending jobs to finish and try again.",
+        )
+
     if not svc.check_disk_space(TEMP_JOBS_DIR, MIN_FREE_DISK_GB):
         raise HTTPException(
             status_code=507,
@@ -251,7 +260,7 @@ async def create_transcription_job(
         logger.error(f"Validation error for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to validate media file")
 
-    # Create job record via service → repository port
+    # Create job record via service → repository port (queued status)
     job = svc.create_job(
         job_id=job_id,
         filename=file.filename,
@@ -260,12 +269,6 @@ async def create_transcription_job(
         target_chunk_sec=target_chunk_sec,
         max_chunk_sec=max_chunk_sec,
     )
-
-    # Launch worker subprocess (inbound adapter concern stays at router layer)
-    import sys
-    cmd = [sys.executable, "-m", "app.run_job", job.id, save_path, lang]
-    proc = subprocess.Popen(cmd, cwd=SERVICE_DIR)
-    _active_workers[job.id] = proc
 
     return JobCreateResponse(
         status="accepted",

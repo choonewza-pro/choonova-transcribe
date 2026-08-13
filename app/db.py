@@ -648,6 +648,34 @@ def delete_compress_job(job_id: str) -> bool:
         return cursor.rowcount > 0
 
 
+def get_next_queued_transcription_job() -> Optional[Dict[str, Any]]:
+    """
+    FIFO pick: the oldest transcription job still waiting in the queue. The queue dispatcher
+    uses this to guarantee only TRANSCRIBE_MAX_CONCURRENT jobs run at once.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM jobs WHERE status = 'queued' "
+            "ORDER BY created_at ASC, rowid ASC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def count_queued_transcription_jobs() -> int:
+    """
+    Number of transcription jobs currently waiting in the queue (status='queued').
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) AS c FROM jobs WHERE status = 'queued'"
+        )
+        row = cursor.fetchone()
+        return int(row["c"]) if row else 0
+
+
 def get_next_queued_compress_job() -> Optional[Dict[str, Any]]:
     """
     FIFO pick: the oldest job still waiting in the queue. The queue dispatcher

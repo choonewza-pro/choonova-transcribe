@@ -19,6 +19,8 @@ from app.core.config import (
     DEVICE,
     COMPRESS_MAX_CONCURRENT,
     COMPRESS_MAX_QUEUED,
+    TRANSCRIBE_MAX_CONCURRENT,
+    TRANSCRIBE_MAX_QUEUED,
     MAX_MEDIA_DURATION_SEC,
     GATEWAY_API_KEY,
     ALLOW_ACCESS_TRANSCRIBE_HISTORY,
@@ -102,6 +104,8 @@ async def media_transcribe_page(request: Request):
         context={
             "max_upload_mb": MAX_UPLOAD_SIZE_MB,
             "max_media_duration_sec": MAX_MEDIA_DURATION_SEC,
+            "max_concurrent": TRANSCRIBE_MAX_CONCURRENT,
+            "max_queued": TRANSCRIBE_MAX_QUEUED,
         },
     )
 

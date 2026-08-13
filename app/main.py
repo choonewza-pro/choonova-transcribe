@@ -9,6 +9,7 @@ import re
 import logging
 import hmac
 import subprocess
+import glob
 from urllib.parse import quote
 from typing import List, Dict, Any
 
@@ -46,7 +47,8 @@ from app.config import (
     TEMP_JOBS_DIR,
     MIN_FREE_DISK_GB,
     TRANSCRIBE_RETENTION_HOURS,
-
+    TRANSCRIBE_MAX_CONCURRENT,
+    TRANSCRIBE_MAX_QUEUED,
     MAX_UPLOAD_SIZE_MB,
     MAX_AUDIO_UPLOAD_SIZE_MB,
     COMPRESS_ENCODER,
@@ -78,6 +80,8 @@ from app.db import (
     delete_job,
     cleanup_expired_jobs,
     update_job_status,
+    get_next_queued_transcription_job,
+    count_queued_transcription_jobs,
     get_setting,
     set_setting,
     create_compress_job,
@@ -338,6 +342,65 @@ async def watchdog_workers():
             logger.error(f"Error in watchdog_workers: {e}")
 
 
+async def transcribe_queue_dispatcher():
+    """
+    FIFO queue dispatcher for transcription jobs.
+
+    Polls SQLite for the oldest 'queued' job and spawns an isolated worker
+    subprocess for it, but never runs more than TRANSCRIBE_MAX_CONCURRENT jobs
+    at once (default TRANSCRIBE_MAX_CONCURRENT=1).
+    """
+    while True:
+        try:
+            await asyncio.sleep(1)
+            if len(_active_workers) >= TRANSCRIBE_MAX_CONCURRENT:
+                continue
+
+            job = get_next_queued_transcription_job()
+            if not job:
+                continue
+            job_id = job["id"]
+            if job_id in _active_workers:
+                continue
+
+            job_dir = os.path.join(TEMP_JOBS_DIR, job_id)
+            if not os.path.exists(job_dir):
+                logger.warning(
+                    f"Transcription job {job_id} has no job directory on disk; marking failed"
+                )
+                update_job_status(
+                    job_id,
+                    status="failed",
+                    stage="Failed",
+                    error_json=json.dumps({"detail": "Job directory missing before processing started"}),
+                )
+                continue
+
+            input_files = glob.glob(os.path.join(job_dir, "input.*"))
+            if not input_files:
+                logger.warning(
+                    f"Transcription job {job_id} has no input file on disk; marking failed"
+                )
+                update_job_status(
+                    job_id,
+                    status="failed",
+                    stage="Failed",
+                    error_json=json.dumps({"detail": "Input file missing before processing started"}),
+                )
+                safe_delete_dir(job_dir)
+                continue
+
+            save_path = input_files[0]
+            lang = job.get("language") or "th"
+
+            cmd = [sys.executable, "-m", "app.run_job", job_id, save_path, lang]
+            proc = subprocess.Popen(cmd, cwd=SERVICE_DIR)
+            _active_workers[job_id] = proc
+            logger.info(f"Dispatched transcription job {job_id} (pid={proc.pid})")
+        except Exception as e:
+            logger.error(f"Error in transcribe_queue_dispatcher: {e}")
+
+
 async def compress_queue_dispatcher():
     """
     FIFO queue dispatcher for video compressor jobs.
@@ -449,6 +512,8 @@ async def startup_event():
     asyncio.create_task(watchdog_workers())
     # Start the model VRAM idle reaper (active only in 'idle' mode)
     asyncio.create_task(model_idle_reaper())
+    # Start the transcription queue dispatcher (FIFO, 1+ concurrent jobs)
+    asyncio.create_task(transcribe_queue_dispatcher())
     # Start the video compressor queue dispatcher (FIFO, 1+ concurrent encodes)
     asyncio.create_task(compress_queue_dispatcher())
 
