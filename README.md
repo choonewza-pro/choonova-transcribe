@@ -101,6 +101,11 @@ We intentionally maintain a hybrid architectural state where the API delivery la
      docker compose up -d --build
      ```
 5. **เข้าใช้งาน** ที่ [http://localhost:8830](http://localhost:8830)
+6. **ตรวจสอบว่าระบบทำงานถูกต้อง (หลังติดตั้ง)**
+   - ไปที่หน้า **ทดสอบ API**: [http://localhost:8830/test](http://localhost:8830/test)
+   - ผู้ใช้จะเข้าได้เมื่อตั้งค่า API Key แล้วเท่านั้น (กรอกที่หน้า `/setting` หรือใช้ `http://localhost:8830/test?api_key=YOUR_KEY`)
+   - กดปุ่ม **▶ เริ่มทดสอบอัตโนมัติ** ระบบจะส่งไฟล์ตัวอย่างจากโฟลเดอร์ `assets/` ไปยัง endpoint จริง (ถอดความภาษาไทย + บีบอัดวิดีโอ) แล้วรายงานผลแบบผ่าน/ไม่ผ่านเป็นรายการ พร้อมแถบความคืบหน้าแบบ `X/N`
+   - งานบีบอัดวิดีโออาจใช้เวลาหลายนาที (โดยเฉพาะโหมด CPU) — ระบบจะแสดงความคืบหน้าให้ตลอดเวลาที่รองาน
 
 ## Configuration
 
@@ -159,6 +164,7 @@ Navigate to `http://localhost:8830/` to access the built-in HTML dashboard where
 - Upload long videos for asynchronous transcription and monitor progress.
 - Compress videos.
 - Adjust Model VRAM Settings.
+- Run the automated API self-test (`/test`) to verify every endpoint works end-to-end.
 
 ### Model VRAM Residency
 

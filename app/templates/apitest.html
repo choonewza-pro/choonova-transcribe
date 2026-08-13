@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ทดสอบ API อัตโนมัติ - ChooNova Transcribe</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  {% set active_page = 'apitest' %}
+  {% set header_badge = 'API Endpoint Tester' %}
+  {% include 'partials/header.html' %}
+
+  <main>
+    <div class="glass-card">
+      <h1>🔬 ทดสอบ API อัตโนมัติ</h1>
+      <p class="subtitle" style="margin-bottom: 1.5rem;">
+        กดปุ่มเพื่อตรวจสอบว่า REST API endpoints ทั้งหมดทำงานถูกต้อง — ระบบจะส่งไฟล์ตัวอย่างจาก
+        <code>assets/</code> ไปยัง endpoint จริงแล้วรายงานผลแบบ field-by-field (ผ่าน/ไม่ผ่าน)
+      </p>
+
+      <div style="display:flex; flex-wrap:wrap; gap:1rem; align-items:center; margin-bottom:1rem;">
+        <button type="button" class="btn-primary" id="startTestBtn" disabled>▶ เริ่มทดสอบอัตโนมัติ</button>
+        <label style="display:flex; align-items:center; gap:0.5rem; color:var(--text-muted); font-size:0.9rem;">
+          <input type="checkbox" id="cleanupToggle" checked>
+          ลบงานทดสอบหลังเสร็จ (default YES)
+        </label>
+        <span id="testStatus" style="color:var(--text-muted); font-size:0.9rem;"></span>
+      </div>
+
+      <div id="assetPanel" style="margin-bottom:1rem;"></div>
+      <div id="limitPanel" style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;"></div>
+
+      <div id="progressPanel" style="display:none; margin-bottom:1.25rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+          <span id="progressLabel" style="font-weight:600;"></span>
+          <span id="progressPct" style="color:var(--text-muted); font-size:0.85rem;"></span>
+        </div>
+        <div style="height:10px; border-radius:5px; background:rgba(255,255,255,0.08); overflow:hidden;">
+          <div id="progressFill" style="width:0%; height:100%; background:linear-gradient(90deg,#00f2fe,#4facfe); transition:width .4s;"></div>
+        </div>
+      </div>
+
+      <div id="resultsArea"></div>
+
+      <div id="summaryCard" style="display:none; margin-top:1.5rem; padding:1.25rem 1.5rem;
+           border:1px solid var(--card-border); border-radius:14px; background:rgba(0,0,0,0.25);"></div>
+    </div>
+
+    <div style="margin-top:1.5rem; color:var(--text-muted); font-size:0.85rem; line-height:1.6;">
+      ⚠️ <strong>หมายเหตุ:</strong> การทดสอบนี้เรียกโปรเซสจริงบน GPU — งานบีบอัดวิดีโอ (compress) อาจใช้เวลาหลายนาที
+      โดยเฉพาะโหมด CPU (รอได้ตามค่า <code>APITEST_COMPRESS_MAX_WAIT_SEC</code>) ขณะทดสอบห้ามกดซ้ำ (รองรับครั้งละ 1 run เท่านั้น)
+    </div>
+  </main>
+
+  <footer>
+    Choonova AI Stack • ChooNova Transcribe Service running on Port 8830
+  </footer>
+
+  <script src="/static/js/apitest.js?v=1"></script>
+</body>
+</html>

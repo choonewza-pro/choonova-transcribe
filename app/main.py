@@ -198,6 +198,11 @@ TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 if os.path.exists(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+# Mount project assets/ (sample files used by the API self-test page)
+ASSETS_DIR = os.path.join(SERVICE_DIR, "assets")
+if os.path.isdir(ASSETS_DIR):
+    app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # Mount Modular Hexagonal Routers
@@ -205,12 +210,14 @@ from app.api.v1.settings_router import router as settings_router
 from app.api.v1.compression_router import router as compression_router
 from app.api.v1.transcription_router import router as transcription_router
 from app.api.v1.realtime_router import router as realtime_router
+from app.api.v1.apitest_router import router as apitest_router
 from app.api.web.views_router import router as views_router
 
 app.include_router(settings_router)
 app.include_router(compression_router)
 app.include_router(transcription_router)
 app.include_router(realtime_router)
+app.include_router(apitest_router)
 app.include_router(views_router)
 
 

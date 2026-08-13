@@ -91,6 +91,18 @@ SUPPORTED_LANGUAGES = ("th", "en", "auto")
 ALLOW_ACCESS_TRANSCRIBE_HISTORY = os.getenv("ALLOW_ACCESS_TRANSCRIBE_HISTORY", "false").lower() in ("true", "1", "yes")
 ALLOW_ACCESS_COMPRESS_HISTORY = os.getenv("ALLOW_ACCESS_COMPRESS_HISTORY", "false").lower() in ("true", "1", "yes")
 
+# =========================================================================
+# API Endpoint Self-Test (/v1/tests/*)
+# =========================================================================
+# Max wall-clock seconds to wait for an async transcription job to reach a
+# terminal status before the test is marked FAILED (cleanup still runs).
+APITEST_TRANSCRIBE_MAX_WAIT_SEC = int(os.getenv("APITEST_TRANSCRIBE_MAX_WAIT_SEC", "1800"))
+# Max wall-clock seconds to wait for an async compression job to reach a
+# terminal status before the test is marked FAILED (cleanup still runs).
+APITEST_COMPRESS_MAX_WAIT_SEC = int(os.getenv("APITEST_COMPRESS_MAX_WAIT_SEC", "3600"))
+# Polling interval (seconds) while waiting for async jobs during self-test.
+APITEST_POLL_INTERVAL_SEC = float(os.getenv("APITEST_POLL_INTERVAL_SEC", "5"))
+
 
 def get_real_execution_device() -> str:
     """

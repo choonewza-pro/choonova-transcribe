@@ -58,6 +58,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app /app/app
 
+# Copy sample assets used by the API Endpoint Self-Test page (/test → /v1/tests/*)
+COPY assets /app/assets
+
 # Create empty SQLite jobs DB inside the image (no volume mount required).
 # At runtime app/db.init_db() runs CREATE TABLE IF NOT EXISTS which is a no-op here.
 RUN python3 -c "\

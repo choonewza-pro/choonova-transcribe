@@ -1,0 +1,1 @@
+"""API Endpoint Self-Test module (pragmatic modular hexagonal)."""

@@ -209,6 +209,28 @@ async def settings_page(request: Request):
     return templates.TemplateResponse(request=request, name="setting.html")
 
 
+@router.get("/test", response_class=HTMLResponse)
+async def api_test_page(request: Request):
+    api_key = request.query_params.get("api_key") or request.query_params.get("x-api-key")
+    if not api_key:
+        api_key = request.headers.get("x-api-key")
+    if not api_key:
+        api_key = request.cookies.get("typhoon_asr_api_key") or request.cookies.get("api_key")
+
+    if not api_key or not hmac.compare_digest(api_key.strip(), GATEWAY_API_KEY):
+        return templates.TemplateResponse(
+            request=request,
+            name="unauthorized.html",
+            context={
+                "error_message": "ต้องตั้งค่า GATEWAY_API_KEY ก่อนจึงจะเข้าใช้งานหน้าทดสอบได้ — ไปที่หน้า ตั้งค่า แล้วกรอก API Key",
+                "active_page": "apitest",
+                "page_title": "หน้าทดสอบ API",
+            },
+            status_code=401,
+        )
+    return templates.TemplateResponse(request=request, name="apitest.html")
+
+
 @router.get("/jobs/history", response_class=HTMLResponse)
 async def jobs_history_page_legacy(request: Request):
     return RedirectResponse(url="/media/transcribe/jobs/history", status_code=302)
