@@ -15,6 +15,7 @@ class JobStage(str, Enum):
     extracting_audio = "extracting_audio"
     chunking = "chunking"
     transcribing = "transcribing"
+    diarizing = "diarizing"
     building_result = "building_result"
     saving_result = "saving_result"
     cleanup = "cleanup"
@@ -29,6 +30,7 @@ class TranscriptionSegment(BaseModel):
     text: str
     start: float
     end: float
+    speaker: Optional[str] = None
 
 class TranscriptionResult(BaseModel):
     text: str
@@ -38,6 +40,7 @@ class TimestampItem(BaseModel):
     word: str
     start: float
     end: float
+    speaker: Optional[str] = None
 
 class TranscribeResponse(BaseModel):
     status: str = "success"
@@ -74,6 +77,7 @@ class JobCreateResponse(BaseModel):
     id: str
     filename: str
     language: str = "th"
+    enable_diarization: bool = False
     message: str = "Job created and enqueued for background processing"
 
 class JobStatusResponse(BaseModel):
@@ -93,12 +97,14 @@ class JobStatusResponse(BaseModel):
     rtf: Optional[float] = None
     target_chunk_sec: float = 30.0
     max_chunk_sec: float = 60.0
+    enable_diarization: bool = False
     result: Optional[TranscriptionResult] = None
     error: Optional[JobError] = None
     created_at: str
     updated_at: str
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
+
 
 class JobListItem(BaseModel):
     id: str

@@ -27,11 +27,12 @@ def main():
     job_id = sys.argv[1]
     input_file_path = sys.argv[2]
     language = sys.argv[3] if len(sys.argv) > 3 else "th"
+    enable_diarization = sys.argv[4] in ("1", "true", "True") if len(sys.argv) > 4 else False
 
-    logger.info(f"🚀 Transcription Inbound Worker starting for job_id={job_id}")
+    logger.info(f"🚀 Transcription Inbound Worker starting for job_id={job_id} (diarization={enable_diarization})")
 
     try:
-        asyncio.run(process_transcription_job(job_id, input_file_path, language))
+        asyncio.run(process_transcription_job(job_id, input_file_path, language, enable_diarization))
         logger.info(f"✅ Transcription Inbound Worker finished for job_id={job_id}")
     except Exception as e:
         logger.error(f"❌ Transcription Inbound Worker failed for job_id={job_id}: {e}", exc_info=True)

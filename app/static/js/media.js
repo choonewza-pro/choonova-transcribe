@@ -186,12 +186,12 @@ document.addEventListener('DOMContentLoaded', () => {
       step1.classList.add('completed');
       step2.classList.add('completed');
       step3.classList.add('active');
-    } else if (status === 'transcribing') {
+    } else if (status === 'transcribing' || stage === 'transcribing' || stage === 'diarizing') {
       step1.classList.add('completed');
       step2.classList.add('completed');
       step3.classList.add('completed');
       step4.classList.add('active');
-    } else if (status === 'completed') {
+    } else if (status === 'completed' || stage === 'completed') {
       [step1, step2, step3, step4, step5].forEach(s => s.classList.add('completed'));
     }
   }
@@ -306,6 +306,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const maxChunkInput = document.getElementById('maxChunkSec');
     if (maxChunkInput && maxChunkInput.value && parseFloat(maxChunkInput.value) > 0) {
       formData.append('max_chunk_sec', maxChunkInput.value);
+    }
+    const enableDiarizationCheck = document.getElementById('enableDiarization');
+    if (enableDiarizationCheck && enableDiarizationCheck.checked) {
+      formData.append('enable_diarization', 'true');
     }
 
     const xhr = new XMLHttpRequest();

@@ -168,6 +168,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (timestampsCheck.checked) {
       formData.append('with_timestamps', 'true');
     }
+    const diarizationCheck = document.getElementById('diarizationCheck');
+    if (diarizationCheck && diarizationCheck.checked) {
+      formData.append('enable_diarization', 'true');
+    }
 
     const headers = {};
     const apiKey = getApiKey();

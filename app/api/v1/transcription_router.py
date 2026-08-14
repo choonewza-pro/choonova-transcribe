@@ -68,6 +68,7 @@ def _job_to_dict(job) -> Dict[str, Any]:
         "processing_time": job.processing_time or 0.0,
         "target_chunk_sec": getattr(job, "target_chunk_sec", None) or 30.0,
         "max_chunk_sec": getattr(job, "max_chunk_sec", None) or 60.0,
+        "enable_diarization": getattr(job, "enable_diarization", False),
         "model": job.model,
         "result": job.result,
         "error": job.error,
@@ -83,6 +84,7 @@ async def transcribe_audio(
     file: UploadFile = File(...),
     with_timestamps: bool = Form(False),
     language: str = Form("th"),
+    enable_diarization: bool = Form(False),
     authenticated: bool = Depends(verify_api_key),
 ):
     """
@@ -122,20 +124,63 @@ async def transcribe_audio(
         content = bytes(content)
         validate_magic_bytes(content[:2048])
 
-        # Inline transcription via engine port (offloaded to thread to prevent blocking event loop)
-        from app.engine_router import transcribe_bytes as router_transcribe_bytes
-        res = await asyncio.to_thread(
-            router_transcribe_bytes,
-            audio_bytes=content,
-            filename_hint=secure_filename(file.filename),
-            language=lang,
-            with_timestamps=with_timestamps,
-        )
+        start_t = time.time()
+        temp_audio_path = None
 
-        text = res.get("text", "")
-        elapsed = float(res.get("elapsed", 0.0))
-        duration = float(res.get("duration", 0.0))
-        timestamps = res.get("timestamps", [])
+        if enable_diarization:
+            # Diarization requires writing audio to a temporary file
+            temp_dir = os.path.join(TEMP_JOBS_DIR, f"sync_{uuid.uuid4()}")
+            os.makedirs(temp_dir, exist_ok=True)
+            safe_name = secure_filename(file.filename)
+            ext = os.path.splitext(safe_name)[1] or ".wav"
+            temp_audio_path = os.path.join(temp_dir, f"input{ext}")
+
+            with open(temp_audio_path, "wb") as f:
+                f.write(content)
+
+            if lang == "th":
+                from app.engine_router import transcribe_file as router_transcribe_file
+                from app.pyannote_engine import diarize_audio, merge_speaker_overlap
+
+                res = await asyncio.to_thread(
+                    router_transcribe_file,
+                    audio_path=temp_audio_path,
+                    language=lang,
+                    with_timestamps=True,
+                )
+                text = res.get("text", "")
+                timestamps = res.get("timestamps", [])
+                turns = await asyncio.to_thread(diarize_audio, temp_audio_path)
+                timestamps = merge_speaker_overlap(timestamps, turns)
+            else:
+                from app.whisperx_engine import transcribe_and_diarize_whisperx
+                wx_res = await asyncio.to_thread(
+                    transcribe_and_diarize_whisperx,
+                    temp_audio_path,
+                    lang,
+                )
+                text = wx_res.get("text", "")
+                timestamps = wx_res.get("segments", [])
+
+            elapsed = time.time() - start_t
+            from app.audio_utils import get_audio_duration_ffmpeg
+            duration = get_audio_duration_ffmpeg(temp_audio_path)
+            svc.safe_delete_dir(temp_dir)
+        else:
+            # Inline transcription via engine port
+            from app.engine_router import transcribe_bytes as router_transcribe_bytes
+            res = await asyncio.to_thread(
+                router_transcribe_bytes,
+                audio_bytes=content,
+                filename_hint=secure_filename(file.filename),
+                language=lang,
+                with_timestamps=with_timestamps,
+            )
+
+            text = res.get("text", "")
+            elapsed = float(res.get("elapsed", 0.0))
+            duration = float(res.get("duration", 0.0))
+            timestamps = res.get("timestamps", [])
 
         rtf = elapsed / duration if duration > 0 else 0.0
 
@@ -145,7 +190,7 @@ async def transcribe_audio(
             duration_seconds=round(duration, 2),
             elapsed_seconds=round(elapsed, 3),
             rtf=round(rtf, 5),
-            timestamps=timestamps if with_timestamps else None,
+            timestamps=timestamps if (with_timestamps or enable_diarization) else None,
         )
     except HTTPException:
         raise
@@ -165,6 +210,7 @@ async def create_transcription_job(
     language: str = Form("th"),
     target_chunk_sec: float = Form(None),
     max_chunk_sec: float = Form(None),
+    enable_diarization: bool = Form(False),
     authenticated: bool = Depends(verify_api_key),
 ):
     """
@@ -268,6 +314,7 @@ async def create_transcription_job(
         language=lang,
         target_chunk_sec=target_chunk_sec,
         max_chunk_sec=max_chunk_sec,
+        enable_diarization=enable_diarization,
     )
 
     return JobCreateResponse(
@@ -275,6 +322,7 @@ async def create_transcription_job(
         id=job.id,
         filename=file.filename,
         language=lang,
+        enable_diarization=enable_diarization,
         message="Job created and enqueued for long-form video transcription",
     )
 

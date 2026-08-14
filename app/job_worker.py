@@ -167,7 +167,8 @@ def build_srt_subtitles(
     max_gap_sec: float = 1.0,
 ) -> str:
     """
-    Group continuous word timestamps into SRT subtitle cues.
+    Group continuous word/segment timestamps into SRT subtitle cues.
+    Supports both word-level timestamps and speaker-grouped segments.
     """
     if not timestamps:
         return ""
@@ -175,46 +176,59 @@ def build_srt_subtitles(
     cues = []
     current_cue_words = []
     current_cue_start = None
+    current_cue_speaker = None
     last_word_end = 0.0
 
     for item in timestamps:
-        word = item.get("word", "").strip()
+        word = (item.get("word") or item.get("text") or "").strip()
         start = float(item.get("start", 0.0))
         end = float(item.get("end", 0.0))
+        speaker = item.get("speaker")
 
         if not word:
             continue
 
         if current_cue_start is None:
             current_cue_start = start
+            current_cue_speaker = speaker
 
         # Check if we should finalize current cue
         is_long_gap = (
             (start - last_word_end) > max_gap_sec if last_word_end > 0 else False
         )
         is_max_words = len(current_cue_words) >= max_words_per_cue
+        is_speaker_change = (
+            speaker != current_cue_speaker if current_cue_speaker is not None and speaker is not None else False
+        )
 
-        if current_cue_words and (is_long_gap or is_max_words):
+        if current_cue_words and (is_long_gap or is_max_words or is_speaker_change):
+            cue_text = " ".join(current_cue_words)
+            if current_cue_speaker and not cue_text.startswith("["):
+                cue_text = f"[{current_cue_speaker}]: {cue_text}"
             cues.append(
                 {
                     "start": current_cue_start,
                     "end": last_word_end,
-                    "text": " ".join(current_cue_words),
+                    "text": cue_text,
                 }
             )
             current_cue_words = [word]
             current_cue_start = start
+            current_cue_speaker = speaker
         else:
             current_cue_words.append(word)
 
         last_word_end = end
 
     if current_cue_words and current_cue_start is not None:
+        cue_text = " ".join(current_cue_words)
+        if current_cue_speaker and not cue_text.startswith("["):
+            cue_text = f"[{current_cue_speaker}]: {cue_text}"
         cues.append(
             {
                 "start": current_cue_start,
                 "end": last_word_end,
-                "text": " ".join(current_cue_words),
+                "text": cue_text,
             }
         )
 
@@ -229,12 +243,17 @@ def build_srt_subtitles(
 
 
 async def process_transcription_job(
-    job_id: str, input_file_path: str, language: str = "th"
+    job_id: str, input_file_path: str, language: str = "th", enable_diarization: bool = False
 ) -> None:
     """
     Asynchronous Background Worker for processing long video/audio transcription jobs.
+    Handles 4 Pathways:
+      - Path 1: Thai without diarization (Typhoon ASR)
+      - Path 2: Eng/Auto without diarization (Faster-Whisper)
+      - Path 3: Thai with diarization (Typhoon ASR + PyAnnote 3.1)
+      - Path 4: Eng/Auto with diarization (WhisperX pipeline)
     """
-    logger.info(f"Starting job worker for job_id={job_id} ({input_file_path})")
+    logger.info(f"Starting job worker for job_id={job_id} ({input_file_path}, lang={language}, diarization={enable_diarization})")
     start_time = time.time()
     job_dir = os.path.dirname(input_file_path)
 
@@ -248,23 +267,8 @@ async def process_transcription_job(
         )
 
         job = get_job(job_id)
-        
-        # Fallback to language-specific defaults if job was created before columns existed
-        fallback_target = (
-            TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC if language == "th" 
-            else TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC
-        )
-        fallback_max = (
-            TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC if language == "th" 
-            else TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC
-        )
-        
-        target_chunk_sec = (
-            job.get("target_chunk_sec") if job and job.get("target_chunk_sec") else fallback_target
-        )
-        max_chunk_sec = (
-            job.get("max_chunk_sec") if job and job.get("max_chunk_sec") else fallback_max
-        )
+        if job and job.get("enable_diarization"):
+            enable_diarization = True
 
         extracted_wav = os.path.join(job_dir, "extracted_audio.wav")
 
@@ -276,125 +280,183 @@ async def process_transcription_job(
         total_duration = get_audio_duration_ffmpeg(extracted_wav)
         update_job_status(id=job_id, duration=total_duration)
 
-        # Step 2: Silence-Aware Audio Chunking
-        update_job_status(
-            id=job_id, status="processing", progress=20.0, stage="chunking"
-        )
-        chunks_dir = os.path.join(job_dir, "chunks")
-        chunks = await loop.run_in_executor(
-            None,
-            split_audio_silence,
-            extracted_wav,
-            chunks_dir,
-            target_chunk_sec,
-            max_chunk_sec,
-        )
+        result_obj = {}
 
-        total_chunks = len(chunks)
-        update_job_status(id=job_id, total_chunks=total_chunks, progress=25.0)
-
-        combined_text_parts = []
-        global_timestamps = []
-
-        # Step 3: GPU Transcription Loop (Protected by asyncio.Lock)
-        async with gpu_lock:
-            logger.info(
-                f"Acquired GPU Lock for job {job_id} (Processing {total_chunks} chunks)"
-            )
-
-            # Load the engine model explicitly so the UI can surface this stage;
-            # otherwise the first chunk hides a 10-60s cold load inside "Transcribing".
-            update_job_status(
-                id=job_id,
-                status="processing",
-                progress=25.0,
-                stage="transcribing",
-            )
-            if language == "th":
-                await loop.run_in_executor(None, engine.load_model)
-            else:
-                await loop.run_in_executor(None, whisper_engine.load_model)
-
-            for idx, chunk in enumerate(chunks, 1):
-                pct = 25.0 + (idx / total_chunks) * 65.0
+        # -----------------------------------------------------------------
+        # Path 4: Eng/Auto + Speaker Diarization -> WhisperX Pipeline
+        # -----------------------------------------------------------------
+        if enable_diarization and language != "th":
+            async with gpu_lock:
+                logger.info(f"Acquired GPU Lock for job {job_id} (WhisperX Diarization Pipeline)")
                 update_job_status(
                     id=job_id,
                     status="processing",
-                    progress=pct,
-                    completed_chunks=idx - 1,
+                    progress=30.0,
                     stage="transcribing",
                 )
+                from app.whisperx_engine import transcribe_and_diarize_whisperx
 
-                chunk_path = chunk["path"]
-                chunk_start_sec = chunk["start_sec"]
-                chunk_duration = chunk.get("duration_sec", 0.0)
+                wx_res = await loop.run_in_executor(
+                    None, transcribe_and_diarize_whisperx, extracted_wav, language
+                )
+                result_obj = {
+                    "text": wx_res.get("text", ""),
+                    "segments": wx_res.get("segments", []),
+                }
+
+        # -----------------------------------------------------------------
+        # Path 1, 2, 3: Standard Chunking (Typhoon / Faster-Whisper)
+        # -----------------------------------------------------------------
+        else:
+            # Step 2: Silence-Aware Audio Chunking
+            update_job_status(
+                id=job_id, status="processing", progress=20.0, stage="chunking"
+            )
+            fallback_target = (
+                TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC if language == "th"
+                else TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC
+            )
+            fallback_max = (
+                TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC if language == "th"
+                else TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC
+            )
+
+            target_chunk_sec = (
+                job.get("target_chunk_sec") if job and job.get("target_chunk_sec") else fallback_target
+            )
+            max_chunk_sec = (
+                job.get("max_chunk_sec") if job and job.get("max_chunk_sec") else fallback_max
+            )
+
+            chunks_dir = os.path.join(job_dir, "chunks")
+            chunks = await loop.run_in_executor(
+                None,
+                split_audio_silence,
+                extracted_wav,
+                chunks_dir,
+                target_chunk_sec,
+                max_chunk_sec,
+            )
+
+            total_chunks = len(chunks)
+            update_job_status(id=job_id, total_chunks=total_chunks, progress=25.0)
+
+            combined_text_parts = []
+            global_timestamps = []
+
+            # Step 3: GPU Transcription Loop (Protected by asyncio.Lock)
+            async with gpu_lock:
                 logger.info(
-                    f"Transcribing chunk {idx}/{total_chunks} "
-                    f"(start={chunk_start_sec:.1f}s, duration={chunk_duration:.1f}s)"
+                    f"Acquired GPU Lock for job {job_id} (Processing {total_chunks} chunks)"
                 )
 
-                # Run synchronous engine inference in executor, retrying on transient CUDA errors
-                res = await transcribe_chunk_with_retry(
-                    loop, chunk_path, True, idx, language
+                update_job_status(
+                    id=job_id,
+                    status="processing",
+                    progress=25.0,
+                    stage="transcribing",
                 )
+                if language == "th":
+                    await loop.run_in_executor(None, engine.load_model)
+                else:
+                    await loop.run_in_executor(None, whisper_engine.load_model)
 
-                chunk_text = res.get("text", "").strip()
-                if chunk_text:
-                    combined_text_parts.append(chunk_text)
-
-                chunk_ts = res.get("timestamps", [])
-                for ts_item in chunk_ts:
-                    word = ts_item.get("word", "")
-                    w_start = float(ts_item.get("start", 0.0)) + chunk_start_sec
-                    w_end = float(ts_item.get("end", 0.0)) + chunk_start_sec
-                    global_timestamps.append(
-                        {
-                            "word": word,
-                            "start": round(w_start, 3),
-                            "end": round(w_end, 3),
-                        }
+                for idx, chunk in enumerate(chunks, 1):
+                    pct_max = 85.0 if enable_diarization else 95.0
+                    pct = 25.0 + (idx / total_chunks) * (pct_max - 25.0)
+                    update_job_status(
+                        id=job_id,
+                        status="processing",
+                        progress=pct,
+                        completed_chunks=idx - 1,
+                        stage="transcribing",
                     )
 
-                # ⚡ Immediate Intermediate Cleanup: Delete chunk WAV file after inference & clear VRAM
-                safe_delete_file(chunk_path)
-                engine.clear_cuda_cache()
-                update_job_status(id=job_id, completed_chunks=idx)
-
-                # 🔧 Prevent CUDACachingAllocator corruption from consecutive
-                # transcribe() calls — the canonical failure mode is "CUDA error:
-                # an illegal memory access was encountered" on chunk 2/2, which
-                # raises a C++ std::terminate that bypasses Python exception
-                # handling entirely (the worker just dies, leaving a zombie job).
-                # Skip on the final chunk since there's nothing left to process.
-                if CUDA_RESET_BETWEEN_CHUNKS and idx < total_chunks:
+                    chunk_path = chunk["path"]
+                    chunk_start_sec = chunk["start_sec"]
+                    chunk_duration = chunk.get("duration_sec", 0.0)
                     logger.info(
-                        f"Resetting CUDA context after chunk {idx}/{total_chunks} "
-                        "to prevent allocator corruption (next chunk will lazy-reload model)"
+                        f"Transcribing chunk {idx}/{total_chunks} "
+                        f"(start={chunk_start_sec:.1f}s, duration={chunk_duration:.1f}s)"
                     )
-                    await loop.run_in_executor(None, cuda_device_reset_all)
 
-        # Step 4: Final Cleanup & Result Assembly
+                    res = await transcribe_chunk_with_retry(
+                        loop, chunk_path, True, idx, language
+                    )
+
+                    chunk_text = res.get("text", "").strip()
+                    if chunk_text:
+                        combined_text_parts.append(chunk_text)
+
+                    chunk_ts = res.get("timestamps", [])
+                    for ts_item in chunk_ts:
+                        word = ts_item.get("word", "")
+                        w_start = float(ts_item.get("start", 0.0)) + chunk_start_sec
+                        w_end = float(ts_item.get("end", 0.0)) + chunk_start_sec
+                        global_timestamps.append(
+                            {
+                                "word": word,
+                                "start": round(w_start, 3),
+                                "end": round(w_end, 3),
+                            }
+                        )
+
+                    safe_delete_file(chunk_path)
+                    engine.clear_cuda_cache()
+                    update_job_status(id=job_id, completed_chunks=idx)
+
+                    if CUDA_RESET_BETWEEN_CHUNKS and idx < total_chunks:
+                        await loop.run_in_executor(None, cuda_device_reset_all)
+
+                # Path 3: Thai + Diarization (PyAnnote 3.1)
+                if enable_diarization and language == "th":
+                    logger.info(f"Running Path 3: PyAnnote Diarization for Thai job {job_id}")
+                    update_job_status(
+                        id=job_id,
+                        status="processing",
+                        progress=88.0,
+                        stage="diarizing",
+                    )
+
+                    # Reset ASR model to clear VRAM before loading PyAnnote
+                    await loop.run_in_executor(None, reset_all)
+
+                    from app.pyannote_engine import (
+                        diarize_audio,
+                        merge_speaker_overlap,
+                        group_speaker_segments,
+                    )
+
+                    turns = await loop.run_in_executor(None, diarize_audio, extracted_wav)
+                    merged_timestamps = merge_speaker_overlap(global_timestamps, turns)
+                    grouped_segments = group_speaker_segments(merged_timestamps)
+
+                    full_text = "\n".join(
+                        [f"[{s['speaker']}]: {s['text']}" for s in grouped_segments]
+                    ) if grouped_segments else " ".join(combined_text_parts)
+
+                    result_obj = {
+                        "text": full_text,
+                        "segments": grouped_segments,
+                    }
+                else:
+                    full_text = " ".join(combined_text_parts)
+                    segments = [
+                        {"text": ts["word"], "start": ts["start"], "end": ts["end"]}
+                        for ts in global_timestamps
+                    ]
+                    result_obj = {
+                        "text": full_text,
+                        "segments": segments,
+                    }
+
+            safe_delete_dir(chunks_dir)
+
+        # Step 4: Final Cleanup & DB Result Update
         safe_delete_file(extracted_wav)
         safe_delete_file(input_file_path)
-        safe_delete_dir(chunks_dir)
         safe_delete_dir(job_dir)
 
-        full_text = " ".join(combined_text_parts)
-        
-        # Rename global_timestamps `word` to `text` to match the new Contract
-        segments = []
-        for ts in global_timestamps:
-            segments.append({
-                "text": ts["word"],
-                "start": ts["start"],
-                "end": ts["end"]
-            })
-            
-        result_obj = {
-            "text": full_text,
-            "segments": segments
-        }
-        
         elapsed = time.time() - start_time
 
         update_job_status(
@@ -420,3 +482,4 @@ async def process_transcription_job(
         update_job_status(
             id=job_id, status="failed", stage="completed", error_json=json.dumps(error_obj)
         )
+

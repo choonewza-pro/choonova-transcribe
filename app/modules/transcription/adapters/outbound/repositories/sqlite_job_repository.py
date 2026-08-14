@@ -45,6 +45,7 @@ def _row_to_job(r) -> TranscriptionJob:
         processing_time=d.get("processing_time") or 0.0,
         target_chunk_sec=d.get("target_chunk_sec") if d.get("target_chunk_sec") is not None else 30.0,
         max_chunk_sec=d.get("max_chunk_sec") if d.get("max_chunk_sec") is not None else 60.0,
+        enable_diarization=bool(d.get("enable_diarization")),
         result=result,
         error=error,
         created_at=str(d["created_at"]) if d.get("created_at") else now_iso,
@@ -67,8 +68,8 @@ class SQLiteJobRepository(JobRepositoryPort):
                     id, type, filename, file_size_bytes, language, status,
                     progress, stage, total_chunks, completed_chunks,
                     duration, processing_time, target_chunk_sec, max_chunk_sec,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    enable_diarization, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job.id, job.type, job.filename, job.file_size_bytes, job.language,
@@ -76,6 +77,7 @@ class SQLiteJobRepository(JobRepositoryPort):
                     job.total_chunks, job.completed_chunks,
                     job.duration, job.processing_time,
                     job.target_chunk_sec, job.max_chunk_sec,
+                    1 if job.enable_diarization else 0,
                     now, now,
                 ),
             )

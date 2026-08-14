@@ -71,6 +71,7 @@ def init_db() -> None:
                 max_chunk_sec REAL DEFAULT 60.0,
                 result_json TEXT,
                 error_json TEXT,
+                enable_diarization INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 started_at TIMESTAMP,
@@ -79,8 +80,12 @@ def init_db() -> None:
                 cancelled_at TIMESTAMP
             );
         """)
-        # We assume database is fresh (deleted) or matching the schema.
-        # No migrations for old columns like job_id needed.
+        jobs_columns = [
+            r["name"] for r in cursor.execute("PRAGMA table_info(jobs)").fetchall()
+        ]
+        if "enable_diarization" not in jobs_columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN enable_diarization INTEGER DEFAULT 0")
+
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
         """)
@@ -179,6 +184,7 @@ def create_job(
     language: str = "th",
     target_chunk_sec: Optional[float] = None,
     max_chunk_sec: Optional[float] = None,
+    enable_diarization: bool = False,
 ) -> Dict[str, Any]:
     """
     Insert a new job record in SQLite with status='queued'.
@@ -198,10 +204,20 @@ def create_job(
             """
             INSERT INTO jobs (
                 id, type, filename, file_size_bytes, language, status, progress,
-                stage, target_chunk_sec, max_chunk_sec, created_at, updated_at
-            ) VALUES (?, 'transcription', ?, ?, ?, 'queued', 0.0, 'queued', ?, ?, ?, ?)
+                stage, target_chunk_sec, max_chunk_sec, enable_diarization, created_at, updated_at
+            ) VALUES (?, 'transcription', ?, ?, ?, 'queued', 0.0, 'queued', ?, ?, ?, ?, ?)
         """,
-            (id, filename, file_size_bytes, language, target_chunk_sec, max_chunk_sec, now, now),
+            (
+                id,
+                filename,
+                file_size_bytes,
+                language,
+                target_chunk_sec,
+                max_chunk_sec,
+                1 if enable_diarization else 0,
+                now,
+                now,
+            ),
         )
         conn.commit()
     return get_job(id)

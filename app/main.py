@@ -399,11 +399,12 @@ async def transcribe_queue_dispatcher():
 
             save_path = input_files[0]
             lang = job.get("language") or "th"
+            enable_diar = "1" if job.get("enable_diarization") else "0"
 
-            cmd = [sys.executable, "-m", "app.run_job", job_id, save_path, lang]
+            cmd = [sys.executable, "-m", "app.run_job", job_id, save_path, lang, enable_diar]
             proc = subprocess.Popen(cmd, cwd=SERVICE_DIR)
             _active_workers[job_id] = proc
-            logger.info(f"Dispatched transcription job {job_id} (pid={proc.pid})")
+            logger.info(f"Dispatched transcription job {job_id} (pid={proc.pid}, diarization={enable_diar})")
         except Exception as e:
             logger.error(f"Error in transcribe_queue_dispatcher: {e}")
 

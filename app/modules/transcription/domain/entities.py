@@ -33,6 +33,7 @@ class TranscriptionJob:
     processing_time: float = 0.0
     target_chunk_sec: float = 30.0
     max_chunk_sec: float = 60.0
+    enable_diarization: bool = False
     result: Optional[Dict[str, Any]] = None
     error: Optional[Dict[str, Any]] = None
     created_at: Optional[str] = None

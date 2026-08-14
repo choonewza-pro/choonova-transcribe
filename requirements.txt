@@ -17,4 +17,6 @@ sentencepiece==0.2.2
 transformers==4.53.3
 numpy==2.5.2
 faster-whisper==1.2.1
+pyannote.audio==3.1.1
+git+https://github.com/m-bain/whisperX.git
 filetype==1.2.0

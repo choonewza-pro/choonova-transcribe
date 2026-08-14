@@ -90,6 +90,12 @@ WHISPER_COMPUTE_TYPE = "float16" if DEVICE == "cuda" else "int8"
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip() or None
 SUPPORTED_LANGUAGES = ("th", "en", "auto")
 
+# Speaker Diarization configurations (PyAnnote 3.1 & WhisperX)
+DIARIZATION_ENABLED = os.getenv("DIARIZATION_ENABLED", "true").lower() in ("true", "1", "yes")
+DIARIZATION_MODEL = os.getenv("DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1")
+DIARIZATION_MIN_SPEAKERS = int(os.getenv("DIARIZATION_MIN_SPEAKERS", "") or 0) or None
+DIARIZATION_MAX_SPEAKERS = int(os.getenv("DIARIZATION_MAX_SPEAKERS", "") or 0) or None
+
 # Public share configurations for history pages
 ALLOW_ACCESS_TRANSCRIBE_HISTORY = os.getenv("ALLOW_ACCESS_TRANSCRIBE_HISTORY", "false").lower() in ("true", "1", "yes")
 ALLOW_ACCESS_COMPRESS_HISTORY = os.getenv("ALLOW_ACCESS_COMPRESS_HISTORY", "false").lower() in ("true", "1", "yes")
