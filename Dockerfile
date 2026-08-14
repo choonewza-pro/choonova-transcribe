@@ -21,78 +21,26 @@ WORKDIR /app
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir huggingface_hub
 
-# Download model weights into Docker image layer (Option 1: Docker Build-time Caching)
-RUN python3 -c "\
-from huggingface_hub import hf_hub_download; \
-import os; \
-p = hf_hub_download(repo_id='typhoon-ai/typhoon-asr-realtime', filename='typhoon-asr-realtime.nemo', local_dir='/app/model'); \
-size = os.path.getsize(p) / (1024**3); \
-print(); \
-print('=' * 70); \
-print('  ✅ MODEL DOWNLOAD COMPLETE — Typhoon ASR Realtime'); \
-print(f'  📁 {p}'); \
-print(f'  💾 {size:.2f} GB'); \
-print('=' * 70); \
-print()"
+# Copy model download helper script
+COPY scripts/download_models.py /app/scripts/download_models.py
+
+# Download Typhoon ASR model weights into Docker image layer (Option 1: Docker Build-time Caching)
+RUN python3 /app/scripts/download_models.py --typhoon
 
 # Pre-download Whisper model (for English / Thai-English mixed support via faster-whisper)
 ARG WHISPER_MODEL=large-v3-turbo
 ARG HF_TOKEN=""
-RUN python3 -c "\
-from huggingface_hub import snapshot_download; \
-import os; \
-m = os.getenv('WHISPER_MODEL', 'large-v3-turbo'); \
-t = os.getenv('HF_TOKEN', '').strip() or None; \
-repo_id = 'mobiuslabsgmbh/faster-whisper-large-v3-turbo' if m in ('turbo', 'large-v3-turbo') else f'Systran/faster-whisper-{m}'; \
-p = snapshot_download(repo_id=repo_id, token=t); \
-print(); \
-print('=' * 70); \
-print('  ✅ WHISPER MODEL DOWNLOAD COMPLETE — ' + repo_id); \
-print(f'  📁 {p}'); \
-print('=' * 70); \
-print()"
+RUN python3 /app/scripts/download_models.py --whisper --whisper-model "${WHISPER_MODEL}" --hf-token "${HF_TOKEN}"
 
 # Pre-download PyAnnote Diarization & SpeechBrain models (if HF_TOKEN is provided at build time)
-RUN python3 -c "\
-from huggingface_hub import snapshot_download; \
-import os; \
-t = os.getenv('HF_TOKEN', '').strip() or None; \
-if t: \
-    try: \
-        p1 = snapshot_download(repo_id='pyannote/speaker-diarization-3.1', token=t); \
-        p2 = snapshot_download(repo_id='pyannote/segmentation-3.0', token=t); \
-        p3 = snapshot_download(repo_id='speechbrain/spkrec-ecapa-voxceleb', token=t); \
-        print(); \
-        print('=' * 70); \
-        print('  ✅ PYANNOTE DIARIZATION MODELS DOWNLOAD COMPLETE'); \
-        print(f'  📁 {p1}'); \
-        print(f'  📁 {p2}'); \
-        print(f'  📁 {p3}'); \
-        print('=' * 70); \
-        print(); \
-    except Exception as e: \
-        print(f'  ⚠️ Could not pre-download PyAnnote models during build: {e}'); \
-else: \
-    print('  ℹ️ HF_TOKEN not provided at build time; PyAnnote models will load at runtime when HF_TOKEN is configured in .env.'); \
-"
+RUN python3 /app/scripts/download_models.py --pyannote --hf-token "${HF_TOKEN}"
 
 # Install all Python requirements with CUDA 12.1 index
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download WhisperX Forced Alignment model for English ('en')
-RUN python3 -c "\
-import whisperx; \
-try: \
-    whisperx.load_align_model(language_code='en', device='cpu'); \
-    print(); \
-    print('=' * 70); \
-    print('  ✅ WHISPERX ENGLISH ALIGNMENT MODEL DOWNLOAD COMPLETE'); \
-    print('=' * 70); \
-    print(); \
-except Exception as e: \
-    print(f'  ⚠️ Could not pre-download WhisperX alignment model: {e}'); \
-"
+RUN python3 /app/scripts/download_models.py --whisperx-align
 
 COPY app /app/app
 
