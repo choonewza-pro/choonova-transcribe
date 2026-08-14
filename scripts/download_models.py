@@ -71,7 +71,17 @@ def download_pyannote(token: str | None = None) -> None:
             print("=" * 70)
             print()
         except Exception as e:
-            print(f"  ⚠️ Could not pre-download PyAnnote models during build: {e}")
+            err_msg = str(e)
+            print()
+            print("=" * 70)
+            print(f"  ⚠️ Could not pre-download PyAnnote models during build: {err_msg[:120]}...")
+            if "403" in err_msg or "401" in err_msg or "gated" in err_msg.lower():
+                print("  💡 HINT: PyAnnote models require accepting user agreements on Hugging Face:")
+                print("     1. https://huggingface.co/pyannote/speaker-diarization-3.1")
+                print("     2. https://huggingface.co/pyannote/segmentation-3.0")
+                print("     (After accepting on Hugging Face, rebuild with docker compose up -d --build)")
+            print("=" * 70)
+            print()
     else:
         print(
             "  ℹ️ HF_TOKEN not provided at build time; PyAnnote models will load at runtime when HF_TOKEN is configured in .env."
