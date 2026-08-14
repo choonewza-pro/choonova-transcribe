@@ -80,6 +80,20 @@ else: \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-download WhisperX Forced Alignment model for English ('en')
+RUN python3 -c "\
+import whisperx; \
+try: \
+    whisperx.load_align_model(language_code='en', device='cpu'); \
+    print(); \
+    print('=' * 70); \
+    print('  ✅ WHISPERX ENGLISH ALIGNMENT MODEL DOWNLOAD COMPLETE'); \
+    print('=' * 70); \
+    print(); \
+except Exception as e: \
+    print(f'  ⚠️ Could not pre-download WhisperX alignment model: {e}'); \
+"
+
 COPY app /app/app
 
 # Copy sample assets used by the API Endpoint Self-Test page (/test → /v1/tests/*)
