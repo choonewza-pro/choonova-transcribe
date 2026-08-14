@@ -52,6 +52,30 @@ print(f'  📁 {p}'); \
 print('=' * 70); \
 print()"
 
+# Pre-download PyAnnote Diarization & SpeechBrain models (if HF_TOKEN is provided at build time)
+RUN python3 -c "\
+from huggingface_hub import snapshot_download; \
+import os; \
+t = os.getenv('HF_TOKEN', '').strip() or None; \
+if t: \
+    try: \
+        p1 = snapshot_download(repo_id='pyannote/speaker-diarization-3.1', token=t); \
+        p2 = snapshot_download(repo_id='pyannote/segmentation-3.0', token=t); \
+        p3 = snapshot_download(repo_id='speechbrain/spkrec-ecapa-voxceleb', token=t); \
+        print(); \
+        print('=' * 70); \
+        print('  ✅ PYANNOTE DIARIZATION MODELS DOWNLOAD COMPLETE'); \
+        print(f'  📁 {p1}'); \
+        print(f'  📁 {p2}'); \
+        print(f'  📁 {p3}'); \
+        print('=' * 70); \
+        print(); \
+    except Exception as e: \
+        print(f'  ⚠️ Could not pre-download PyAnnote models during build: {e}'); \
+else: \
+    print('  ℹ️ HF_TOKEN not provided at build time; PyAnnote models will load at runtime when HF_TOKEN is configured in .env.'); \
+"
+
 # Install all Python requirements with CUDA 12.1 index
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
