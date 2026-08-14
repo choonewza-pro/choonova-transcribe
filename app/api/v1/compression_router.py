@@ -523,7 +523,7 @@ async def download_compress_job_audio(
 
     if not _is_safe_job_path(
         audio_path, job_id, COMPRESS_OUTPUT_DIR,
-        job_output_path=output_path if 'output_path' in locals() else job.output_path, job_input_path=job.input_path
+        job_output_path=job.output_path, job_input_path=job.input_path
     ):
         raise HTTPException(
             status_code=403, detail="Access to this audio path is not allowed."

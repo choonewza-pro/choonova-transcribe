@@ -150,6 +150,7 @@ def group_speaker_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, Any
                     "start": round(current_start, 3),
                     "end": round(current_end, 3),
                     "text": " ".join(current_text_parts),
+                    "word": " ".join(current_text_parts),
                 }
             )
             current_speaker = speaker
@@ -164,6 +165,7 @@ def group_speaker_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, Any
                 "start": round(current_start, 3),
                 "end": round(current_end, 3),
                 "text": " ".join(current_text_parts),
+                "word": " ".join(current_text_parts),
             }
         )
 

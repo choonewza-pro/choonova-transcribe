@@ -17,9 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Upgrade pip and install huggingface_hub for model downloading
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir huggingface_hub
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip
+
+# Install all Python requirements with CUDA 12.1 index
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy model download helper script
 COPY scripts/download_models.py /app/scripts/download_models.py
@@ -35,10 +38,6 @@ RUN python3 /app/scripts/download_models.py --whisper --whisper-model "${WHISPER
 
 # Pre-download PyAnnote Diarization & SpeechBrain models (if HF_TOKEN is provided at build time)
 RUN python3 /app/scripts/download_models.py --pyannote --hf-token "${HF_TOKEN}"
-
-# Install all Python requirements with CUDA 12.1 index
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download WhisperX Forced Alignment model for English ('en')
 RUN python3 /app/scripts/download_models.py --whisperx-align

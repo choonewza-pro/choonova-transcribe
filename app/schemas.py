@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Any, Literal
 from enum import Enum
 
@@ -27,20 +27,46 @@ class JobError(BaseModel):
     retryable: bool = False
 
 class TranscriptionSegment(BaseModel):
-    text: str
+    text: Optional[str] = None
+    word: Optional[str] = None
     start: float
     end: float
     speaker: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def sync_text_and_word(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            text_val = data.get("text")
+            word_val = data.get("word")
+            if text_val is not None and word_val is None:
+                data["word"] = str(text_val)
+            elif word_val is not None and text_val is None:
+                data["text"] = str(word_val)
+        return data
 
 class TranscriptionResult(BaseModel):
     text: str
     segments: Optional[List[TranscriptionSegment]] = None
 
 class TimestampItem(BaseModel):
-    word: str
+    word: Optional[str] = None
+    text: Optional[str] = None
     start: float
     end: float
     speaker: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def sync_word_and_text(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            word_val = data.get("word")
+            text_val = data.get("text")
+            if word_val is not None and text_val is None:
+                data["text"] = str(word_val)
+            elif text_val is not None and word_val is None:
+                data["word"] = str(text_val)
+        return data
 
 class TranscribeResponse(BaseModel):
     status: str = "success"
