@@ -69,43 +69,43 @@ We intentionally maintain a hybrid architectural state where the API delivery la
 
 ## Quick Start
 
-### ขั้นตอนการติดตั้ง (Step by Step)
+### Step by Step
 
-1. **ติดตั้ง Docker Desktop** (สำหรับ Windows ดูคำแนะนำและดาวน์โหลดได้ที่ [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/))
-2. **คัดลอกไฟล์ `.env.example` ไปเป็น `.env`**
+1. **Install Docker Desktop** (for Windows, see instructions and download at [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/))
+2. **Copy `.env.example` to `.env`**
    ```bash
    cp .env.example .env
    ```
-3. **แก้ไขตัวแปรในไฟล์ `.env`**  
-   - เปลี่ยน `GATEWAY_API_KEY` จาก `change-me-in-production` ไปเป็นรหัสผ่านสำหรับ auth ที่ต้องการ
-   - กำหนดตัวแปร `DEVICE`:
-     - หากรันบน **CPU** ให้เปลี่ยนเป็น `DEVICE=cpu`
-     - หากรันบน **NVIDIA GPU** ให้เปลี่ยนเป็น `DEVICE=cuda`
-   - **กำหนดขีดจำกัดคิวและจำนวนงานที่ประมวลผลพร้อมกัน (Important Queue Limits):**
+3. **Edit the variables in `.env`**
+   - Change `GATEWAY_API_KEY` from `change-me-in-production` to the auth key you want to use
+   - Set the `DEVICE` variable:
+     - If running on **CPU**, change it to `DEVICE=cpu`
+     - If running on an **NVIDIA GPU**, change it to `DEVICE=cuda`
+   - **Set queue and concurrency limits (Important Queue Limits):**
      ```env
-     # ควบคุมคิวงานถอดความ (Transcription Queue)
+     # Controls the transcription queue
      TRANSCRIBE_MAX_CONCURRENT=1
      TRANSCRIBE_MAX_QUEUED=10
 
-     # ควบคุมคิวงานบีบอัดวิดีโอ (Compression Queue)
+     # Controls the video compression queue
      COMPRESS_MAX_CONCURRENT=1
      COMPRESS_MAX_QUEUED=10
      ```
-4. **ติดตั้งและรันบน Docker Container**
-   - สำหรับ **Windows / Mac** ที่รันบน **CPU**:
+4. **Install and run on a Docker Container**
+   - For **Windows / Mac** running on **CPU**:
      ```bash
      docker compose -f docker-compose-cpu.yml up -d --build
      ```
-   - สำหรับ **Windows** ที่มี **NVIDIA GPU**:
+   - For **Windows** with an **NVIDIA GPU**:
      ```bash
      docker compose up -d --build
      ```
-5. **เข้าใช้งาน** ที่ [http://localhost:8830](http://localhost:8830)
-6. **ตรวจสอบว่าระบบทำงานถูกต้อง (หลังติดตั้ง)**
-   - ไปที่หน้า **ทดสอบ API**: [http://localhost:8830/test](http://localhost:8830/test)
-   - ผู้ใช้จะเข้าได้เมื่อตั้งค่า API Key แล้วเท่านั้น (กรอกที่หน้า `/setting` หรือใช้ `http://localhost:8830/test?api_key=YOUR_KEY`)
-   - กดปุ่ม **▶ เริ่มทดสอบอัตโนมัติ** ระบบจะส่งไฟล์ตัวอย่างจากโฟลเดอร์ `assets/` ไปยัง endpoint จริง (ถอดความภาษาไทย + บีบอัดวิดีโอ) แล้วรายงานผลแบบผ่าน/ไม่ผ่านเป็นรายการ พร้อมแถบความคืบหน้าแบบ `X/N`
-   - งานบีบอัดวิดีโออาจใช้เวลาหลายนาที (โดยเฉพาะโหมด CPU) — ระบบจะแสดงความคืบหน้าให้ตลอดเวลาที่รองาน
+5. **Open the app** at [http://localhost:8830](http://localhost:8830)
+6. **Verify the service is working (after installation)**
+   - Go to the **API Self-Test** page: [http://localhost:8830/test](http://localhost:8830/test)
+   - The page is only accessible once you have set an API Key (enter it on `/setting` or use `http://localhost:8830/test?api_key=YOUR_KEY`)
+   - Press the **▶ Start Automated Test** button — the service sends sample files from the `assets/` folder to the real endpoints (Thai transcription + video compression) and reports pass/fail per test, with an `X/N` progress bar
+   - Video compression can take several minutes (especially in CPU mode) — the progress bar keeps you informed while the job is running
 
 ## Configuration
 
