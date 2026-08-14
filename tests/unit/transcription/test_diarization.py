@@ -59,12 +59,12 @@ class TestDiarizationHelpers(unittest.TestCase):
         grouped = group_speaker_segments(segments)
         self.assertEqual(len(grouped), 2)
         self.assertEqual(grouped[0]["speaker"], "SPEAKER_00")
-        self.assertEqual(grouped[0]["text"], "สวัสดี ครับ")
+        self.assertEqual(grouped[0]["text"], "สวัสดีครับ")
         self.assertEqual(grouped[0]["start"], 0.0)
         self.assertEqual(grouped[0]["end"], 1.8)
 
         self.assertEqual(grouped[1]["speaker"], "SPEAKER_01")
-        self.assertEqual(grouped[1]["text"], "ยินดี ที่ได้รู้จัก")
+        self.assertEqual(grouped[1]["text"], "ยินดีที่ได้รู้จัก")
         self.assertEqual(grouped[1]["start"], 2.2)
         self.assertEqual(grouped[1]["end"], 3.8)
 
@@ -126,6 +126,43 @@ class TestDiarizationHelpers(unittest.TestCase):
         srt_output = build_srt_subtitles(timestamps)
         self.assertIn("1\n00:00:00,000 --> 00:00:01,500\n[SPEAKER_00]: สวัสดีครับ", srt_output)
         self.assertIn("2\n00:00:02,000 --> 00:00:03,500\n[SPEAKER_01]: ยินดีต้อนรับครับ", srt_output)
+
+    def test_collapse_repeated_tokens(self):
+        from app.text_utils import collapse_repeated_tokens
+
+        # RNNT decode loop hallucination: long identical runs collapse to 3.
+        tokens = ["สาย", "นาง", "นาง", "นาง", "นาง", "นาง", "นาง", "ไง"]
+        result = collapse_repeated_tokens(tokens)
+        self.assertEqual(result.count("นาง"), 3)
+
+    def test_collapse_repeated_tokens_keeps_short_emphasis(self):
+        from app.text_utils import collapse_repeated_tokens
+
+        # Legitimate short repetition must be preserved.
+        result = collapse_repeated_tokens(["เร็ว", "เร็ว"])
+        self.assertEqual(result, ["เร็ว", "เร็ว"])
+
+    def test_clean_text_collapses_hallucination(self):
+        from app.text_utils import clean_text
+
+        # Full-text cleanup drops pathological loops (works without pythainlp
+        # installed because the fallback splits on whitespace here).
+        text = "go " + "go " * 20 + "go"
+        cleaned = clean_text(text)
+        self.assertEqual(cleaned.count("go"), 3)
+
+    def test_group_speaker_segments_joins_thai_without_spaces(self):
+        # Thai turns should read as continuous text, matching raw ASR output.
+        segments = [
+            {"text": "สวัสดี", "start": 0.0, "end": 1.0, "speaker": "SPEAKER_00"},
+            {"text": "ครับ", "start": 1.1, "end": 1.8, "speaker": "SPEAKER_00"},
+            {"text": "hello", "start": 2.2, "end": 2.8, "speaker": "SPEAKER_01"},
+            {"text": "there", "start": 2.9, "end": 3.8, "speaker": "SPEAKER_01"},
+        ]
+
+        grouped = group_speaker_segments(segments)
+        self.assertEqual(grouped[0]["text"], "สวัสดีครับ")
+        self.assertEqual(grouped[1]["text"], "hello there")
 
 
 if __name__ == "__main__":

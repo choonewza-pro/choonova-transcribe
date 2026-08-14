@@ -194,6 +194,18 @@ def smooth_speaker_labels(
     return segments
 
 
+def _join_words(parts: List[str]) -> str:
+    """
+    Join word parts into readable text. Thai has no inter-word spaces, so a
+    space-joined transcript looks wrong; join Thai runs without spaces to match
+    the raw ASR output. Mixed/non-Thai text keeps normal spaces.
+    """
+    joined = "".join(parts)
+    if any(ord(ch) >= 0x0E00 and ord(ch) <= 0x0E7F for ch in joined):
+        return joined
+    return " ".join(parts)
+
+
 def group_speaker_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Group continuous segments belonging to the same speaker into coherent speaker turn segments.
@@ -232,8 +244,8 @@ def group_speaker_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, Any
                     "speaker": current_speaker,
                     "start": round(current_start, 3),
                     "end": round(current_end, 3),
-                    "text": " ".join(current_text_parts),
-                    "word": " ".join(current_text_parts),
+                    "text": _join_words(current_text_parts),
+                    "word": _join_words(current_text_parts),
                 }
             )
             current_speaker = speaker
@@ -247,8 +259,8 @@ def group_speaker_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, Any
                 "speaker": current_speaker,
                 "start": round(current_start, 3),
                 "end": round(current_end, 3),
-                "text": " ".join(current_text_parts),
-                "word": " ".join(current_text_parts),
+                "text": _join_words(current_text_parts),
+                "word": _join_words(current_text_parts),
             }
         )
 
