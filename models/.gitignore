@@ -1,1 +1,8 @@
 typhoon-asr-realtime.nemo
+faster-whisper-large-v3-turbo
+*.nemo
+*.bin
+*.ckpt
+*.onnx
+.cache/
+**/.cache/

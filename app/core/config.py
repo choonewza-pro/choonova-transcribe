@@ -18,7 +18,7 @@ DEFAULT_GATEWAY_API_KEY = "change-me-in-production"
 GATEWAY_API_KEY = os.getenv("GATEWAY_API_KEY", DEFAULT_GATEWAY_API_KEY)
 # True when the admin has not yet replaced the shipped default API key.
 GATEWAY_API_KEY_IS_DEFAULT = GATEWAY_API_KEY == DEFAULT_GATEWAY_API_KEY
-MODEL_PATH = os.getenv("MODEL_PATH", "model/typhoon-asr-realtime.nemo")
+MODEL_PATH = os.getenv("MODEL_PATH", "models/typhoon-asr-realtime.nemo")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "info")
 
 # Directory & Database Configurations

@@ -26,11 +26,12 @@ services:
       - .env
     environment:
       - DEVICE=cpu
-      - MODEL_PATH=/app/model/typhoon-asr-realtime.nemo
+      - MODEL_PATH=/app/models/typhoon-asr-realtime.nemo
     networks:
       - km4u-network
     volumes:
       - ./data/jobs:/tmp/choonova-transcribe-jobs
+      - ./models:/app/models
       - ./data:/app/data   # Enable to persist the jobs DB on the host (baked empty DB is used otherwise)
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8830/healthz"]

@@ -131,7 +131,7 @@ Retention policy: **completed** job DB records kept forever (only on-disk files 
 - `requirements.txt` — GPU deps (CUDA 12.1 PyTorch index via `--extra-index-url`)
 - `requirements-cpu.txt` — CPU deps (no CUDA index)
 - `.env.example` → copy to `.env`
-- `model/typhoon-asr-realtime.nemo` — weights (gitignored, auto-downloaded at Docker build time)
+- `models/typhoon-asr-realtime.nemo` — weights (gitignored, auto-downloaded at Docker build time)
 - `app/core/config.py` — all env vars defined here
 - `app/core/db.py` — SQLite WAL connection factory (`timeout=30`, `busy_timeout=30000`, `row_factory=sqlite3.Row`)
 - `app/db.py` — monolithic 799-line legacy with ALL SQLite CRUD (still in active use by workers and main.py bg tasks)

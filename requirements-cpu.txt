@@ -16,7 +16,7 @@ soundfile==0.13.1
 sentencepiece==0.2.0
 transformers==4.46.3
 numpy==1.26.4
-faster-whisper==1.1.1
-pyannote.audio==3.1.1
-whisperx==3.3.1
+faster-whisper==1.1.0
+pyannote.audio==3.3.2
+whisperx==3.3.2
 filetype==1.2.0

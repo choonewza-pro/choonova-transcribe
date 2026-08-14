@@ -12,12 +12,38 @@ from typing import List, Dict, Any, Optional
 from app.core.config import (
     DEVICE,
     HF_TOKEN,
+    SERVICE_DIR,
     DIARIZATION_MODEL,
     DIARIZATION_MIN_SPEAKERS,
     DIARIZATION_MAX_SPEAKERS,
 )
 
 logger = logging.getLogger("pyannote-engine")
+
+
+def find_local_diarization_models() -> Optional[Dict[str, str]]:
+    """
+    Search for local segmentation and embedding models in known directories.
+    Returns dict with {"segmentation": path, "embedding": path, "config": path} if found.
+    """
+    candidate_roots = [
+        os.path.join(SERVICE_DIR, "models"),
+        os.path.abspath("models"),
+        "/app/models",
+    ]
+    for root in candidate_roots:
+        if not os.path.exists(root):
+            continue
+        seg_path = os.path.join(root, "pyannote", "segmentation-3.0", "pytorch_model.bin")
+        emb_path = os.path.join(root, "speechbrain", "spkrec-ecapa-voxceleb")
+        config_path = os.path.join(root, "pyannote", "speaker-diarization-3.1", "config.yaml")
+        if os.path.exists(seg_path) and os.path.exists(emb_path):
+            return {
+                "segmentation": seg_path,
+                "embedding": emb_path,
+                "config": config_path if os.path.exists(config_path) else None,
+            }
+    return None
 
 
 def clear_cuda_cache() -> None:
@@ -265,26 +291,95 @@ class PyAnnoteDiarizer:
     def load_model(self) -> None:
         """
         Lazy-load PyAnnote pipeline onto GPU/CPU context.
-        Raises descriptive errors if HF_TOKEN is missing or license terms not accepted.
+        Prioritizes local models from /models directory (offline),
+        falling back to Hugging Face Hub if HF_TOKEN is configured.
         """
         if self._pipeline is not None:
             return
 
-        if not HF_TOKEN:
-            raise ValueError(
-                "HF_TOKEN is required for PyAnnote Speaker Diarization. "
-                "Please accept license agreements on HuggingFace:\n"
-                "1. https://hf.co/pyannote/speaker-diarization-3.1\n"
-                "2. https://hf.co/pyannote/segmentation-3.0\n"
-                "Then set HF_TOKEN in your .env file."
-            )
-
         self._is_loading = True
-        logger.info(f"Loading PyAnnote Diarization model ({self.model_name}) on device={self.device}...")
         start_t = time.time()
 
         try:
             import torch
+            local_models = find_local_diarization_models()
+
+            if local_models is not None:
+                logger.info(
+                    f"Loading PyAnnote Diarization from local models: "
+                    f"segmentation={local_models['segmentation']}, embedding={local_models['embedding']} "
+                    f"on device={self.device}..."
+                )
+                # Patch SpeechBrain 1.0+ compatibility for pyannote.audio
+                try:
+                    from speechbrain.inference.classifiers import EncoderClassifier
+                    orig_from_hparams = getattr(EncoderClassifier, "_choonova_orig_from_hparams", None)
+                    if orig_from_hparams is None:
+                        orig_from_hparams = EncoderClassifier.from_hparams
+                        EncoderClassifier._choonova_orig_from_hparams = orig_from_hparams
+
+                    def _patched_from_hparams(*args, **kwargs):
+                        if "use_auth_token" in kwargs:
+                            tok = kwargs.pop("use_auth_token")
+                            if tok is not None:
+                                kwargs["token"] = tok
+                        if "revision" in kwargs:
+                            rev = kwargs.pop("revision")
+                            if rev is not None:
+                                kwargs["revision"] = rev
+                        if "run_opts" in kwargs and isinstance(kwargs["run_opts"], dict) and "device" in kwargs["run_opts"]:
+                            kwargs["run_opts"]["device"] = str(kwargs["run_opts"]["device"])
+                        return orig_from_hparams(*args, **kwargs)
+
+                    EncoderClassifier.from_hparams = _patched_from_hparams
+                except Exception as e:
+                    logger.warning(f"Could not patch SpeechBrain from_hparams: {e}")
+
+                from pyannote.audio.pipelines.speaker_diarization import SpeakerDiarization
+                import yaml
+
+                pipeline = SpeakerDiarization(
+                    segmentation=local_models["segmentation"],
+                    embedding=local_models["embedding"],
+                    clustering="AgglomerativeClustering",
+                    embedding_batch_size=32,
+                    embedding_exclude_overlap=True,
+                    segmentation_batch_size=32,
+                )
+
+                params = {
+                    "clustering": {"method": "centroid", "min_cluster_size": 12, "threshold": 0.7045654963945799},
+                    "segmentation": {"min_duration_off": 0.0},
+                }
+                if local_models.get("config") and os.path.exists(local_models["config"]):
+                    try:
+                        with open(local_models["config"], "r", encoding="utf-8") as fp:
+                            loaded_cfg = yaml.safe_load(fp)
+                            if "params" in loaded_cfg:
+                                params = loaded_cfg["params"]
+                    except Exception as ex:
+                        logger.warning(f"Could not read params from local config.yaml: {ex}")
+
+                pipeline.instantiate(params)
+
+                if self.device == "cuda" and torch.cuda.is_available():
+                    pipeline.to(torch.device("cuda"))
+
+                self._pipeline = pipeline
+                self._last_used_time = time.time()
+                elapsed = time.time() - start_t
+                logger.info(f"PyAnnote Diarization loaded from local models successfully in {elapsed:.2f}s")
+                return
+
+            # Fallback to Hugging Face Hub download if local models not found
+            if not HF_TOKEN:
+                raise ValueError(
+                    "Local PyAnnote models not found in models/pyannote and models/speechbrain, "
+                    "and HF_TOKEN is not configured in .env.\n"
+                    "Either place models in models/ folder or set HF_TOKEN in .env."
+                )
+
+            logger.info(f"Loading PyAnnote Diarization model from Hugging Face ({self.model_name}) on device={self.device}...")
             from pyannote.audio import Pipeline
 
             pipeline = Pipeline.from_pretrained(
@@ -298,14 +393,12 @@ class PyAnnoteDiarizer:
             self._pipeline = pipeline
             self._last_used_time = time.time()
             elapsed = time.time() - start_t
-            logger.info(f"PyAnnote Diarization model loaded successfully in {elapsed:.2f}s")
+            logger.info(f"PyAnnote Diarization model loaded from HF successfully in {elapsed:.2f}s")
         except Exception as e:
             logger.error(f"Failed to load PyAnnote model ({self.model_name}): {e}", exc_info=True)
             raise RuntimeError(
                 f"Failed to initialize PyAnnote Diarization pipeline: {e}. "
-                "Ensure HF_TOKEN is valid and you have accepted terms at "
-                "https://hf.co/pyannote/speaker-diarization-3.1 AND "
-                "https://hf.co/pyannote/segmentation-3.0"
+                "Ensure local models exist in models/ folder or valid HF_TOKEN is provided."
             ) from e
         finally:
             self._is_loading = False

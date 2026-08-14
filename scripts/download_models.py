@@ -8,7 +8,7 @@ import os
 import sys
 
 
-def download_typhoon(model_dir: str = "/app/model", token: str | None = None) -> None:
+def download_typhoon(model_dir: str = "/app/models", token: str | None = None) -> None:
     from huggingface_hub import hf_hub_download
 
     token = token or os.getenv("HF_TOKEN", "").strip() or None
@@ -53,8 +53,15 @@ def download_whisper(model_name: str = "large-v3-turbo", token: str | None = Non
     print()
 
 
-def download_pyannote(token: str | None = None) -> None:
+def download_pyannote(model_dir: str = "/app/models", token: str | None = None) -> None:
     from huggingface_hub import snapshot_download
+
+    # Check if local models already exist
+    seg_file = os.path.join(model_dir, "pyannote", "segmentation-3.0", "pytorch_model.bin")
+    emb_file = os.path.join(model_dir, "speechbrain", "spkrec-ecapa-voxceleb", "embedding_model.ckpt")
+    if os.path.exists(seg_file) and os.path.exists(emb_file):
+        print("  ℹ️ Local PyAnnote & SpeechBrain models already exist in", model_dir)
+        return
 
     token = token or os.getenv("HF_TOKEN", "").strip() or None
     if token:
@@ -111,7 +118,7 @@ def main() -> None:
     parser.add_argument(
         "--whisperx-align", action="store_true", help="Download WhisperX alignment model"
     )
-    parser.add_argument("--model-dir", default="/app/model", help="Target dir for Typhoon model")
+    parser.add_argument("--model-dir", default="/app/models", help="Target dir for Typhoon model")
     parser.add_argument(
         "--whisper-model", default="large-v3-turbo", help="Whisper model name/variant"
     )
@@ -131,7 +138,7 @@ def main() -> None:
         download_whisper(model_name=args.whisper_model, token=token)
 
     if args.pyannote or args.all:
-        download_pyannote(token=token)
+        download_pyannote(model_dir=args.model_dir, token=token)
 
     if args.whisperx_align or args.all:
         download_whisperx_align(lang="en")
