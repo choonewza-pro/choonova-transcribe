@@ -18,6 +18,22 @@ document.addEventListener('DOMContentLoaded', () => {
   let running = false;
   let totalTests = null;
   let completedTests = 0;
+  let selectedSuite = 'typhoon';
+
+  // Suite Card Click Handling
+  const suiteCards = document.querySelectorAll('.suite-card');
+  suiteCards.forEach(card => {
+    card.addEventListener('click', () => {
+      if (running) return;
+      selectedSuite = card.dataset.suite || 'typhoon';
+      suiteCards.forEach(c => {
+        c.classList.remove('active');
+        c.style.borderColor = 'var(--card-border)';
+      });
+      card.classList.add('active');
+      card.style.borderColor = 'var(--accent-cyan)';
+    });
+  });
 
   function getApiKey() {
     try { return localStorage.getItem(API_KEY_STORAGE) || ''; } catch (e) { return ''; }
@@ -247,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setStatus('กำลังเริ่มทดสอบ...');
     const doCleanup = !!cleanupToggle.checked;
     try {
-      const res = await fetch(`/v1/tests/run?cleanup=${doCleanup}`, {
+      const res = await fetch(`/v1/tests/run?suite=${selectedSuite}&cleanup=${doCleanup}`, {
         method: 'POST',
         headers: headers(),
       });

@@ -257,6 +257,72 @@ class ApiTestRunnerTest(unittest.TestCase):
         asyncio.run(runner.run(cleanup=False, on_start=on_start))
         self.assertEqual(totals, [11])
 
+    def test_pyannote_suite_passes_and_cleans_up(self):
+        fake = FakeApiHttp()
+        self._configure_all_good(fake)
+        # Configure pyannote specific mock responses
+        fake.set("POST", "/v1/audio/transcribe", 200, {
+            "status": "success", "text": "[SPEAKER_00]: สวัสดีครับ",
+            "duration_seconds": 3.42, "elapsed_seconds": 0.15, "rtf": 0.04,
+            "timestamps": [{"word": "สวัสดีครับ", "start": 0.0, "end": 3.42, "speaker": "SPEAKER_00"}],
+        })
+        fake.set("POST", "/v1/media/transcribe/jobs", 202, {
+            "status": "accepted", "id": "t_py", "filename": "The-Frog-and-The-Ox.mp4",
+            "language": "th", "enable_diarization": True, "message": "Job created",
+        })
+        fake.set_poll("/v1/media/transcribe/jobs/t_py", [], {
+            "id": "t_py", "type": "transcription", "filename": "The-Frog-and-The-Ox.mp4",
+            "file_size_bytes": 1000, "language": "th", "model": "typhoon-asr-realtime",
+            "status": "completed", "stage": "completed", "progress": 100.0,
+            "total_chunks": 1, "completed_chunks": 1, "duration": 10.0, "processing_time": 1.0,
+            "target_chunk_sec": 45.0, "max_chunk_sec": 90.0,
+            "result": {"text": "[SPEAKER_00]: สวัสดีครับ", "srt": "1\n00:00:00,000 --> 00:00:10,000\n[SPEAKER_00]: สวัสดีครับ\n"},
+            "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:01Z",
+            "started_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:00:01Z",
+        })
+        fake.set("GET", "/v1/media/transcribe/jobs/t_py/export/txt", 200, "[SPEAKER_00]: สวัสดีครับ\n")
+        fake.set("GET", "/v1/media/transcribe/jobs/t_py/export/json", 200, {
+            "id": "t_py", "filename": "The-Frog-and-The-Ox.mp4", "duration": 10.0, "text": "[SPEAKER_00]: สวัสดีครับ",
+        })
+        runner = self._runner(fake)
+        report = asyncio.run(runner.run(suite="pyannote", cleanup=True))
+        self.assertTrue(report.overall_passed)
+        self.assertEqual(report.total, 8)
+        self.assertIn(("DELETE", "/v1/media/transcribe/jobs/t_py"), fake.calls)
+
+    def test_whisperx_suite_passes_and_cleans_up(self):
+        fake = FakeApiHttp()
+        self._configure_all_good(fake)
+        # Configure whisperx specific mock responses
+        fake.set("POST", "/v1/audio/transcribe", 200, {
+            "status": "success", "text": "Hello world",
+            "duration_seconds": 2.5, "elapsed_seconds": 0.2, "rtf": 0.08,
+            "timestamps": [{"word": "Hello", "start": 0.0, "end": 1.0, "speaker": "SPEAKER_00"}],
+        })
+        fake.set("POST", "/v1/media/transcribe/jobs", 202, {
+            "status": "accepted", "id": "t_wx", "filename": "The-Frog-and-The-Ox.mp4",
+            "language": "auto", "enable_diarization": True, "message": "Job created",
+        })
+        fake.set_poll("/v1/media/transcribe/jobs/t_wx", [], {
+            "id": "t_wx", "type": "transcription", "filename": "The-Frog-and-The-Ox.mp4",
+            "file_size_bytes": 1000, "language": "auto", "model": "whisperx",
+            "status": "completed", "stage": "completed", "progress": 100.0,
+            "total_chunks": 1, "completed_chunks": 1, "duration": 10.0, "processing_time": 1.5,
+            "target_chunk_sec": 25.0, "max_chunk_sec": 30.0,
+            "result": {"text": "Hello world", "srt": "1\n00:00:00,000 --> 00:00:02,500\nHello world\n"},
+            "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:01Z",
+            "started_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:00:01Z",
+        })
+        fake.set("GET", "/v1/media/transcribe/jobs/t_wx/export/txt", 200, "Hello world\n")
+        fake.set("GET", "/v1/media/transcribe/jobs/t_wx/export/json", 200, {
+            "id": "t_wx", "filename": "The-Frog-and-The-Ox.mp4", "duration": 10.0, "text": "Hello world",
+        })
+        runner = self._runner(fake)
+        report = asyncio.run(runner.run(suite="whisperx", cleanup=True))
+        self.assertTrue(report.overall_passed)
+        self.assertEqual(report.total, 8)
+        self.assertIn(("DELETE", "/v1/media/transcribe/jobs/t_wx"), fake.calls)
+
     def test_asset_info_reports_availability(self):
         fake = FakeApiHttp()
         runner = self._runner(fake)

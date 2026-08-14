@@ -48,6 +48,13 @@
               </table>
             </div>
             <div class="code-container">
+              <div class="code-header">พารามิเตอร์อื่นๆ</div>
+              <ul style="margin:0; padding-left:1.2rem; font-size:0.85rem; color:var(--text-muted); line-height:1.6;">
+                <li><code>with_timestamps</code> (bool, default <code>true</code>) — ส่งคืนตำแหน่งช่วงเวลาเริ่มต้น-สิ้นสุดระดับคำในอาร์เรย์ <code>timestamps</code></li>
+                <li><code>enable_diarization</code> (bool, default <code>false</code>) — ตรวจจับและแยกแยะผู้พูด (คืนฟิลด์ <code>speaker</code> เช่น <code>SPEAKER_00</code> ในแต่ละคำ/ช่วงเวลา)</li>
+              </ul>
+            </div>
+            <div class="code-container">
               <div class="code-header">cURL (Multipart Upload)</div>
               <pre>curl -X POST http://localhost:8830/v1/audio/transcribe \
   -H "x-api-key: change-me-in-production" \
@@ -65,7 +72,11 @@ headers = {"x-api-key": "change-me-in-production"}
 
 with open("sample_audio.wav", "rb") as f:
     files = {"file": f}
-    data = {"language": "auto", "with_timestamps": "true"}
+    data = {
+        "language": "th",
+        "with_timestamps": "true",
+        "enable_diarization": "true"
+    }
     response = requests.post(url, headers=headers, files=files, data=data)
 
 print(response.json())</pre>
@@ -74,15 +85,15 @@ print(response.json())</pre>
               <div class="code-header">Response JSON (200 OK)</div>
               <pre>{
   "status": "success",
-  "text": "สวัสดีครับ นี่คือการทดสอบแปลงเสียงพูดเป็นข้อความด้วยไต้ฝุ่นเอเอสอาร์",
+  "text": "[SPEAKER_00]: สวัสดีครับ นี่คือการทดสอบแปลงเสียงพูดเป็นข้อความด้วยไต้ฝุ่นเอเอสอาร์",
   "duration_seconds": 3.42,
-  "elapsed_seconds": 0.082,
-  "rtf": 0.024,
+  "elapsed_seconds": 0.152,
+  "rtf": 0.044,
   "timestamps": [
-    { "word": "สวัสดีครับ", "start": 0.0, "end": 0.85 },
-    { "word": "นี่คือการทดสอบ", "start": 0.86, "end": 1.75 },
-    { "word": "แปลงเสียงพูดเป็นข้อความ", "start": 1.76, "end": 2.8 },
-    { "word": "ด้วยไต้ฝุ่นเอเอสอาร์", "start": 2.81, "end": 3.42 }
+    { "word": "สวัสดีครับ", "start": 0.0, "end": 0.85, "speaker": "SPEAKER_00" },
+    { "word": "นี่คือการทดสอบ", "start": 0.86, "end": 1.75, "speaker": "SPEAKER_00" },
+    { "word": "แปลงเสียงพูดเป็นข้อความ", "start": 1.76, "end": 2.8, "speaker": "SPEAKER_00" },
+    { "word": "ด้วยไต้ฝุ่นเอเอสอาร์", "start": 2.81, "end": 3.42, "speaker": "SPEAKER_00" }
   ]
 }</pre>
             </div>

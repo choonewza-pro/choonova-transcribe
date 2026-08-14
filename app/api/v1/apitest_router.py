@@ -69,11 +69,35 @@ async def tests_info(authenticated: bool = Depends(verify_api_key)) -> Dict[str,
         "compress_max_wait_sec": APITEST_COMPRESS_MAX_WAIT_SEC,
         "poll_interval_sec": APITEST_POLL_INTERVAL_SEC,
     }
+    info["suites"] = {
+        "typhoon": {
+            "name": "Typhoon ASR (มาตรฐาน)",
+            "desc": "ทดสอบ ASR ภาษาไทย + การบีบอัดวิดีโอ (Baseline ไม่ต้องใช้ HF_TOKEN)",
+            "engine": "Typhoon FastConformer 114M",
+            "hf_token_required": False,
+            "vram": "~1.0 GB",
+        },
+        "pyannote": {
+            "name": "Typhoon + PyAnnote 3.1",
+            "desc": "ทดสอบถอดเสียงภาษาไทยพร้อมระบุผู้พูด (Thai Diarization)",
+            "engine": "Typhoon ASR + PyAnnote 3.1",
+            "hf_token_required": True,
+            "vram": "~2.5 GB",
+        },
+        "whisperx": {
+            "name": "WhisperX Pipeline",
+            "desc": "ทดสอบถอดเสียงภาษาอังกฤษ/Auto พร้อมจัดเรียงระดับคำและระบุผู้พูด",
+            "engine": "Faster-Whisper + wav2vec2 Alignment + PyAnnote 3.1",
+            "hf_token_required": True,
+            "vram": "~3.5 GB",
+        },
+    }
     return info
 
 
 @router.post("/run")
 async def run_self_test(
+    suite: str = "typhoon",
     cleanup: bool = True,
     authenticated: bool = Depends(verify_api_key),
 ) -> StreamingResponse:
@@ -109,8 +133,13 @@ async def run_self_test(
                     async def on_start(total: int) -> None:
                         await run_events.put({"type": "start", "total": total})
 
-                    report = await runner.run(cleanup=cleanup, on_test=on_test,
-                                              on_progress=on_progress, on_start=on_start)
+                    report = await runner.run(
+                        suite=suite,
+                        cleanup=cleanup,
+                        on_test=on_test,
+                        on_progress=on_progress,
+                        on_start=on_start,
+                    )
                     await run_events.put({"type": "done", "summary": report.to_dict()})
                 except Exception as e:  # noqa: BLE001
                     with contextlib.suppress(Exception):

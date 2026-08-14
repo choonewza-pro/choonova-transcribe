@@ -122,29 +122,30 @@ class ApiTestRunner:
             },
         }
 
-    # ------------------------------------------------------------- entry point
-
     async def run(
         self,
+        suite: str = "typhoon",
         cleanup: bool = True,
         on_test: Optional[Callable[[EndpointTest], Any]] = None,
         on_progress: Optional[Callable[[Dict[str, Any]], Any]] = None,
         on_start: Optional[Callable[[int], Any]] = None,
     ) -> ApiTestReport:
-        """Run the full self-test pass and return the aggregated report.
+        """Run the selected self-test suite and return the aggregated report.
 
-        `on_test` (optional async callable) fires with each completed
-        EndpointTest as it finishes so a streaming surface can relay it live.
-        `on_progress` (optional async callable) fires while polling async jobs.
-        `on_start` (optional async callable) fires once, before the first test,
-        with the predicted number of tests (assuming the async job creates
-        succeed) so the UI can render an X/Y counter while results stream in.
+        suite options:
+          - 'typhoon': Baseline Typhoon Thai ASR + FFmpeg Video Compression (default)
+          - 'pyannote': Typhoon + PyAnnote 3.1 Thai Speaker Diarization
+          - 'whisperx': WhisperX English/Auto Speaker Diarization + Forced Alignment
         """
         self.check_assets()
         report = ApiTestReport(started_at=_now_iso())
 
+        suite = (suite or "typhoon").lower().strip()
+        if suite not in ("typhoon", "pyannote", "whisperx"):
+            suite = "typhoon"
+
         if on_start is not None:
-            await on_start(self._expected_total(cleanup))
+            await on_start(self._expected_total(cleanup, suite=suite))
 
         async def push(test: EndpointTest) -> None:
             test.order = len(report.tests) + 1
@@ -153,10 +154,19 @@ class ApiTestRunner:
                 await on_test(test)
 
         try:
-            await push(await self._test_health())
-            await push(await self._test_audio_sync())
-            await self._transcribe_family(cleanup=cleanup, push=push, on_progress=on_progress)
-            await self._compress_family(cleanup=cleanup, push=push, on_progress=on_progress)
+            if suite == "typhoon":
+                await push(await self._test_health())
+                await push(await self._test_audio_sync())
+                await self._transcribe_family(cleanup=cleanup, push=push, on_progress=on_progress)
+                await self._compress_family(cleanup=cleanup, push=push, on_progress=on_progress)
+            elif suite == "pyannote":
+                await push(await self._test_health())
+                await push(await self._test_audio_sync_diarize(lang="th"))
+                await self._transcribe_family_diarize(lang="th", cleanup=cleanup, push=push, on_progress=on_progress)
+            elif suite == "whisperx":
+                await push(await self._test_health())
+                await push(await self._test_audio_sync_diarize(lang="en"))
+                await self._transcribe_family_diarize(lang="auto", cleanup=cleanup, push=push, on_progress=on_progress)
         finally:
             report.finished_at = _now_iso()
         return report
@@ -219,6 +229,45 @@ class ApiTestRunner:
         except Exception as e:  # noqa: BLE001
             return self._error_test(method, path, name, expected, inputs, specs, e)
 
+    async def _test_audio_sync_diarize(self, lang: str = "th") -> EndpointTest:
+        engine_name = "Typhoon + PyAnnote" if lang == "th" else "WhisperX"
+        method, path, expected, name = "POST", "/v1/audio/transcribe", 200, f"ถอดไฟล์เสียงพร้อมระบุผู้พูด ({engine_name})"
+        with open(self._audio_path, "rb") as fh:
+            audio_bytes = fh.read()
+        inputs = [
+            InputParam("file", f"{AUDIO_ASSET_NAME} ({len(audio_bytes):,} bytes)", "file"),
+            InputParam("language", lang, "field"),
+            InputParam("with_timestamps", "true", "field"),
+            InputParam("enable_diarization", "true", "field"),
+        ]
+        specs = [
+            ("status", "str"), ("text", "str"), ("duration_seconds", "num"),
+            ("elapsed_seconds", "num"), ("rtf", "num"), ("timestamps", "list"),
+        ]
+        start = time.monotonic()
+        try:
+            status, body = await self._http.post_multipart(
+                path,
+                files={"file": (AUDIO_ASSET_NAME, audio_bytes, "audio/wav")},
+                data={"language": lang, "with_timestamps": "true", "enable_diarization": "true"},
+                headers=self._auth_headers(),
+                timeout=180,
+            )
+            checks = self._check_fields(body, specs)
+            if isinstance(body, dict):
+                checks.append(_value_check("status==success", body.get("status") == "success", body.get("status")))
+                checks.append(_value_check("text ไม่ว่าง", bool(body.get("text") and str(body["text"]).strip()), body.get("text")))
+                checks.append(_value_check("duration_seconds>0", (body.get("duration_seconds") or 0) > 0, body.get("duration_seconds")))
+                ts = body.get("timestamps")
+                checks.append(_value_check("timestamps ไม่ว่าง", isinstance(ts, list) and len(ts) > 0, ts))
+                has_speaker = isinstance(ts, list) and any(item.get("speaker") for item in ts if isinstance(item, dict))
+                checks.append(_value_check("พบ speaker ใน timestamps", has_speaker, ts[0].get("speaker") if ts and isinstance(ts[0], dict) else None))
+            passed = status == expected and all(c.passed for c in checks)
+            return EndpointTest(method, path, name, status, passed,
+                                time.monotonic() - start, inputs, checks)
+        except Exception as e:  # noqa: BLE001
+            return self._error_test(method, path, name, expected, inputs, specs, e)
+
     # ------------------------------------------------------------- transcribe family
 
     async def _transcribe_family(
@@ -228,6 +277,36 @@ class ApiTestRunner:
         on_progress: Optional[Callable[[Dict[str, Any]], Any]],
     ) -> None:
         create_test, job_id = await self._transcribe_create()
+        await push(create_test)
+
+        await push(await self._transcribe_list())
+
+        status_test, terminal = await self._transcribe_status(job_id, on_progress) if job_id \
+            else (self._skipped_result("GET", "/v1/media/transcribe/jobs/{id}",
+                                       "สถานะงานถอดความ (poll)", "ข้าม: สร้างงานไม่สำเร็จ"), None)
+        await push(status_test)
+
+        if terminal is not None:
+            if status_test.passed:
+                await push(await self._export_txt(job_id))
+                await push(await self._export_json(job_id))
+            else:
+                await push(self._skipped_result("GET", f"/v1/media/transcribe/jobs/{job_id}/export/txt",
+                                                "Export .txt", "ข้าม: งานยังไม่สำเร็จ (completed)"))
+                await push(self._skipped_result("GET", f"/v1/media/transcribe/jobs/{job_id}/export/json",
+                                                "Export .json", "ข้าม: งานยังไม่สำเร็จ (completed)"))
+
+        if cleanup and job_id:
+            await push(await self._delete_transcribe(job_id))
+
+    async def _transcribe_family_diarize(
+        self,
+        lang: str,
+        cleanup: bool,
+        push: Callable[[EndpointTest], Any],
+        on_progress: Optional[Callable[[Dict[str, Any]], Any]],
+    ) -> None:
+        create_test, job_id = await self._transcribe_create_diarize(lang=lang)
         await push(create_test)
 
         await push(await self._transcribe_list())
@@ -274,6 +353,42 @@ class ApiTestRunner:
             if isinstance(body, dict):
                 checks.append(_value_check("status==accepted", body.get("status") == "accepted", body.get("status")))
                 checks.append(_value_check("language==th", body.get("language") == "th", body.get("language")))
+                raw_id = body.get("id")
+                job_id = raw_id.strip() if isinstance(raw_id, str) else None
+                checks.append(_value_check("id ไม่ว่าง", bool(job_id), raw_id))
+            passed = status == expected and all(c.passed for c in checks)
+            return EndpointTest(method, path, name, status, passed,
+                                time.monotonic() - start, inputs, checks), job_id
+        except Exception as e:  # noqa: BLE001
+            return self._error_test(method, path, name, expected, inputs, specs, e), None
+
+    async def _transcribe_create_diarize(self, lang: str = "th") -> Tuple[EndpointTest, Optional[str]]:
+        engine_name = "Typhoon + PyAnnote" if lang == "th" else "WhisperX"
+        method, path, expected, name = "POST", "/v1/media/transcribe/jobs", 202, f"สร้างงานถอดความยาว ({engine_name})"
+        with open(self._video_path, "rb") as fh:
+            video_bytes = fh.read()
+        inputs = [
+            InputParam("file", f"{VIDEO_ASSET_NAME} ({len(video_bytes):,} bytes)", "file"),
+            InputParam("language", lang, "field"),
+            InputParam("enable_diarization", "true", "field"),
+        ]
+        specs = [("status", "str"), ("id", "str"), ("filename", "str"),
+                 ("language", "str"), ("enable_diarization", "bool"), ("message", "str")]
+        start = time.monotonic()
+        job_id: Optional[str] = None
+        try:
+            status, body = await self._http.post_multipart(
+                path,
+                files={"file": (VIDEO_ASSET_NAME, video_bytes, "video/mp4")},
+                data={"language": lang, "enable_diarization": "true"},
+                headers=self._auth_headers(),
+                timeout=60,
+            )
+            checks = self._check_fields(body, specs)
+            if isinstance(body, dict):
+                checks.append(_value_check("status==accepted", body.get("status") == "accepted", body.get("status")))
+                checks.append(_value_check(f"language=={lang}", body.get("language") == lang, body.get("language")))
+                checks.append(_value_check("enable_diarization==True", body.get("enable_diarization") is True, body.get("enable_diarization")))
                 raw_id = body.get("id")
                 job_id = raw_id.strip() if isinstance(raw_id, str) else None
                 checks.append(_value_check("id ไม่ว่าง", bool(job_id), raw_id))
@@ -519,20 +634,19 @@ class ApiTestRunner:
 
     # ------------------------------------------------------------- shared helpers
 
-    def _expected_total(self, cleanup: bool) -> int:
-        """Predicted test count assuming the async job creates succeed.
-
-        health + audio sync + 5 transcribe tests (create/list/status/export
-        txt/export json) + 4 compress tests (create/list/retention/status),
-        plus one cleanup delete per family when `cleanup` is enabled. If a job
-        create actually fails the real total is lower (exports/cleanup skip).
-        """
-        n = 2
-        n += 5
-        n += 1 if cleanup else 0
-        n += 4
-        n += 1 if cleanup else 0
-        return n
+    def _expected_total(self, cleanup: bool, suite: str = "typhoon") -> int:
+        """Predicted test count assuming the async job creates succeed."""
+        if suite == "typhoon":
+            n = 2
+            n += 5
+            n += 1 if cleanup else 0
+            n += 4
+            n += 1 if cleanup else 0
+            return n
+        elif suite in ("pyannote", "whisperx"):
+            # health (1) + audio sync diarize (1) + create (1) + list (1) + status (1) + export txt (1) + export json (1) + cleanup (1 if cleanup else 0)
+            return 7 + (1 if cleanup else 0)
+        return 2 + 5 + (1 if cleanup else 0) + 4 + (1 if cleanup else 0)
 
     def _auth_headers(self) -> Dict[str, str]:
         return {"x-api-key": self._api_key} if self._api_key else {}
