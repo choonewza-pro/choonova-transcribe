@@ -1,0 +1,20 @@
+{% if using_default_api_key %}
+<div class="security-warning-card" style="margin-bottom: 2rem; background: rgba(218, 54, 51, 0.08); border: 1px dashed var(--danger); border-radius: 12px; padding: 1.25rem 1.5rem; display: flex; align-items: flex-start; gap: 1rem; box-shadow: 0 8px 24px rgba(218, 54, 51, 0.05); position: relative; overflow: hidden; box-sizing: border-box; width: 100%;">
+  <div style="font-size: 1.75rem; line-height: 1; color: #ff6b6b; animation: warning-pulse 1.5s infinite; flex-shrink: 0;">⚠️</div>
+  <div style="flex: 1; min-width: 0; word-break: break-word; overflow-wrap: break-word;">
+    <h4 style="font-size: 1rem; font-weight: 600; color: #ff6b6b; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem; word-break: break-word; overflow-wrap: break-word;">
+      แจ้งเตือนความปลอดภัย — ยังใช้ API Key เริ่มต้น (Default API Key)
+    </h4>
+    <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.5; word-break: break-word; overflow-wrap: break-word; margin: 0;">
+      ระบบยังใช้ <code>GATEWAY_API_KEY</code> เป็นค่าเริ่มต้น (<code>change-me-in-production</code>) — ควรเปลี่ยนเป็นรหัสลับเฉพาะของคุณในไฟล์ <code>.env</code> แล้ว restart บริการ เพื่อป้องกันบุคคลอื่นเข้าถึง API ได้ หากยังคงใช้ค่านี้ต่อไปจะมีความเสี่ยงด้านความปลอดภัย
+    </p>
+  </div>
+</div>
+<style>
+  @keyframes warning-pulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.08); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+</style>
+{% endif %}

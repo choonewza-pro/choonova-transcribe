@@ -23,6 +23,7 @@ from app.core.config import (
     TRANSCRIBE_MAX_QUEUED,
     MAX_MEDIA_DURATION_SEC,
     GATEWAY_API_KEY,
+    GATEWAY_API_KEY_IS_DEFAULT,
     ALLOW_ACCESS_TRANSCRIBE_HISTORY,
     ALLOW_ACCESS_COMPRESS_HISTORY,
 )
@@ -78,6 +79,7 @@ async def home_page(request: Request):
             "max_upload_mb": MAX_UPLOAD_SIZE_MB,
             "allow_access_transcribe_history": ALLOW_ACCESS_TRANSCRIBE_HISTORY,
             "allow_access_compress_history": ALLOW_ACCESS_COMPRESS_HISTORY,
+            "using_default_api_key": GATEWAY_API_KEY_IS_DEFAULT,
         },
     )
 
@@ -206,7 +208,11 @@ async def jobs_history_page(request: Request):
 
 @router.get("/setting", response_class=HTMLResponse)
 async def settings_page(request: Request):
-    return templates.TemplateResponse(request=request, name="setting.html")
+    return templates.TemplateResponse(
+        request=request,
+        name="setting.html",
+        context={"using_default_api_key": GATEWAY_API_KEY_IS_DEFAULT},
+    )
 
 
 @router.get("/test", response_class=HTMLResponse)
