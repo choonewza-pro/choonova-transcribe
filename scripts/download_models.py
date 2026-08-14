@@ -8,9 +8,10 @@ import os
 import sys
 
 
-def download_typhoon(model_dir: str = "/app/model") -> None:
+def download_typhoon(model_dir: str = "/app/model", token: str | None = None) -> None:
     from huggingface_hub import hf_hub_download
 
+    token = token or os.getenv("HF_TOKEN", "").strip() or None
     os.makedirs(model_dir, exist_ok=True)
     target_file = os.path.join(model_dir, "typhoon-asr-realtime.nemo")
     if os.path.exists(target_file) and os.path.getsize(target_file) > 100 * 1024 * 1024:
@@ -21,6 +22,7 @@ def download_typhoon(model_dir: str = "/app/model") -> None:
         repo_id="typhoon-ai/typhoon-asr-realtime",
         filename="typhoon-asr-realtime.nemo",
         local_dir=model_dir,
+        token=token,
     )
     size = os.path.getsize(p) / (1024**3)
     print()
@@ -113,7 +115,7 @@ def main() -> None:
     token = args.hf_token or os.getenv("HF_TOKEN", "").strip() or None
 
     if args.typhoon or args.all:
-        download_typhoon(model_dir=args.model_dir)
+        download_typhoon(model_dir=args.model_dir, token=token)
 
     if args.whisper or args.all:
         download_whisper(model_name=args.whisper_model, token=token)

@@ -24,12 +24,13 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy model download helper script
 COPY scripts/download_models.py /app/scripts/download_models.py
 
-# Download Typhoon ASR model weights into Docker image layer (Option 1: Docker Build-time Caching)
-RUN python3 /app/scripts/download_models.py --typhoon
-
-# Pre-download Whisper model (for English / Thai-English mixed support via faster-whisper)
 ARG WHISPER_MODEL=large-v3-turbo
 ARG HF_TOKEN=""
+
+# Download Typhoon ASR model weights into Docker image layer (Option 1: Docker Build-time Caching)
+RUN python3 /app/scripts/download_models.py --typhoon --hf-token "${HF_TOKEN}"
+
+# Pre-download Whisper model (for English / Thai-English mixed support via faster-whisper)
 RUN python3 /app/scripts/download_models.py --whisper --whisper-model "${WHISPER_MODEL}" --hf-token "${HF_TOKEN}"
 
 # Pre-download PyAnnote Diarization & SpeechBrain models (if HF_TOKEN is provided at build time)
