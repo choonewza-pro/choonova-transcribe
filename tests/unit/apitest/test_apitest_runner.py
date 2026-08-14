@@ -112,6 +112,7 @@ class ApiTestRunnerTest(unittest.TestCase):
                       [{"status": "processing", "stage": "transcribing", "progress": 50.0}],
                       transcribe_done)
         fake.set("GET", "/v1/media/transcribe/jobs/t1/export/txt", 200, "กบกับวัว\n")
+        fake.set("GET", "/v1/media/transcribe/jobs/t1/export/srt", 200, "1\n00:00:00,000 --> 00:00:45,500\nกบกับวัว\n")
         fake.set("GET", "/v1/media/transcribe/jobs/t1/export/json", 200, {
             "id": "t1", "filename": "The-Frog-and-The-Ox.mp4", "duration": 45.5, "text": "กบกับวัว",
         })
@@ -154,8 +155,8 @@ class ApiTestRunnerTest(unittest.TestCase):
         runner = self._runner(fake)
         report = asyncio.run(runner.run(cleanup=True))
 
-        self.assertEqual(report.total, 13)
-        self.assertEqual(report.passed_count, 13)
+        self.assertEqual(report.total, 14)
+        self.assertEqual(report.passed_count, 14)
         self.assertEqual(report.failed_count, 0)
         self.assertTrue(report.overall_passed)
         # Cleanup DELETE must have hit both created jobs
@@ -238,7 +239,7 @@ class ApiTestRunnerTest(unittest.TestCase):
         runner = self._runner(fake)
         report = asyncio.run(runner.run(cleanup=False))
 
-        self.assertEqual(report.total, 11)
+        self.assertEqual(report.total, 12)
         self.assertNotIn(("DELETE", "/v1/media/transcribe/jobs/t1"), fake.calls)
         self.assertNotIn(("DELETE", "/v1/media/compress/jobs/c1"), fake.calls)
 
@@ -252,10 +253,10 @@ class ApiTestRunnerTest(unittest.TestCase):
             totals.append(total)
 
         asyncio.run(runner.run(cleanup=True, on_start=on_start))
-        self.assertEqual(totals, [13])
+        self.assertEqual(totals, [14])
         totals.clear()
         asyncio.run(runner.run(cleanup=False, on_start=on_start))
-        self.assertEqual(totals, [11])
+        self.assertEqual(totals, [12])
 
     def test_pyannote_suite_passes_and_cleans_up(self):
         fake = FakeApiHttp()
@@ -281,13 +282,14 @@ class ApiTestRunnerTest(unittest.TestCase):
             "started_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:00:01Z",
         })
         fake.set("GET", "/v1/media/transcribe/jobs/t_py/export/txt", 200, "[SPEAKER_00]: สวัสดีครับ\n")
+        fake.set("GET", "/v1/media/transcribe/jobs/t_py/export/srt", 200, "1\n00:00:00,000 --> 00:00:10,000\n[SPEAKER_00]: สวัสดีครับ\n")
         fake.set("GET", "/v1/media/transcribe/jobs/t_py/export/json", 200, {
             "id": "t_py", "filename": "The-Frog-and-The-Ox.mp4", "duration": 10.0, "text": "[SPEAKER_00]: สวัสดีครับ",
         })
         runner = self._runner(fake)
         report = asyncio.run(runner.run(suite="pyannote", cleanup=True))
         self.assertTrue(report.overall_passed)
-        self.assertEqual(report.total, 8)
+        self.assertEqual(report.total, 9)
         self.assertIn(("DELETE", "/v1/media/transcribe/jobs/t_py"), fake.calls)
 
     def test_whisperx_suite_passes_and_cleans_up(self):
@@ -314,13 +316,14 @@ class ApiTestRunnerTest(unittest.TestCase):
             "started_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:00:01Z",
         })
         fake.set("GET", "/v1/media/transcribe/jobs/t_wx/export/txt", 200, "Hello world\n")
+        fake.set("GET", "/v1/media/transcribe/jobs/t_wx/export/srt", 200, "1\n00:00:00,000 --> 00:00:02,500\nHello world\n")
         fake.set("GET", "/v1/media/transcribe/jobs/t_wx/export/json", 200, {
             "id": "t_wx", "filename": "The-Frog-and-The-Ox.mp4", "duration": 10.0, "text": "Hello world",
         })
         runner = self._runner(fake)
         report = asyncio.run(runner.run(suite="whisperx", cleanup=True))
         self.assertTrue(report.overall_passed)
-        self.assertEqual(report.total, 8)
+        self.assertEqual(report.total, 9)
         self.assertIn(("DELETE", "/v1/media/transcribe/jobs/t_wx"), fake.calls)
 
     def test_asset_info_reports_availability(self):

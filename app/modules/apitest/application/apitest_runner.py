@@ -289,10 +289,13 @@ class ApiTestRunner:
         if terminal is not None:
             if status_test.passed:
                 await push(await self._export_txt(job_id))
+                await push(await self._export_srt(job_id))
                 await push(await self._export_json(job_id))
             else:
                 await push(self._skipped_result("GET", f"/v1/media/transcribe/jobs/{job_id}/export/txt",
                                                 "Export .txt", "ข้าม: งานยังไม่สำเร็จ (completed)"))
+                await push(self._skipped_result("GET", f"/v1/media/transcribe/jobs/{job_id}/export/srt",
+                                                "Export .srt (คำบรรยาย)", "ข้าม: งานยังไม่สำเร็จ (completed)"))
                 await push(self._skipped_result("GET", f"/v1/media/transcribe/jobs/{job_id}/export/json",
                                                 "Export .json", "ข้าม: งานยังไม่สำเร็จ (completed)"))
 
@@ -319,10 +322,13 @@ class ApiTestRunner:
         if terminal is not None:
             if status_test.passed:
                 await push(await self._export_txt(job_id))
+                await push(await self._export_srt(job_id))
                 await push(await self._export_json(job_id))
             else:
                 await push(self._skipped_result("GET", f"/v1/media/transcribe/jobs/{job_id}/export/txt",
                                                 "Export .txt", "ข้าม: งานยังไม่สำเร็จ (completed)"))
+                await push(self._skipped_result("GET", f"/v1/media/transcribe/jobs/{job_id}/export/srt",
+                                                "Export .srt (คำบรรยาย)", "ข้าม: งานยังไม่สำเร็จ (completed)"))
                 await push(self._skipped_result("GET", f"/v1/media/transcribe/jobs/{job_id}/export/json",
                                                 "Export .json", "ข้าม: งานยังไม่สำเร็จ (completed)"))
 
@@ -451,6 +457,10 @@ class ApiTestRunner:
     async def _export_txt(self, job_id: str) -> EndpointTest:
         path = f"/v1/media/transcribe/jobs/{job_id}/export/txt"
         return await self._export_test(path, "Export .txt", "text")
+
+    async def _export_srt(self, job_id: str) -> EndpointTest:
+        path = f"/v1/media/transcribe/jobs/{job_id}/export/srt"
+        return await self._export_test(path, "Export .srt (คำบรรยาย)", "text")
 
     async def _export_json(self, job_id: str) -> EndpointTest:
         path = f"/v1/media/transcribe/jobs/{job_id}/export/json"
@@ -638,15 +648,15 @@ class ApiTestRunner:
         """Predicted test count assuming the async job creates succeed."""
         if suite == "typhoon":
             n = 2
-            n += 5
+            n += 6
             n += 1 if cleanup else 0
             n += 4
             n += 1 if cleanup else 0
             return n
         elif suite in ("pyannote", "whisperx"):
-            # health (1) + audio sync diarize (1) + create (1) + list (1) + status (1) + export txt (1) + export json (1) + cleanup (1 if cleanup else 0)
-            return 7 + (1 if cleanup else 0)
-        return 2 + 5 + (1 if cleanup else 0) + 4 + (1 if cleanup else 0)
+            # health (1) + audio sync diarize (1) + create (1) + list (1) + status (1) + export txt (1) + export srt (1) + export json (1) + cleanup (1 if cleanup else 0)
+            return 8 + (1 if cleanup else 0)
+        return 2 + 6 + (1 if cleanup else 0) + 4 + (1 if cleanup else 0)
 
     def _auth_headers(self) -> Dict[str, str]:
         return {"x-api-key": self._api_key} if self._api_key else {}
