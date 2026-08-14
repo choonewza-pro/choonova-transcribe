@@ -167,9 +167,9 @@
         </div>
 
         <div style="margin: 1.5rem 0; display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap;">
-          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; background: rgba(168,85,247,0.12); padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid rgba(168,85,247,0.3);">
             <input type="checkbox" id="enableDiarization" style="width: 18px; height: 18px;">
-            <span>🎙️ ระบุผู้พูด (Speaker Diarization)</span>
+            <span style="font-weight: 500; color: #d8b4fe;">🎙️ ระบุผู้พูด (Speaker Diarization)</span>
           </label>
           <label style="display: flex; align-items: center; gap: 0.5rem;">
             <span>🌐 ภาษา:</span>
@@ -177,6 +177,7 @@
               <option value="th">ไทย (Typhoon)</option>
               <option value="en">อังกฤษ (Whisper)</option>
               <option value="auto">อัตโนมัติ / ผสม (Whisper)</option>
+              <option value="translate_en">🌐 แปลเป็นอังกฤษ (Translate to English - Whisper)</option>
             </select>
           </label>
           <label style="display: flex; align-items: center; gap: 0.5rem;">
@@ -187,6 +188,28 @@
             <span>⏰ สูงสุด (วินาที/chunk):</span>
             <input type="number" id="maxChunkSec" class="form-select" min="1" step="1" placeholder="Auto" title="ปล่อยว่างเพื่อให้ระบบเลือกค่าที่เหมาะสมกับโมเดล" style="width: 90px; padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(0,0,0,0.25); color: #fff; border: 1px solid var(--card-border);">
           </label>
+        </div>
+
+        <!-- Speaker Diarization Options Box -->
+        <div id="diarizationOptions" style="display: none; margin: -0.5rem 0 1.5rem 0; padding: 1rem 1.25rem; background: rgba(168,85,247,0.12); border-radius: 10px; border: 1px solid rgba(168,85,247,0.35); gap: 1.5rem; align-items: center; flex-wrap: wrap;">
+          <div style="width: 100%; font-size: 0.9rem; font-weight: 600; color: #d8b4fe; margin-bottom: 0.25rem;">
+            👥 ตั้งค่าจำนวนผู้พูด (Speaker Count Configuration - ปล่อยว่างเพื่อตรวจจับอัตโนมัติ):
+          </div>
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+            <span>🎯 จำนวนคนแน่นอน (num_speakers):</span>
+            <input type="number" id="numSpeakersInput" min="1" max="20" placeholder="เช่น 2" style="width: 75px; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(168,85,247,0.4);">
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+            <span>⬇️ ขั้นต่ำ (min_speakers):</span>
+            <input type="number" id="minSpeakersInput" min="1" max="20" placeholder="Auto" style="width: 75px; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(168,85,247,0.4);">
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+            <span>⬆️ สูงสุด (max_speakers):</span>
+            <input type="number" id="maxSpeakersInput" min="1" max="20" placeholder="Auto" style="width: 75px; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(168,85,247,0.4);">
+          </label>
+        </div>
+
+        <div style="margin: 1.5rem 0; display: flex; gap: 1rem; align-items: center;">
           <button type="submit" class="btn-primary" id="startJobBtn" disabled>
             <span>🚀 เริ่มการถอดความ</span>
           </button>
@@ -257,6 +280,6 @@
     </div>
   </main>
 
-  <script src="/static/js/media.js?v=6"></script>
+  <script src="/static/js/media.js?v=8"></script>
 </body>
 </html>

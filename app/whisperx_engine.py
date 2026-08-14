@@ -119,8 +119,10 @@ class WhisperXDiarizer:
         self,
         audio_path: str,
         language: Optional[str] = None,
+        num_speakers: Optional[int] = None,
         min_speakers: Optional[int] = None,
         max_speakers: Optional[int] = None,
+        task: str = "transcribe",
     ) -> Dict[str, Any]:
         """
         Run WhisperX full pipeline: Transcribe -> Forced Alignment (with fallback) -> Diarize -> Assign Speakers.
@@ -140,9 +142,9 @@ class WhisperXDiarizer:
         # 1. ASR Transcribe
         batch_size = 16
         lang_arg = language if language and language != "auto" else None
-        logger.info(f"Step 1: WhisperX Transcribe (lang={lang_arg}, batch_size={batch_size})")
+        logger.info(f"Step 1: WhisperX Transcribe (lang={lang_arg}, task={task}, batch_size={batch_size})")
         start_t = time.time()
-        result = self._asr_model.transcribe(audio, batch_size=batch_size, language=lang_arg)
+        result = self._asr_model.transcribe(audio, batch_size=batch_size, language=lang_arg, task=task)
         detected_lang = result.get("language", language or "en")
         logger.info(f"ASR step finished in {time.time() - start_t:.2f}s (detected_lang={detected_lang})")
 
@@ -168,14 +170,16 @@ class WhisperXDiarizer:
             )
 
         # 3. Speaker Diarization
-        min_spk = min_speakers if min_speakers is not None else DIARIZATION_MIN_SPEAKERS
-        max_spk = max_speakers if max_speakers is not None else DIARIZATION_MAX_SPEAKERS
-
         diarize_kwargs = {}
-        if min_spk is not None and min_spk > 0:
-            diarize_kwargs["min_speakers"] = min_spk
-        if max_spk is not None and max_spk > 0:
-            diarize_kwargs["max_speakers"] = max_spk
+        if num_speakers is not None and num_speakers > 0:
+            diarize_kwargs["num_speakers"] = num_speakers
+        else:
+            min_spk = min_speakers if min_speakers is not None else DIARIZATION_MIN_SPEAKERS
+            max_spk = max_speakers if max_speakers is not None else DIARIZATION_MAX_SPEAKERS
+            if min_spk is not None and min_spk > 0:
+                diarize_kwargs["min_speakers"] = min_spk
+            if max_spk is not None and max_spk > 0:
+                diarize_kwargs["max_speakers"] = max_spk
 
         logger.info(f"Step 3: WhisperX Diarization (kwargs={diarize_kwargs})")
         start_t = time.time()
@@ -273,13 +277,17 @@ def get_whisperx_diarizer() -> WhisperXDiarizer:
 def transcribe_and_diarize_whisperx(
     audio_path: str,
     language: Optional[str] = None,
+    num_speakers: Optional[int] = None,
     min_speakers: Optional[int] = None,
     max_speakers: Optional[int] = None,
+    task: str = "transcribe",
 ) -> Dict[str, Any]:
     diarizer = get_whisperx_diarizer()
     return diarizer.transcribe_and_diarize(
         audio_path,
         language=language,
+        num_speakers=num_speakers,
         min_speakers=min_speakers,
         max_speakers=max_speakers,
+        task=task,
     )

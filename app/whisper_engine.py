@@ -127,13 +127,17 @@ class WhisperEngine:
         audio_path: str,
         language: str = "auto",
         with_timestamps: bool = False,
+        task: str = "transcribe",
+        temperature: Optional[float] = None,
+        initial_prompt: Optional[str] = None,
+        hotwords: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Transcribe an audio file using the Whisper model.
+        Transcribe or translate an audio file using the Whisper model.
 
         language: 'en' forces English, 'auto' uses Whisper's language detection
-        (handles Thai, English, and Thai-English mixed content, emitting English
-        words in Latin script).
+        (handles Thai, English, and Thai-English mixed content).
+        task: 'transcribe' (default) or 'translate' (translate to English).
         """
         with self._lifecycle_lock:
             self._last_used = time.monotonic()
@@ -144,40 +148,73 @@ class WhisperEngine:
 
         start_time = time.time()
         try:
-            whisper_lang = "en" if language == "en" else None
+            whisper_lang = "en" if language == "en" else ("th" if language == "th" else None)
+            if language == "auto":
+                whisper_lang = None
 
-            segments, info = model.transcribe(
-                audio_path,
-                language=whisper_lang,
-                word_timestamps=with_timestamps,
-                vad_filter=True,
-            )
+            transcribe_kwargs = {
+                "language": whisper_lang,
+                "task": task or "transcribe",
+                "word_timestamps": with_timestamps,
+                "vad_filter": True,
+            }
+            if temperature is not None:
+                transcribe_kwargs["temperature"] = temperature
+            if initial_prompt:
+                transcribe_kwargs["initial_prompt"] = initial_prompt
+            if hotwords:
+                try:
+                    transcribe_kwargs["hotwords"] = hotwords
+                except TypeError:
+                    if not initial_prompt:
+                        transcribe_kwargs["initial_prompt"] = hotwords
+
+            segments, info = model.transcribe(audio_path, **transcribe_kwargs)
             duration = float(info.duration or 0.0)
+            detected_language = getattr(info, "language", language) or language
 
             combined_text = []
             timestamps = []
+            segments_detail = []
             for segment in segments:
                 text = (segment.text or "").strip()
                 if text:
                     combined_text.append(text)
+                seg_words = []
                 if with_timestamps:
                     for word in getattr(segment, "words", None) or []:
                         w_text = (word.word or "").strip()
                         if w_text:
-                            timestamps.append(
-                                {
-                                    "word": w_text,
-                                    "start": round(float(word.start), 2),
-                                    "end": round(float(word.end), 2),
-                                }
-                            )
+                            w_item = {
+                                "word": w_text,
+                                "start": round(float(word.start), 2),
+                                "end": round(float(word.end), 2),
+                            }
+                            timestamps.append(w_item)
+                            seg_words.append(w_item)
+
+                segments_detail.append({
+                    "id": getattr(segment, "id", len(segments_detail)),
+                    "seek": getattr(segment, "seek", 0),
+                    "start": round(float(segment.start), 2),
+                    "end": round(float(segment.end), 2),
+                    "text": text,
+                    "tokens": getattr(segment, "tokens", []),
+                    "temperature": getattr(segment, "temperature", 0.0),
+                    "avg_logprob": getattr(segment, "avg_logprob", 0.0),
+                    "compression_ratio": getattr(segment, "compression_ratio", 0.0),
+                    "no_speech_prob": getattr(segment, "no_speech_prob", 0.0),
+                    "words": seg_words if with_timestamps else None,
+                })
 
             processing_time = time.time() - start_time
             return {
                 "text": " ".join(combined_text),
                 "elapsed": processing_time,
                 "duration": duration,
+                "language": detected_language,
                 "timestamps": timestamps,
+                "segments": segments_detail,
             }
         except Exception as e:
             logger.error(f"Whisper transcribe failed: {e}")
@@ -192,6 +229,10 @@ class WhisperEngine:
         filename_hint: str = "audio.wav",
         language: str = "auto",
         with_timestamps: bool = False,
+        task: str = "transcribe",
+        temperature: Optional[float] = None,
+        initial_prompt: Optional[str] = None,
+        hotwords: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Transcribe raw audio bytes.
@@ -206,6 +247,10 @@ class WhisperEngine:
                 tmp_path,
                 language=language,
                 with_timestamps=with_timestamps,
+                task=task,
+                temperature=temperature,
+                initial_prompt=initial_prompt,
+                hotwords=hotwords,
             )
         finally:
             if os.path.exists(tmp_path):

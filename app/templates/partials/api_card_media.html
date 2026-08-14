@@ -266,6 +266,16 @@
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>true</code> / <code>false</code> (default <code>false</code>) — ตรวจจับและแยกแยะผู้พูด (Speaker Diarization)</td>
                   </tr>
                   <tr>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>num_speakers</code></td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">int</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">กำหนดจำนวนผู้พูดที่แน่นอน (เช่น <code>2</code>) เพื่อความแม่นยำสูงสุดในการจัดกลุ่มผู้พูด</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>min_speakers</code> / <code>max_speakers</code></td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">int</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">กำหนดช่วงจำนวนผู้พูดต่ำสุด/สูงสุด</td>
+                  </tr>
+                  <tr>
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>target_chunk_sec</code></td>
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">float</td>
                     <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">ความยาวเป้าหมายต่อ chunk (default: th=45s, en/auto=25s)</td>
@@ -285,6 +295,7 @@
   -F "file=@/path/to/long_video.mp4" \
   -F "language=th" \
   -F "enable_diarization=true" \
+  -F "num_speakers=2" \
   -F "target_chunk_sec=30" \
   -F "max_chunk_sec=60"</pre>
             </div>

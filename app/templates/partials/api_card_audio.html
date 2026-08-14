@@ -52,6 +52,8 @@
               <ul style="margin:0; padding-left:1.2rem; font-size:0.85rem; color:var(--text-muted); line-height:1.6;">
                 <li><code>with_timestamps</code> (bool, default <code>true</code>) — ส่งคืนตำแหน่งช่วงเวลาเริ่มต้น-สิ้นสุดระดับคำในอาร์เรย์ <code>timestamps</code></li>
                 <li><code>enable_diarization</code> (bool, default <code>false</code>) — ตรวจจับและแยกแยะผู้พูด (คืนฟิลด์ <code>speaker</code> เช่น <code>SPEAKER_00</code> ในแต่ละคำ/ช่วงเวลา)</li>
+                <li><code>num_speakers</code> (int, optional) — กำหนดจำนวนผู้พูดที่ทราบแน่นอน (เช่น <code>2</code>) เพื่อความแม่นยำสูงสุดในการแยกแยะผู้พูด</li>
+                <li><code>min_speakers</code> / <code>max_speakers</code> (int, optional) — กำหนดช่วงจำนวนผู้พูดต่ำสุด/สูงสุด</li>
               </ul>
             </div>
             <div class="code-container">
@@ -61,7 +63,8 @@
   -F "file=@/path/to/sample_audio.wav" \
   -F "language=th" \
   -F "with_timestamps=true" \
-  -F "enable_diarization=true"</pre>
+  -F "enable_diarization=true" \
+  -F "num_speakers=2"</pre>
             </div>
             <div class="code-container">
               <div class="code-header">Python (requests)</div>

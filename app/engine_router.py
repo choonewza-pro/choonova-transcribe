@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from app.config import SUPPORTED_LANGUAGES
 from app.asr_engine import engine
@@ -91,13 +91,30 @@ def transcribe_file(
     language: str = "th",
     with_timestamps: bool = False,
     is_chunk: bool = False,
+    task: str = "transcribe",
+    temperature: Optional[float] = None,
+    initial_prompt: Optional[str] = None,
+    hotwords: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Route a transcription request to the appropriate engine:
-      - 'th'       -> Typhoon ASR (Thai-only, fast, streaming-friendly)
-      - 'en'/'auto' -> Whisper (English / Thai-English mixed, Latin script output)
+    Route a transcription/translation request to the appropriate engine:
+      - task='translate' -> Whisper (translates speech into English text)
+      - 'th' (transcribe) -> Typhoon ASR (Thai-only, fast, streaming-friendly)
+      - 'en'/'auto' (transcribe) -> Whisper
     """
-    lang = normalize_language(language)
+    lang = normalize_language(language) if language else "th"
+
+    if task == "translate":
+        return whisper_engine.transcribe_file(
+            audio_path,
+            language=lang,
+            with_timestamps=with_timestamps,
+            task="translate",
+            temperature=temperature,
+            initial_prompt=initial_prompt,
+            hotwords=hotwords,
+        )
+
     if lang == "th":
         return engine.transcribe_file(
             audio_path,
@@ -108,6 +125,10 @@ def transcribe_file(
         audio_path,
         language=lang,
         with_timestamps=with_timestamps,
+        task="transcribe",
+        temperature=temperature,
+        initial_prompt=initial_prompt,
+        hotwords=hotwords,
     )
 
 
@@ -116,11 +137,28 @@ def transcribe_bytes(
     filename_hint: str = "audio.wav",
     language: str = "th",
     with_timestamps: bool = False,
+    task: str = "transcribe",
+    temperature: Optional[float] = None,
+    initial_prompt: Optional[str] = None,
+    hotwords: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Route a raw-bytes transcription request to the appropriate engine.
+    Route a raw-bytes transcription/translation request to the appropriate engine.
     """
-    lang = normalize_language(language)
+    lang = normalize_language(language) if language else "th"
+
+    if task == "translate":
+        return whisper_engine.transcribe_bytes(
+            audio_bytes,
+            filename_hint=filename_hint,
+            language=lang,
+            with_timestamps=with_timestamps,
+            task="translate",
+            temperature=temperature,
+            initial_prompt=initial_prompt,
+            hotwords=hotwords,
+        )
+
     if lang == "th":
         return engine.transcribe_bytes(
             audio_bytes,
@@ -132,6 +170,10 @@ def transcribe_bytes(
         filename_hint=filename_hint,
         language=lang,
         with_timestamps=with_timestamps,
+        task="transcribe",
+        temperature=temperature,
+        initial_prompt=initial_prompt,
+        hotwords=hotwords,
     )
 
 

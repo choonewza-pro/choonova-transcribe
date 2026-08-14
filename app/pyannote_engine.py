@@ -408,6 +408,7 @@ class PyAnnoteDiarizer:
     def diarize(
         self,
         audio_path: str,
+        num_speakers: Optional[int] = None,
         min_speakers: Optional[int] = None,
         max_speakers: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
@@ -421,14 +422,16 @@ class PyAnnoteDiarizer:
         self.load_model()
         self._last_used_time = time.time()
 
-        min_spk = min_speakers if min_speakers is not None else DIARIZATION_MIN_SPEAKERS
-        max_spk = max_speakers if max_speakers is not None else DIARIZATION_MAX_SPEAKERS
-
         diarize_kwargs = {}
-        if min_spk is not None and min_spk > 0:
-            diarize_kwargs["min_speakers"] = min_spk
-        if max_spk is not None and max_spk > 0:
-            diarize_kwargs["max_speakers"] = max_spk
+        if num_speakers is not None and num_speakers > 0:
+            diarize_kwargs["num_speakers"] = num_speakers
+        else:
+            min_spk = min_speakers if min_speakers is not None else DIARIZATION_MIN_SPEAKERS
+            max_spk = max_speakers if max_speakers is not None else DIARIZATION_MAX_SPEAKERS
+            if min_spk is not None and min_spk > 0:
+                diarize_kwargs["min_speakers"] = min_spk
+            if max_spk is not None and max_spk > 0:
+                diarize_kwargs["max_speakers"] = max_spk
 
         logger.info(f"Running PyAnnote diarization on {audio_path} (kwargs={diarize_kwargs})")
         start_t = time.time()
@@ -486,8 +489,14 @@ def get_pyannote_diarizer() -> PyAnnoteDiarizer:
 
 def diarize_audio(
     audio_path: str,
+    num_speakers: Optional[int] = None,
     min_speakers: Optional[int] = None,
     max_speakers: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     diarizer = get_pyannote_diarizer()
-    return diarizer.diarize(audio_path, min_speakers=min_speakers, max_speakers=max_speakers)
+    return diarizer.diarize(
+        audio_path,
+        num_speakers=num_speakers,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
+    )

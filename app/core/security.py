@@ -13,16 +13,25 @@ from app.core.config import (
 
 async def verify_api_key(
     x_api_key: str | None = Header(None, alias="x-api-key"),
+    authorization: str | None = Header(None, alias="authorization"),
 ) -> bool:
     """
-    Verifies authentication via x-api-key header.
+    Verifies authentication via x-api-key header or Authorization: Bearer <key> header.
     """
-    token = x_api_key.strip() if x_api_key else None
+    token = None
+    if x_api_key:
+        token = x_api_key.strip()
+    elif authorization:
+        auth_parts = authorization.strip().split()
+        if len(auth_parts) == 2 and auth_parts[0].lower() == "bearer":
+            token = auth_parts[1].strip()
+        else:
+            token = authorization.strip()
 
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing API key. Provide 'x-api-key: <key>' header."
+            detail="Missing API key. Provide 'x-api-key: <key>' or 'Authorization: Bearer <key>' header."
         )
 
     # Constant time comparison to prevent timing attacks

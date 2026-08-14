@@ -70,6 +70,10 @@ def _job_to_dict(job) -> Dict[str, Any]:
         "target_chunk_sec": getattr(job, "target_chunk_sec", None) or 30.0,
         "max_chunk_sec": getattr(job, "max_chunk_sec", None) or 60.0,
         "enable_diarization": getattr(job, "enable_diarization", False),
+        "num_speakers": getattr(job, "num_speakers", None),
+        "min_speakers": getattr(job, "min_speakers", None),
+        "max_speakers": getattr(job, "max_speakers", None),
+        "task": getattr(job, "task", None) or "transcribe",
         "model": job.model,
         "result": job.result,
         "error": job.error,
@@ -85,24 +89,48 @@ async def transcribe_audio(
     file: UploadFile = File(...),
     with_timestamps: bool = Form(False),
     language: str = Form("th"),
+    task: str = Form("transcribe"),
     enable_diarization: bool = Form(False),
+    num_speakers: Optional[int] = Form(None),
+    min_speakers: Optional[int] = Form(None),
+    max_speakers: Optional[int] = Form(None),
     authenticated: bool = Depends(verify_api_key),
 ):
     """
-    Transcribe an uploaded audio file (WAV, MP3, M4A, OGG, FLAC).
+    Transcribe or translate an uploaded audio file (WAV, MP3, M4A, OGG, FLAC).
 
     language: 'th' (default, Typhoon Thai ASR), 'en' (Whisper English), or
     'auto' (Whisper auto-detect for Thai/English mixed audio).
+    task: 'transcribe' (default) or 'translate' (translate to English via Whisper).
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="Audio file must be provided.")
 
     validate_extension(file.filename)
 
-    try:
-        lang = TranscriptionService.normalize_language(language)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+    lang_clean = (language or "th").strip().lower()
+    if lang_clean in ("translate_en", "translate"):
+        task = "translate"
+        lang = "auto"
+    elif task == "translate":
+        lang = "auto" if lang_clean not in ("th", "en") else lang_clean
+    else:
+        try:
+            lang = TranscriptionService.normalize_language(language)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    if num_speakers is not None and num_speakers <= 0:
+        raise HTTPException(status_code=422, detail="num_speakers must be greater than 0.")
+    if min_speakers is not None and min_speakers <= 0:
+        raise HTTPException(status_code=422, detail="min_speakers must be greater than 0.")
+    if max_speakers is not None and max_speakers <= 0:
+        raise HTTPException(status_code=422, detail="max_speakers must be greater than 0.")
+    if min_speakers is not None and max_speakers is not None and min_speakers > max_speakers:
+        raise HTTPException(status_code=422, detail="min_speakers cannot exceed max_speakers.")
+
+    if num_speakers or min_speakers or max_speakers:
+        enable_diarization = True
 
     svc = get_transcription_service()
 
@@ -139,7 +167,28 @@ async def transcribe_audio(
             with open(temp_audio_path, "wb") as f:
                 f.write(content)
 
-            if lang == "th":
+            if task == "translate":
+                from app.engine_router import transcribe_file as router_transcribe_file
+                from app.pyannote_engine import diarize_audio, merge_speaker_overlap
+
+                res = await asyncio.to_thread(
+                    router_transcribe_file,
+                    audio_path=temp_audio_path,
+                    language=lang,
+                    with_timestamps=True,
+                    task="translate",
+                )
+                text = res.get("text", "")
+                timestamps = res.get("timestamps", [])
+                turns = await asyncio.to_thread(
+                    diarize_audio,
+                    temp_audio_path,
+                    num_speakers=num_speakers,
+                    min_speakers=min_speakers,
+                    max_speakers=max_speakers,
+                )
+                timestamps = merge_speaker_overlap(timestamps, turns)
+            elif lang == "th":
                 from app.engine_router import transcribe_file as router_transcribe_file
                 from app.pyannote_engine import diarize_audio, merge_speaker_overlap
 
@@ -151,7 +200,13 @@ async def transcribe_audio(
                 )
                 text = res.get("text", "")
                 timestamps = res.get("timestamps", [])
-                turns = await asyncio.to_thread(diarize_audio, temp_audio_path)
+                turns = await asyncio.to_thread(
+                    diarize_audio,
+                    temp_audio_path,
+                    num_speakers=num_speakers,
+                    min_speakers=min_speakers,
+                    max_speakers=max_speakers,
+                )
                 timestamps = merge_speaker_overlap(timestamps, turns)
             else:
                 from app.whisperx_engine import transcribe_and_diarize_whisperx
@@ -159,6 +214,9 @@ async def transcribe_audio(
                     transcribe_and_diarize_whisperx,
                     temp_audio_path,
                     lang,
+                    num_speakers,
+                    min_speakers,
+                    max_speakers,
                 )
                 text = wx_res.get("text", "")
                 timestamps = wx_res.get("segments", [])
@@ -176,6 +234,7 @@ async def transcribe_audio(
                 filename_hint=secure_filename(file.filename),
                 language=lang,
                 with_timestamps=with_timestamps,
+                task=task,
             )
 
             text = res.get("text", "")
@@ -209,17 +268,21 @@ async def transcribe_audio(
 async def create_transcription_job(
     file: UploadFile = File(...),
     language: str = Form("th"),
+    task: str = Form("transcribe"),
     target_chunk_sec: float = Form(None),
     max_chunk_sec: float = Form(None),
     enable_diarization: bool = Form(False),
+    num_speakers: Optional[int] = Form(None),
+    min_speakers: Optional[int] = Form(None),
+    max_speakers: Optional[int] = Form(None),
     authenticated: bool = Depends(verify_api_key),
 ):
     """
     Upload a large video/audio file (MP4, MKV, MOV, WAV up to 1GB+) for long-form transcription.
     Returns job_id immediately with 202 Accepted status for async background processing.
 
-    language: 'th' (default, Typhoon Thai ASR), 'en' (Whisper English), or
-    'auto' (Whisper auto-detect for Thai/English mixed audio).
+    language: 'th' (default, Typhoon Thai ASR), 'en' (Whisper English),
+    'auto' (Whisper auto-detect for Thai/English mixed audio), or 'translate_en' (Whisper speech-to-English translation).
 
     target_chunk_sec / max_chunk_sec: chunk duration bounds for silence-based splitting.
     Defaults come from env based on the selected language model.
@@ -231,10 +294,29 @@ async def create_transcription_job(
 
     validate_extension(file.filename)
 
-    try:
-        lang = TranscriptionService.normalize_language(language)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+    lang_clean = (language or "th").strip().lower()
+    task_clean = (task or "transcribe").strip().lower()
+    if lang_clean in ("translate_en", "translate") or task_clean == "translate":
+        task_mode = "translate"
+        lang = "auto"
+    else:
+        task_mode = "transcribe"
+        try:
+            lang = TranscriptionService.normalize_language(language)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    if num_speakers is not None and num_speakers <= 0:
+        raise HTTPException(status_code=422, detail="num_speakers must be greater than 0.")
+    if min_speakers is not None and min_speakers <= 0:
+        raise HTTPException(status_code=422, detail="min_speakers must be greater than 0.")
+    if max_speakers is not None and max_speakers <= 0:
+        raise HTTPException(status_code=422, detail="max_speakers must be greater than 0.")
+    if min_speakers is not None and max_speakers is not None and min_speakers > max_speakers:
+        raise HTTPException(status_code=422, detail="min_speakers cannot exceed max_speakers.")
+
+    if num_speakers or min_speakers or max_speakers:
+        enable_diarization = True
 
     if target_chunk_sec is None or max_chunk_sec is None:
         if lang == "th":
@@ -316,6 +398,10 @@ async def create_transcription_job(
         target_chunk_sec=target_chunk_sec,
         max_chunk_sec=max_chunk_sec,
         enable_diarization=enable_diarization,
+        num_speakers=num_speakers,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
+        task=task_mode,
     )
 
     return JobCreateResponse(
@@ -323,7 +409,11 @@ async def create_transcription_job(
         id=job.id,
         filename=file.filename,
         language=lang,
+        task=task_mode,
         enable_diarization=enable_diarization,
+        num_speakers=num_speakers,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
         message="Job created and enqueued for long-form video transcription",
     )
 

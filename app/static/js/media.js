@@ -37,6 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const cancelJobBtn = document.getElementById('cancelJobBtn');
   const btnNewJob = document.getElementById('btnNewJob');
+  const enableDiarizationCheck = document.getElementById('enableDiarization');
+  const diarizationOptions = document.getElementById('diarizationOptions');
+
+  if (enableDiarizationCheck && diarizationOptions) {
+    enableDiarizationCheck.addEventListener('change', () => {
+      diarizationOptions.style.display = enableDiarizationCheck.checked ? 'flex' : 'none';
+    });
+  }
 
   let selectedFile = null;
   let activeJobId = null;
@@ -310,6 +318,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const enableDiarizationCheck = document.getElementById('enableDiarization');
     if (enableDiarizationCheck && enableDiarizationCheck.checked) {
       formData.append('enable_diarization', 'true');
+      const numSpeakersInput = document.getElementById('numSpeakersInput');
+      if (numSpeakersInput && numSpeakersInput.value && parseInt(numSpeakersInput.value, 10) > 0) {
+        formData.append('num_speakers', numSpeakersInput.value);
+      }
+      const minSpeakersInput = document.getElementById('minSpeakersInput');
+      if (minSpeakersInput && minSpeakersInput.value && parseInt(minSpeakersInput.value, 10) > 0) {
+        formData.append('min_speakers', minSpeakersInput.value);
+      }
+      const maxSpeakersInput = document.getElementById('maxSpeakersInput');
+      if (maxSpeakersInput && maxSpeakersInput.value && parseInt(maxSpeakersInput.value, 10) > 0) {
+        formData.append('max_speakers', maxSpeakersInput.value);
+      }
     }
 
     const xhr = new XMLHttpRequest();

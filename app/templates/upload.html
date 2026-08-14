@@ -52,7 +52,15 @@
               <option value="th">ไทย (Typhoon)</option>
               <option value="en">อังกฤษ (Whisper)</option>
               <option value="auto">อัตโนมัติ / ผสม (Whisper)</option>
+              <option value="translate_en">🌐 แปลเป็นอังกฤษ (Translate to English - Whisper)</option>
             </select>
+          </label>
+        </div>
+
+        <div id="diarizationOptions" style="display: none; margin: -0.5rem 0 1rem 0; padding: 0.75rem 1rem; background: rgba(168,85,247,0.08); border-radius: 8px; border: 1px solid rgba(168,85,247,0.2);">
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
+            <span>👥 จำนวนผู้พูดที่ทราบแน่นอน (เว้นว่างได้):</span>
+            <input type="number" id="numSpeakersInput" min="1" max="20" placeholder="เช่น 2" style="width: 80px; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.3); color: #fff; border: 1px solid var(--card-border);">
           </label>
         </div>
 
@@ -95,6 +103,6 @@
     </div>
   </main>
 
-  <script src="/static/js/upload.js?v=6"></script>
+  <script src="/static/js/upload.js?v=8"></script>
 </body>
 </html>

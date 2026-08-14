@@ -21,6 +21,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const playerStatus = document.getElementById('playerStatus');
   const cancelBtn = document.getElementById('cancelBtn');
   const newTranscribeBtn = document.getElementById('newTranscribeBtn');
+  const diarizationCheck = document.getElementById('diarizationCheck');
+  const diarizationOptions = document.getElementById('diarizationOptions');
+
+  if (diarizationCheck && diarizationOptions) {
+    diarizationCheck.addEventListener('change', () => {
+      diarizationOptions.style.display = diarizationCheck.checked ? 'block' : 'none';
+    });
+  }
 
   let selectedFile = null;
   let activeController = null;
@@ -162,15 +170,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const formData = new FormData();
     formData.append('file', selectedFile);
     const languageSelect = document.getElementById('languageSelect');
-    if (languageSelect) {
-      formData.append('language', languageSelect.value);
+    const selectedLang = languageSelect ? languageSelect.value : 'th';
+    if (selectedLang === 'translate_en') {
+      formData.append('language', 'auto');
+      formData.append('task', 'translate');
+      resultText.textContent = 'กำลังแปลเสียงพูดเป็นภาษาอังกฤษ...';
+    } else {
+      formData.append('language', selectedLang);
+      formData.append('task', 'transcribe');
     }
     if (timestampsCheck.checked) {
       formData.append('with_timestamps', 'true');
     }
-    const diarizationCheck = document.getElementById('diarizationCheck');
     if (diarizationCheck && diarizationCheck.checked) {
       formData.append('enable_diarization', 'true');
+      const numSpeakersInput = document.getElementById('numSpeakersInput');
+      if (numSpeakersInput && numSpeakersInput.value) {
+        formData.append('num_speakers', numSpeakersInput.value);
+      }
     }
 
     const headers = {};

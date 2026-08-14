@@ -103,7 +103,11 @@ class JobCreateResponse(BaseModel):
     id: str
     filename: str
     language: str = "th"
+    task: str = "transcribe"
     enable_diarization: bool = False
+    num_speakers: Optional[int] = None
+    min_speakers: Optional[int] = None
+    max_speakers: Optional[int] = None
     message: str = "Job created and enqueued for background processing"
 
 class JobStatusResponse(BaseModel):
@@ -112,6 +116,7 @@ class JobStatusResponse(BaseModel):
     filename: str
     file_size_bytes: int = 0
     language: str = "th"
+    task: str = "transcribe"
     model: Optional[str] = None
     status: JobStatus
     stage: str
@@ -124,6 +129,9 @@ class JobStatusResponse(BaseModel):
     target_chunk_sec: float = 30.0
     max_chunk_sec: float = 60.0
     enable_diarization: bool = False
+    num_speakers: Optional[int] = None
+    min_speakers: Optional[int] = None
+    max_speakers: Optional[int] = None
     result: Optional[TranscriptionResult] = None
     error: Optional[JobError] = None
     created_at: str
@@ -179,3 +187,72 @@ class CompressJobStatusResponse(BaseModel):
     audio_exists: bool = False
     created_at: str
     updated_at: str
+
+
+# =========================================================================
+# OpenAI-Compatible Audio API Models
+# =========================================================================
+
+class ResponseFormat(str, Enum):
+    """Supported response formats for OpenAI transcription / translation."""
+    JSON = "json"
+    TEXT = "text"
+    SRT = "srt"
+    VTT = "vtt"
+    VERBOSE_JSON = "verbose_json"
+
+
+class TimestampGranularity(str, Enum):
+    """Timestamp granularity options for verbose_json."""
+    WORD = "word"
+    SEGMENT = "segment"
+
+
+class OpenAITranscriptionWord(BaseModel):
+    """Word-level timestamp object for verbose_json."""
+    word: str
+    start: float
+    end: float
+
+
+class OpenAITranscriptionSegment(BaseModel):
+    """Segment-level object for verbose_json."""
+    id: int
+    seek: int
+    start: float
+    end: float
+    text: str
+    tokens: List[int] = Field(default_factory=list)
+    temperature: float = 0.0
+    avg_logprob: float = 0.0
+    compression_ratio: float = 0.0
+    no_speech_prob: float = 0.0
+
+
+class OpenAITranscriptionJsonResponse(BaseModel):
+    """Simple JSON response format (OpenAI default)."""
+    text: str
+
+
+class OpenAITranscriptionVerboseJsonResponse(BaseModel):
+    """Verbose JSON response with segments and optional words."""
+    task: Literal["transcribe", "translate"]
+    language: str
+    duration: float
+    text: str
+    segments: List[OpenAITranscriptionSegment] = Field(default_factory=list)
+    words: Optional[List[OpenAITranscriptionWord]] = None
+
+
+class OpenAIErrorDetail(BaseModel):
+    """Error detail matching OpenAI format."""
+    message: str
+    type: str = "invalid_request_error"
+    param: Optional[str] = None
+    code: Optional[str] = None
+
+
+class OpenAIErrorResponse(BaseModel):
+    """Error response matching OpenAI format."""
+    error: OpenAIErrorDetail
+

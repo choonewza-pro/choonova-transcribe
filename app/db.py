@@ -72,6 +72,10 @@ def init_db() -> None:
                 result_json TEXT,
                 error_json TEXT,
                 enable_diarization INTEGER DEFAULT 0,
+                num_speakers INTEGER DEFAULT NULL,
+                min_speakers INTEGER DEFAULT NULL,
+                max_speakers INTEGER DEFAULT NULL,
+                task TEXT DEFAULT 'transcribe',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 started_at TIMESTAMP,
@@ -85,6 +89,14 @@ def init_db() -> None:
         ]
         if "enable_diarization" not in jobs_columns:
             cursor.execute("ALTER TABLE jobs ADD COLUMN enable_diarization INTEGER DEFAULT 0")
+        if "num_speakers" not in jobs_columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN num_speakers INTEGER DEFAULT NULL")
+        if "min_speakers" not in jobs_columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN min_speakers INTEGER DEFAULT NULL")
+        if "max_speakers" not in jobs_columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN max_speakers INTEGER DEFAULT NULL")
+        if "task" not in jobs_columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN task TEXT DEFAULT 'transcribe'")
 
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
@@ -185,6 +197,10 @@ def create_job(
     target_chunk_sec: Optional[float] = None,
     max_chunk_sec: Optional[float] = None,
     enable_diarization: bool = False,
+    num_speakers: Optional[int] = None,
+    min_speakers: Optional[int] = None,
+    max_speakers: Optional[int] = None,
+    task: str = "transcribe",
 ) -> Dict[str, Any]:
     """
     Insert a new job record in SQLite with status='queued'.
@@ -204,8 +220,9 @@ def create_job(
             """
             INSERT INTO jobs (
                 id, type, filename, file_size_bytes, language, status, progress,
-                stage, target_chunk_sec, max_chunk_sec, enable_diarization, created_at, updated_at
-            ) VALUES (?, 'transcription', ?, ?, ?, 'queued', 0.0, 'queued', ?, ?, ?, ?, ?)
+                stage, target_chunk_sec, max_chunk_sec, enable_diarization,
+                num_speakers, min_speakers, max_speakers, task, created_at, updated_at
+            ) VALUES (?, 'transcription', ?, ?, ?, 'queued', 0.0, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 id,
@@ -215,6 +232,10 @@ def create_job(
                 target_chunk_sec,
                 max_chunk_sec,
                 1 if enable_diarization else 0,
+                num_speakers,
+                min_speakers,
+                max_speakers,
+                task,
                 now,
                 now,
             ),

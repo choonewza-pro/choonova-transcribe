@@ -37,6 +37,10 @@ class TranscriptionService:
         max_chunk_sec: Optional[float] = None,
         job_id: Optional[str] = None,
         enable_diarization: bool = False,
+        num_speakers: Optional[int] = None,
+        min_speakers: Optional[int] = None,
+        max_speakers: Optional[int] = None,
+        task: str = "transcribe",
     ) -> TranscriptionJob:
         """Create a new transcription job record (status=queued)."""
         final_job_id = job_id or str(uuid.uuid4())
@@ -50,6 +54,10 @@ class TranscriptionService:
             target_chunk_sec=target_chunk_sec if target_chunk_sec is not None else 30.0,
             max_chunk_sec=max_chunk_sec if max_chunk_sec is not None else 60.0,
             enable_diarization=enable_diarization,
+            num_speakers=num_speakers,
+            min_speakers=min_speakers,
+            max_speakers=max_speakers,
+            task=task,
         )
         return self.repo.create_job(job)
 

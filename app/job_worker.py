@@ -65,6 +65,7 @@ async def transcribe_chunk_with_retry(
     with_timestamps: bool,
     chunk_idx: int,
     language: str = "th",
+    task: str = "transcribe",
 ) -> Dict[str, Any]:
     """
     Run the routed engine's transcribe_file for a single chunk, retrying on
@@ -84,6 +85,7 @@ async def transcribe_chunk_with_retry(
                 language,
                 with_timestamps,
                 True,
+                task,
             )
         except Exception as e:
             if not is_cuda_error(e):
@@ -102,6 +104,7 @@ async def transcribe_chunk_with_retry(
                     language,
                     with_timestamps,
                     True,
+                    task,
                 )
             if is_allocator_corruption(e):
                 # Allocator corruption but device reset disabled: keep reloading
@@ -118,6 +121,7 @@ async def transcribe_chunk_with_retry(
                     language,
                     with_timestamps,
                     True,
+                    task,
                 )
             if attempt == CUDA_RETRY_ATTEMPTS:
                 logger.warning(
@@ -132,6 +136,7 @@ async def transcribe_chunk_with_retry(
                     language,
                     with_timestamps,
                     True,
+                    task,
                 )
             backoff = CUDA_RETRY_BACKOFF_SEC * attempt
             logger.warning(
@@ -270,6 +275,11 @@ async def process_transcription_job(
         if job and job.get("enable_diarization"):
             enable_diarization = True
 
+        task = job.get("task", "transcribe") if job else "transcribe"
+        num_speakers = job.get("num_speakers") if job else None
+        min_speakers = job.get("min_speakers") if job else None
+        max_speakers = job.get("max_speakers") if job else None
+
         extracted_wav = os.path.join(job_dir, "extracted_audio.wav")
 
         loop = asyncio.get_running_loop()
@@ -287,7 +297,10 @@ async def process_transcription_job(
         # -----------------------------------------------------------------
         if enable_diarization and language != "th":
             async with gpu_lock:
-                logger.info(f"Acquired GPU Lock for job {job_id} (WhisperX Diarization Pipeline)")
+                logger.info(
+                    f"Acquired GPU Lock for job {job_id} (WhisperX Diarization Pipeline, "
+                    f"num_speakers={num_speakers}, min={min_speakers}, max={max_speakers})"
+                )
                 update_job_status(
                     id=job_id,
                     status="processing",
@@ -297,7 +310,14 @@ async def process_transcription_job(
                 from app.whisperx_engine import transcribe_and_diarize_whisperx
 
                 wx_res = await loop.run_in_executor(
-                    None, transcribe_and_diarize_whisperx, extracted_wav, language
+                    None,
+                    transcribe_and_diarize_whisperx,
+                    extracted_wav,
+                    language,
+                    num_speakers,
+                    min_speakers,
+                    max_speakers,
+                    task,
                 )
                 result_obj = {
                     "text": wx_res.get("text", ""),
@@ -356,7 +376,7 @@ async def process_transcription_job(
                     progress=25.0,
                     stage="transcribing",
                 )
-                if language == "th":
+                if language == "th" and task != "translate":
                     await loop.run_in_executor(None, engine.load_model)
                 else:
                     await loop.run_in_executor(None, whisper_engine.load_model)
@@ -381,7 +401,7 @@ async def process_transcription_job(
                     )
 
                     res = await transcribe_chunk_with_retry(
-                        loop, chunk_path, True, idx, language
+                        loop, chunk_path, True, idx, language, task=task
                     )
 
                     chunk_text = res.get("text", "").strip()
@@ -410,7 +430,10 @@ async def process_transcription_job(
 
                 # Path 3: Thai + Diarization (PyAnnote 3.1)
                 if enable_diarization and language == "th":
-                    logger.info(f"Running Path 3: PyAnnote Diarization for Thai job {job_id}")
+                    logger.info(
+                        f"Running Path 3: PyAnnote Diarization for Thai job {job_id} "
+                        f"(num_speakers={num_speakers}, min={min_speakers}, max={max_speakers})"
+                    )
                     update_job_status(
                         id=job_id,
                         status="processing",
@@ -426,8 +449,16 @@ async def process_transcription_job(
                         merge_speaker_overlap,
                         group_speaker_segments,
                     )
+                    from functools import partial
 
-                    turns = await loop.run_in_executor(None, diarize_audio, extracted_wav)
+                    diarize_fn = partial(
+                        diarize_audio,
+                        extracted_wav,
+                        num_speakers=num_speakers,
+                        min_speakers=min_speakers,
+                        max_speakers=max_speakers,
+                    )
+                    turns = await loop.run_in_executor(None, diarize_fn)
                     merged_timestamps = merge_speaker_overlap(global_timestamps, turns)
                     grouped_segments = group_speaker_segments(merged_timestamps)
 

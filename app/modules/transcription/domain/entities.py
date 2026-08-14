@@ -34,6 +34,10 @@ class TranscriptionJob:
     target_chunk_sec: float = 30.0
     max_chunk_sec: float = 60.0
     enable_diarization: bool = False
+    num_speakers: Optional[int] = None
+    min_speakers: Optional[int] = None
+    max_speakers: Optional[int] = None
+    task: str = "transcribe"
     result: Optional[Dict[str, Any]] = None
     error: Optional[Dict[str, Any]] = None
     created_at: Optional[str] = None

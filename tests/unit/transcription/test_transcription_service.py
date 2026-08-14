@@ -159,6 +159,62 @@ class TestTranscriptionService(unittest.TestCase):
         self.assertIsNotNone(retrieved)
         self.assertTrue(retrieved.enable_diarization)
 
+    def test_create_job_with_speaker_counts(self):
+        repo = FakeJobRepository()
+        service = TranscriptionService(repo)
+        job = service.create_job(
+            filename="podcast.mp4",
+            file_size_bytes=10000000,
+            language="en",
+            enable_diarization=True,
+            num_speakers=2,
+            min_speakers=2,
+            max_speakers=2,
+        )
+        self.assertTrue(job.enable_diarization)
+        self.assertEqual(job.num_speakers, 2)
+        self.assertEqual(job.min_speakers, 2)
+        self.assertEqual(job.max_speakers, 2)
+        retrieved = service.get_job_or_none(job.id)
+        self.assertIsNotNone(retrieved)
+        self.assertEqual(retrieved.num_speakers, 2)
+
+    def test_create_job_with_task(self):
+        repo = FakeJobRepository()
+        service = TranscriptionService(repo)
+        job = service.create_job(
+            filename="lecture.mp4",
+            file_size_bytes=5000000,
+            language="auto",
+            task="translate",
+        )
+        self.assertEqual(job.task, "translate")
+        retrieved = service.get_job_or_none(job.id)
+        self.assertIsNotNone(retrieved)
+        self.assertEqual(retrieved.task, "translate")
+
+    def test_job_to_dict_includes_speakers_and_task(self):
+        from app.api.v1.transcription_router import _job_to_dict
+        repo = FakeJobRepository()
+        service = TranscriptionService(repo)
+        job = service.create_job(
+            filename="meeting.mp4",
+            file_size_bytes=2000000,
+            language="th",
+            enable_diarization=True,
+            num_speakers=3,
+            min_speakers=2,
+            max_speakers=4,
+            task="transcribe",
+        )
+        d = _job_to_dict(job)
+        self.assertEqual(d["num_speakers"], 3)
+        self.assertEqual(d["min_speakers"], 2)
+        self.assertEqual(d["max_speakers"], 4)
+        self.assertEqual(d["task"], "transcribe")
+        self.assertTrue(d["enable_diarization"])
+
 
 if __name__ == "__main__":
     unittest.main()
+

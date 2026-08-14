@@ -14,13 +14,14 @@ ChooNova Transcribe is a high-performance audio transcription and media processi
 
 ## Key Features
 
+- **OpenAI-Compatible Audio API**: Full drop-in replacement for OpenAI Whisper API (`/v1/audio/transcriptions`, `/v1/audio/translations`, `/v1/models`). Seamlessly integrates with official OpenAI Python/Node SDKs, Open WebUI, Obsidian, and third-party clients. Supports output formats: `json`, `text`, `srt`, `vtt`, and `verbose_json` (with `timestamp_granularities[]`).
 - **Real-time Transcription**: High-performance WebSocket endpoint (`/v1/realtime/stream`) for zero-disk-write live microphone transcription with in-memory FFmpeg pipes, 600ms streaming updates, and sliding window preview (Thai only).
-- **Short Audio Transcription**: REST API for quick, synchronous processing of short multipart audio uploads.
+- **Short Audio Transcription & Translation**: REST API for quick, synchronous processing of short multipart audio uploads, including speech-to-English translation (`task="translate"`).
 - **Long-form Media Pipeline**: Asynchronous processing for large video/audio files (up to 1GB+) with silence-aware chunking and automatic cleanup.
-- **Auto Language Detection & Secondary ASR**: Uses **Faster Whisper (`large-v3-turbo`)** (~809M params) for English and code-switched (Thai-English) content, delivering 4-6x faster decoding speed than standard Large-v3 with low VRAM footprint (~3.5GB).
-- **Speaker Diarization**: Multi-speaker identification and labeling (`[SPEAKER_00]`, `[SPEAKER_01]`, ...) powered by PyAnnote 3.1 & WhisperX. Uses a 4 Pathways Matrix (Typhoon ASR + PyAnnote 3.1 for Thai, WhisperX for English/Auto) with automatic VRAM swapping and graceful fallback.
+- **Auto Language Detection & Secondary ASR**: Uses **Faster Whisper (`large-v3-turbo`)** (~809M params) for English, Thai-English mixed content, and speech-to-English translation, delivering 4-6x faster decoding speed than standard Large-v3 with low VRAM footprint (~3.5GB).
+- **Speaker Diarization with Speaker Count Controls**: Multi-speaker identification and labeling (`[SPEAKER_00]`, `[SPEAKER_01]`, ...) powered by PyAnnote 3.1 & WhisperX. Supports explicit speaker count controls (`num_speakers`, `min_speakers`, `max_speakers`) to lock clustering and maximize accuracy. Uses a 4 Pathways Matrix with automatic VRAM swapping and graceful fallback.
 - **Video Compression**: Asynchronous FFmpeg-based video compressor with queue management, supporting both CPU (libx264) and GPU (NVENC) encoding.
-- **Job History & Management**: Built-in SQLite tracking for transcription and compression jobs with a web-based dashboard.
+- **Job History & Management**: Built-in SQLite tracking for transcription and compression jobs with a web-based dashboard and export capabilities (.txt, .srt, .json).
 - **Dynamic VRAM Management**: Configurable model residency (Always-on vs. Idle timeout) to optimize GPU memory usage.
 
 ## Architecture
@@ -158,7 +159,7 @@ _(Note: Environment variables for VRAM mode only seed the database on first boot
 
 ## Authentication / Security
 
-- **API Endpoints**: All `/v1` REST endpoints require a static API key passed via the `x-api-key` HTTP header. The system uses constant-time HMAC comparison to verify keys.
+- **API Endpoints**: All `/v1` REST endpoints require an API key passed via either `Authorization: Bearer <GATEWAY_API_KEY>` (standard for OpenAI SDKs & Third-party clients) or `x-api-key: <GATEWAY_API_KEY>` (REST Gateway header). The system uses constant-time HMAC comparison to verify keys.
 - **History Dashboards**: The transcription history (`/media/transcribe/jobs/history`) and compression history (`/media/compress/jobs/history`) pages are secured by API key checks. You can log in via query parameter (`?api_key=YOUR_KEY`), browser cookie, or via the manual login form on the Access Denied page. The session is seamlessly synchronized between browser cookies and `localStorage`.
 - **Public Share Bypasses**: Bypasses can be enabled via `ALLOW_ACCESS_TRANSCRIBE_HISTORY=true` and `ALLOW_ACCESS_COMPRESS_HISTORY=true` to publicly share history dashboards. When active, a prominent security warning banner is displayed on the homepage and respective history dashboards to alert operators of the open access.
 - **Web UI**: The landing page, short transcription forms, and microphone streaming page remain unauthenticated for ease of local access.
@@ -198,6 +199,10 @@ You can toggle this mode at runtime without restarting the server via the web da
 
 | Method | Path                                             | Auth | Description                                        |
 | ------ | ------------------------------------------------ | ---- | -------------------------------------------------- |
+| POST   | `/v1/audio/transcriptions`                       | ✅   | **OpenAI Drop-in**: Transcribe audio (JSON/SRT/VTT/verbose_json). |
+| POST   | `/v1/audio/translations`                         | ✅   | **OpenAI Drop-in**: Translate audio to English text. |
+| GET    | `/v1/models`                                     | ❌   | **OpenAI Drop-in**: List available models (`whisper-1`, `typhoon-asr`). |
+| GET    | `/v1/models/{model_id}`                          | ❌   | **OpenAI Drop-in**: Retrieve model metadata.       |
 | POST   | `/v1/audio/transcribe`                           | ✅   | Synchronously transcribe short audio (multipart).  |
 | POST   | `/v1/media/transcribe/jobs`                      | ✅   | Enqueue long-form transcription job (returns 202). |
 | GET    | `/v1/media/transcribe/jobs/{id}`                 | ✅   | Check status and retrieve transcription results.   |
@@ -206,30 +211,70 @@ You can toggle this mode at runtime without restarting the server via the web da
 | GET    | `/v1/media/compress/jobs/{id}/download`          | ✅   | Download the compressed MP4 output.                |
 | PUT    | `/v1/settings/model`                             | ✅   | Change model VRAM mode at runtime.                 |
 
-### cURL Examples
+### Usage Examples
 
-**Short Audio Transcription (Thai - default via Typhoon ASR)**
+#### 1. Official OpenAI Python SDK (Drop-in Replacement)
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8830/v1",
+    api_key="change-me-in-production"
+)
+
+# Transcribe audio to verbose JSON with word timestamps
+with open("meeting.mp3", "rb") as audio_file:
+    transcript = client.audio.transcriptions.create(
+        model="whisper-1",
+        file=audio_file,
+        response_format="verbose_json",
+        timestamp_granularities=["word", "segment"]
+    )
+print(transcript.text)
+
+# Translate audio to English
+with open("thai_speech.mp3", "rb") as audio_file:
+    translation = client.audio.translations.create(
+        model="whisper-1",
+        file=audio_file
+    )
+print(translation.text)
+```
+
+#### 2. cURL Examples
+
+**OpenAI-Compatible Transcription (SRT Subtitles)**
+
+```bash
+curl -X POST http://localhost:8830/v1/audio/transcriptions \
+  -H "Authorization: Bearer change-me-in-production" \
+  -F "file=@sample.mp3" \
+  -F "model=whisper-1" \
+  -F "response_format=srt"
+```
+
+**Short Audio Transcription (Thai - Typhoon ASR)**
 
 ```bash
 curl -X POST http://localhost:8830/v1/audio/transcribe \
-  -H "x-api-key: change-me-in-production" \
+  -H "Authorization: Bearer change-me-in-production" \
   -F "file=@audio.mp3" -F "language=th" -F "with_timestamps=true"
 ```
 
-**Long-form Video Transcription with Speaker Diarization**
+**Long-form Video Transcription with Exact Speaker Count**
 
 ```bash
 curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
-  -H "x-api-key: change-me-in-production" \
-  -F "file=@meeting.mp4" -F "language=th" -F "enable_diarization=true"
+  -H "Authorization: Bearer change-me-in-production" \
+  -F "file=@meeting.mp4" -F "language=th" -F "enable_diarization=true" -F "num_speakers=2"
 ```
-
 
 **Video Compression (Resize & Trim)**
 
 ```bash
 curl -X POST http://localhost:8830/v1/media/compress/jobs \
-  -H "x-api-key: change-me-in-production" \
+  -H "Authorization: Bearer change-me-in-production" \
   -F "file=@video.mp4" -F "target_width=1280" -F "bitrate_kbps=2000" \
   -F "start=00:01:00" -F "end=00:02:00"
 ```
