@@ -20,3 +20,4 @@ faster-whisper==1.1.0
 pyannote.audio==3.3.2
 whisperx==3.3.2
 filetype==1.2.0
+pythainlp==5.0.4

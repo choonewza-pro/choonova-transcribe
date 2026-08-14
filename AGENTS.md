@@ -69,6 +69,15 @@ app/
 
 Chunk durations differ: Typhoon target=45s/max=90s, Whisper target=25s/max=30s.
 
+## Speaker Diarization (Thai Path 3)
+
+- **PyAnnote is the source of truth for who speaks when** — it runs on the full 16kHz WAV and labels turns correctly. The ASR does **NOT** provide real word timestamps: NeMo Typhoon returns text only, so `app/asr_engine.py` **synthesizes proportional timestamps** by evenly spacing tokens across each chunk.
+- **Thai tokenization matters for merge quality.** Thai text has no spaces, so `str.split()` would produce one giant token per chunk (2–49s), collapsing speaker merges. `app/asr_engine.py:_split_into_words()` uses **PyThaiNLP `newmm`** (falls back to a 2-char run splitter if unavailable) so each chunk yields fine-grained (0.2–0.5s) pseudo-words.
+- Merge pipeline in `app/pyannote_engine.py`: `merge_speaker_overlap` (max-overlap + nearest-turn fallback, `gap_tolerance_sec=0.3`) → `smooth_speaker_labels` (absorbs `UNKNOWN` + snaps <1.5s blips sandwiched by the same speaker) → `group_speaker_segments`. Called from both `transcription_router.py` (`/v1/audio/transcribe`) and `job_worker.py` Path 3.
+- `PyAnnoteDiarizer.diarize()` calls `relabel_speakers_chronological()` so `SPEAKER_00` is **always the first speaker in time** (PyAnnote cluster IDs are arbitrary).
+- With diarization enabled, `/v1/audio/transcribe` returns `text` grouped as `[SPEAKER_00]: ...` lines (was plain text).
+- `pythainlp==5.0.4` added to `requirements.txt` / `requirements-cpu.txt`.
+
 ## Workers
 
 **Both transcription and compression jobs run as isolated subprocesses** to prevent VRAM leak in the main process:

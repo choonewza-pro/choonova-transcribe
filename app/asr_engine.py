@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import tempfile
 import logging
@@ -16,6 +17,50 @@ from app.config import (
 
 logger = logging.getLogger("typhoon-asr-engine")
 logging.basicConfig(level=logging.INFO)
+
+# Thai grapheme ranges (Unicode): consonants, vowels, tone marks, and digits.
+_THAI_CHARS = r"\u0E00-\u0E7F"
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _split_into_words(text: str) -> list:
+    """
+    Tokenize transcription text into words/units suitable for building
+    proportional timestamps.
+
+    Thai text rarely contains spaces, so ``str.split()`` collapses a whole
+    sentence into one giant token (which makes speaker-diariazation merges
+    useless). Prefer PyThaiNLP when installed; otherwise fall back to a
+    whitespace + Thai-character-run splitter so every chunk yields several
+    small units.
+    """
+    if not text:
+        return []
+
+    try:
+        from pythainlp.tokenize import word_tokenize
+
+        tokens = word_tokenize(text, engine="newmm")
+        tokens = [t for t in tokens if t.strip()]
+        if tokens:
+            return tokens
+    except Exception:
+        pass
+
+    # Fallback: split on whitespace first, then further split any Thai-only
+    # run into ~2-char pseudo-words (preserves text when rejoined with '').
+    words: list = []
+    for token in _WHITESPACE_RE.split(text):
+        if not token:
+            continue
+        if any(ord(ch) >= 0x0E00 and ord(ch) <= 0x0E7F for ch in token):
+            for i in range(0, len(token), 2):
+                piece = token[i : i + 2]
+                if piece:
+                    words.append(piece)
+        else:
+            words.append(token)
+    return words
 
 
 class TyphoonASREngine:
@@ -194,6 +239,12 @@ class TyphoonASREngine:
         if y is None or len(y) == 0:
             raise ValueError("Failed to load audio file or file is empty.")
 
+        # Downmix multichannel (stereo) audio to mono. librosa.resample treats
+        # the last axis as time, so a 2D (N, channels) array is pathologically
+        # slow and keeps the wrong frame count (e.g. 48kHz stereo -> 3x duration).
+        if y.ndim > 1:
+            y = y.mean(axis=1)
+
         duration = len(y) / float(sr)
 
         # Fast path: If already 16kHz mono WAV, bypass duplicate temp file write
@@ -322,7 +373,7 @@ class TyphoonASREngine:
 
                 timestamps = []
                 if with_timestamps and transcription and audio_duration > 0:
-                    words = transcription.split()
+                    words = _split_into_words(transcription)
                     if words:
                         avg_dur = audio_duration / len(words)
                         for i, word in enumerate(words):

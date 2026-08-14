@@ -59,7 +59,7 @@ def clear_cuda_cache() -> None:
 def merge_speaker_overlap(
     segments: List[Dict[str, Any]],
     diarization_turns: List[Dict[str, Any]],
-    gap_tolerance_sec: float = 0.5,
+    gap_tolerance_sec: float = 0.3,
 ) -> List[Dict[str, Any]]:
     """
     Merge ASR word/phrase segments with PyAnnote diarization turns using Maximum Overlap.
@@ -113,12 +113,95 @@ def merge_speaker_overlap(
     return segments
 
 
+def relabel_speakers_chronological(
+    turns: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Re-label speaker turns so that SPEAKER_00 is the first speaker to appear
+    in the audio, SPEAKER_01 the second, and so on.
+
+    PyAnnote assigns arbitrary cluster IDs (SPEAKER_00..N) that are NOT tied
+    to the order speakers appear, so the same real person can be SPEAKER_01
+    on one file and SPEAKER_00 on another. Renaming by first-appearance makes
+    the output stable and predictable.
+    """
+    mapping: Dict[str, str] = {}
+    ordered = sorted(turns, key=lambda t: float(t["start"]))
+    for turn in ordered:
+        old = turn["speaker"]
+        if old not in mapping:
+            mapping[old] = f"SPEAKER_{len(mapping):02d}"
+        turn["speaker"] = mapping[old]
+    return turns
+
+
+def smooth_speaker_labels(
+    segments: List[Dict[str, Any]],
+    min_turn_sec: float = 1.5,
+) -> List[Dict[str, Any]]:
+    """
+    Post-process merged word segments to reduce speaker flapping:
+
+    - Words that could not be matched to any diarization turn ("UNKNOWN")
+      are absorbed into the nearest known speaker turn.
+    - Very short speaker blips (shorter than ``min_turn_sec``) sandwiched
+      between two turns of the *same* speaker are snapped to that speaker.
+
+    This only ever merges ambiguous/short runs — legitimate alternating
+    A-B-A-B back-and-forth (different neighbors) is preserved.
+    """
+    if not segments:
+        return segments
+
+    runs = []
+    for seg in segments:
+        spk = str(seg.get("speaker") or "UNKNOWN")
+        if runs and runs[-1]["speaker"] == spk:
+            runs[-1]["end"] = float(seg.get("end", 0.0))
+            runs[-1]["segs"].append(seg)
+        else:
+            runs.append(
+                {
+                    "speaker": spk,
+                    "start": float(seg.get("start", 0.0)),
+                    "end": float(seg.get("end", 0.0)),
+                    "segs": [seg],
+                }
+            )
+
+    for i, r in enumerate(runs):
+        dur = r["end"] - r["start"]
+        prev = runs[i - 1] if i > 0 else None
+        nxt = runs[i + 1] if i < len(runs) - 1 else None
+
+        if r["speaker"] == "UNKNOWN":
+            candidates = [c for c in (prev, nxt) if c and c["speaker"] != "UNKNOWN"]
+            if not candidates:
+                continue
+            target = min(
+                candidates,
+                key=lambda c: min(
+                    abs(r["start"] - c["end"]), abs(c["start"] - r["end"])
+                ),
+            )
+            for seg in r["segs"]:
+                seg["speaker"] = target["speaker"]
+        elif dur < min_turn_sec and prev and nxt and prev["speaker"] == nxt["speaker"]:
+            if prev["speaker"] != r["speaker"]:
+                for seg in r["segs"]:
+                    seg["speaker"] = prev["speaker"]
+
+    return segments
+
+
 def group_speaker_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Group continuous segments belonging to the same speaker into coherent speaker turn segments.
     """
     if not segments:
         return []
+
+    smooth_speaker_labels(segments)
 
     grouped = []
     current_speaker = None
@@ -447,6 +530,8 @@ class PyAnnoteDiarizer:
                     "speaker": str(speaker),
                 }
             )
+
+        relabel_speakers_chronological(turns)
 
         elapsed = time.time() - start_t
         logger.info(f"PyAnnote diarization completed in {elapsed:.2f}s (Extracted {len(turns)} turns)")

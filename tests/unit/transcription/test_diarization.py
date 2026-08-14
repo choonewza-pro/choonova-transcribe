@@ -2,11 +2,18 @@
 Unit tests for pure Diarization helper functions:
 - merge_speaker_overlap
 - group_speaker_segments
+- relabel_speakers_chronological
 - build_srt_subtitles
 """
 
 import unittest
-from app.pyannote_engine import merge_speaker_overlap, group_speaker_segments, build_srt_subtitles
+from app.pyannote_engine import (
+    merge_speaker_overlap,
+    group_speaker_segments,
+    smooth_speaker_labels,
+    relabel_speakers_chronological,
+    build_srt_subtitles,
+)
 
 
 class TestDiarizationHelpers(unittest.TestCase):
@@ -60,6 +67,55 @@ class TestDiarizationHelpers(unittest.TestCase):
         self.assertEqual(grouped[1]["text"], "ยินดี ที่ได้รู้จัก")
         self.assertEqual(grouped[1]["start"], 2.2)
         self.assertEqual(grouped[1]["end"], 3.8)
+
+    def test_smooth_speaker_labels(self):
+        # Short SPEAKER_01 blip sandwiched between SPEAKER_00 turns gets snapped.
+        segments = [
+            {"start": 0.0, "end": 1.0, "speaker": "SPEAKER_00"},
+            {"start": 1.0, "end": 1.2, "speaker": "SPEAKER_01"},   # 0.2s blip
+            {"start": 1.2, "end": 2.0, "speaker": "SPEAKER_00"},
+        ]
+        result = smooth_speaker_labels([dict(s) for s in segments])
+        self.assertEqual(result[1]["speaker"], "SPEAKER_00")
+
+    def test_smooth_speaker_labels_absorbs_unknown(self):
+        segments = [
+            {"start": 0.0, "end": 1.0, "speaker": "SPEAKER_00"},
+            {"start": 1.0, "end": 2.0, "speaker": "UNKNOWN"},
+            {"start": 2.0, "end": 3.0, "speaker": "SPEAKER_01"},
+        ]
+        result = smooth_speaker_labels([dict(s) for s in segments])
+        # UNKNOWN absorbed into its nearest known neighbor (SPEAKER_00)
+        self.assertEqual(result[1]["speaker"], "SPEAKER_00")
+
+    def test_smooth_speaker_labels_keeps_alternation(self):
+        # A-B-A-B alternation must NOT be flattened away.
+        segments = [
+            {"start": 0.0, "end": 2.0, "speaker": "SPEAKER_00"},
+            {"start": 2.0, "end": 4.0, "speaker": "SPEAKER_01"},
+            {"start": 4.0, "end": 6.0, "speaker": "SPEAKER_00"},
+        ]
+        result = smooth_speaker_labels([dict(s) for s in segments])
+        self.assertEqual([s["speaker"] for s in result],
+                         ["SPEAKER_00", "SPEAKER_01", "SPEAKER_00"])
+
+    def test_relabel_speakers_chronological(self):
+        # PyAnnote cluster IDs are arbitrary; SPEAKER_00 must become the
+        # first speaker that actually appears in time.
+        turns = [
+            {"start": 30.0, "end": 35.0, "speaker": "SPEAKER_02"},
+            {"start": 5.0, "end": 10.0, "speaker": "SPEAKER_01"},
+            {"start": 0.0, "end": 4.0, "speaker": "SPEAKER_00"},
+            {"start": 40.0, "end": 45.0, "speaker": "SPEAKER_02"},
+        ]
+
+        result = relabel_speakers_chronological(turns)
+        by_start = {t["start"]: t["speaker"] for t in result}
+        # first speaker (0.0) -> SPEAKER_00, second (5.0) -> SPEAKER_01, third (30.0) -> SPEAKER_02
+        self.assertEqual(by_start[0.0], "SPEAKER_00")
+        self.assertEqual(by_start[5.0], "SPEAKER_01")
+        self.assertEqual(by_start[30.0], "SPEAKER_02")
+        self.assertEqual(by_start[40.0], "SPEAKER_02")  # same cluster keeps its new label
 
     def test_build_srt_subtitles_with_speakers(self):
         timestamps = [

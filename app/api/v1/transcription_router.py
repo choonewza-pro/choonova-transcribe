@@ -177,7 +177,11 @@ async def transcribe_audio(
 
             if task == "translate":
                 from app.engine_router import transcribe_file as router_transcribe_file
-                from app.pyannote_engine import diarize_audio, merge_speaker_overlap
+                from app.pyannote_engine import (
+                    diarize_audio,
+                    merge_speaker_overlap,
+                    group_speaker_segments,
+                )
 
                 res = await asyncio.to_thread(
                     router_transcribe_file,
@@ -196,9 +200,18 @@ async def transcribe_audio(
                     max_speakers=max_speakers,
                 )
                 timestamps = merge_speaker_overlap(timestamps, turns)
+                grouped = group_speaker_segments(timestamps)
+                if grouped:
+                    text = "\n".join(
+                        f"[{s['speaker']}]: {s['text']}" for s in grouped
+                    )
             elif lang == "th":
                 from app.engine_router import transcribe_file as router_transcribe_file
-                from app.pyannote_engine import diarize_audio, merge_speaker_overlap
+                from app.pyannote_engine import (
+                    diarize_audio,
+                    merge_speaker_overlap,
+                    group_speaker_segments,
+                )
 
                 res = await asyncio.to_thread(
                     router_transcribe_file,
@@ -216,6 +229,11 @@ async def transcribe_audio(
                     max_speakers=max_speakers,
                 )
                 timestamps = merge_speaker_overlap(timestamps, turns)
+                grouped = group_speaker_segments(timestamps)
+                if grouped:
+                    text = "\n".join(
+                        f"[{s['speaker']}]: {s['text']}" for s in grouped
+                    )
             else:
                 from app.whisperx_engine import transcribe_and_diarize_whisperx
                 wx_res = await asyncio.to_thread(
