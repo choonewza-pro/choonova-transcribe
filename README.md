@@ -18,6 +18,7 @@ ChooNova Transcribe is a high-performance audio transcription and media processi
 - **Short Audio Transcription**: REST API for quick, synchronous processing of short multipart audio uploads.
 - **Long-form Media Pipeline**: Asynchronous processing for large video/audio files (up to 1GB+) with silence-aware chunking and automatic cleanup.
 - **Auto Language Detection & Secondary ASR**: Uses **Faster Whisper (`large-v3-turbo`)** (~809M params) for English and code-switched (Thai-English) content, delivering 4-6x faster decoding speed than standard Large-v3 with low VRAM footprint (~3.5GB).
+- **Speaker Diarization**: Multi-speaker identification and labeling (`[SPEAKER_00]`, `[SPEAKER_01]`, ...) powered by PyAnnote 3.1 & WhisperX. Uses a 4 Pathways Matrix (Typhoon ASR + PyAnnote 3.1 for Thai, WhisperX for English/Auto) with automatic VRAM swapping and graceful fallback.
 - **Video Compression**: Asynchronous FFmpeg-based video compressor with queue management, supporting both CPU (libx264) and GPU (NVENC) encoding.
 - **Job History & Management**: Built-in SQLite tracking for transcription and compression jobs with a web-based dashboard.
 - **Dynamic VRAM Management**: Configurable model residency (Always-on vs. Idle timeout) to optimize GPU memory usage.
@@ -30,25 +31,37 @@ ChooNova Transcribe follows a Pragmatic Modular Monolith + Hexagonal Architectur
 - **Isolated Workers & Background Tasks (Legacy/Monolithic Hybrid)**: Long-running jobs (transcription and compression) and background watchdogs run as isolated subprocesses ([`job_worker.py`](file:///D:/_PROJECT_/choonova-transcribe/app/job_worker.py), [`compress_worker.py`](file:///D:/_PROJECT_/choonova-transcribe/app/compress_worker.py)) using monolithic connections ([`app/db.py`](file:///D:/_PROJECT_/choonova-transcribe/app/db.py)).
 - **CUDA Resilience**: Implements transient error retries (with backoff) and allocator corruption recovery via `cudaDeviceReset`.
 
+### 4 Pathways Processing Matrix
+
+Depending on the requested language (`th` vs. `en`/`auto`) and whether speaker diarization is enabled (`enable_diarization`), the pipeline routes jobs across 4 distinct pathways:
+
+| Pathway | Language | Diarization | Engine & Pipeline | Mechanism & Rationale |
+|---|---|---|---|---|
+| **Path 1** | `th` | ❌ Disabled | **Typhoon ASR** | FastConformer-Transducer 114M (~1GB VRAM). Fastest and most accurate for pure Thai audio. |
+| **Path 2** | `en` / `auto` | ❌ Disabled | **Faster Whisper** | CTranslate2 `large-v3-turbo` (~3.5GB VRAM). Ideal for English and auto language detection. |
+| **Path 3** | `th` | ✅ Enabled | **Typhoon ASR + PyAnnote 3.1** | Typhoon ASR $\rightarrow$ PyAnnote 3.1 Diarization $\rightarrow$ **Maximum-Overlap Merge** with nearest-neighbor fallback. (WhisperX lacks default forced alignment models for Thai). |
+| **Path 4** | `en` / `auto` | ✅ Enabled | **WhisperX** | Transcribe $\rightarrow$ Phoneme Forced Alignment (wav2vec2) $\rightarrow$ PyAnnote 3.1 Diarization $\rightarrow$ Word Speaker Assignment. Provides word-level speaker accuracy. |
+
 ### Dual-Architecture Rationale (Mid-Migration)
 
 We intentionally maintain a hybrid architectural state where the API delivery layer is fully hexagonal, while worker subprocesses and background tasks utilize monolithic handlers. This design choice is driven by:
 
-1. **VRAM/RAM Containment**: Worker subprocesses require strict lazy loading of heavy deep learning packages (`PyTorch`/`NeMo`/`faster-whisper`). Keeping workers as lightweight monolithic CLI scripts prevents accidental package imports from polluting the main API process memory.
+1. **VRAM/RAM Containment**: Worker subprocesses require strict lazy loading of heavy deep learning packages (`PyTorch`/`NeMo`/`faster-whisper`/`PyAnnote`/`WhisperX`). Keeping workers as lightweight monolithic CLI scripts prevents accidental package imports from polluting the main API process memory.
 2. **SQLite WAL Concurrency**: Subprocesses access the database concurrently with the FastAPI process. The monolithic database wrapper ([`app/db.py`](file:///D:/_PROJECT_/choonova-transcribe/app/db.py)) is production-hardened for SQLite concurrent write locks under WAL mode.
 3. **Pragmatic Complexity (Low ROI)**: Workers are simple linear CLI scripts (e.g., FFmpeg extraction -> Model Inference -> DB Update). Introducing interface port abstractions here would add boilerplates without real-world utility.
 
 
 ## Technology Stack
 
-| Layer         | Technology                 | Purpose                                              |
-| ------------- | -------------------------- | ---------------------------------------------------- |
-| Language      | Python 3.12                | Core application logic                               |
-| Web Framework | FastAPI + Uvicorn          | High-performance async HTTP/WebSocket server         |
-| Deep Learning | PyTorch 2.5.1              | Tensor operations and model execution (CUDA 12.1)    |
-| ASR Models    | NeMo Toolkit & Faster Whisper | Typhoon ASR (114M) & Faster Whisper (`large-v3-turbo`) |
-| Audio/Video   | FFmpeg, librosa, soundfile | Media extraction, silence detection, and compression |
-| Storage       | SQLite (WAL mode)          | Transactional job history and settings persistence   |
+| Layer         | Technology                            | Purpose                                              |
+| ------------- | ------------------------------------- | ---------------------------------------------------- |
+| Language      | Python 3.12                           | Core application logic                               |
+| Web Framework | FastAPI + Uvicorn                     | High-performance async HTTP/WebSocket server         |
+| Deep Learning | PyTorch 2.5.1                         | Tensor operations and model execution (CUDA 12.1)    |
+| ASR Models    | NeMo Toolkit & Faster Whisper         | Typhoon ASR (114M) & Faster Whisper (`large-v3-turbo`) |
+| Diarization   | PyAnnote.audio 3.1 & WhisperX         | Multi-speaker identification and word alignment      |
+| Audio/Video   | FFmpeg, librosa, soundfile            | Media extraction, silence detection, and compression |
+| Storage       | SQLite (WAL mode)                     | Transactional job history and settings persistence   |
 
 ## Requirements
 
@@ -116,7 +129,11 @@ Application behavior is controlled via environment variables. Copy `.env.example
 | `GATEWAY_API_KEY`            | `change-me-in-production` | Yes      | Secret key for API authentication.                                          |
 | `DEVICE`                     | `cuda`                    | No       | Target device (`cuda` or `cpu`). Auto-detects if CUDA is missing.           |
 | `WHISPER_MODEL`              | `large-v3-turbo`          | No       | faster-whisper model size (`large-v3-turbo`, `large-v3`, `medium`, `small`, etc.). |
-| `HF_TOKEN`                   | *(Empty)*                 | No       | Optional Hugging Face Hub token to prevent unauthenticated download warnings and rate limits. |
+| `HF_TOKEN`                   | *(Empty)*                 | No       | Hugging Face Hub token. Required for PyAnnote 3.1 & WhisperX gated models (`pyannote/speaker-diarization-3.1`, `pyannote/segmentation-3.0`). |
+| `DIARIZATION_ENABLED`        | `true`                    | No       | Master toggle for speaker diarization feature (`true` or `false`).          |
+| `DIARIZATION_MODEL`          | `pyannote/speaker-diarization-3.1` | No | Hugging Face model ID for PyAnnote diarization pipeline.                     |
+| `DIARIZATION_MIN_SPEAKERS`   | *(Empty)*                 | No       | Optional hint for minimum expected speakers (auto-detect if empty).          |
+| `DIARIZATION_MAX_SPEAKERS`   | *(Empty)*                 | No       | Optional hint for maximum expected speakers (auto-detect if empty).          |
 | `MODEL_LOAD_MODE`            | `always`                  | No       | VRAM residency seed: `always` or `idle`.                                    |
 | `MODEL_IDLE_TIMEOUT_SEC`     | `900`                     | No       | Seconds of inactivity before unloading models (if `idle`).                  |
 | `COMPRESS_ENCODER`           | `libx264`                 | No       | Video encoder: `libx264` or `nvenc` (auto-falls back if NVENC unavailable). |
@@ -199,13 +216,14 @@ curl -X POST http://localhost:8830/v1/audio/transcribe \
   -F "file=@audio.mp3" -F "language=th" -F "with_timestamps=true"
 ```
 
-**Long-form Video Transcription (Auto-detect Language - Whisper)**
+**Long-form Video Transcription with Speaker Diarization**
 
 ```bash
 curl -X POST http://localhost:8830/v1/media/transcribe/jobs \
   -H "x-api-key: change-me-in-production" \
-  -F "file=@video.mp4" -F "language=auto"
+  -F "file=@meeting.mp4" -F "language=th" -F "enable_diarization=true"
 ```
+
 
 **Video Compression (Resize & Trim)**
 
