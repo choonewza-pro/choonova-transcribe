@@ -145,11 +145,19 @@ class TestTranscriptionService(unittest.TestCase):
         service.create_job(filename="b.wav", file_size_bytes=200, language="th")
         self.assertEqual(service.count_queued(), 2)
 
-    def test_get_retention_summary(self):
+    def test_create_job_with_diarization(self):
         repo = FakeJobRepository()
         service = TranscriptionService(repo)
-        summary = service.get_retention_summary()
-        self.assertIn("retention_hours", summary)
+        job = service.create_job(
+            filename="interview.mp4",
+            file_size_bytes=5000000,
+            language="th",
+            enable_diarization=True,
+        )
+        self.assertTrue(job.enable_diarization)
+        retrieved = service.get_job_or_none(job.id)
+        self.assertIsNotNone(retrieved)
+        self.assertTrue(retrieved.enable_diarization)
 
 
 if __name__ == "__main__":

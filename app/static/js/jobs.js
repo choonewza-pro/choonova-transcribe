@@ -219,6 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${extra}
         <div class="job-card-meta">
           <span class="job-card-meta-item">🌐 ${langBadge}</span>
+          ${job.enable_diarization ? '<span class="job-card-meta-item" style="color: #60a5fa; font-weight: 600;">👥 Diarized</span>' : ''}
           <span class="job-card-meta-item">⏱️ ${formatSeconds(job.duration)}</span>
           <span class="job-card-meta-item">📦 ${formatBytes(job.file_size_bytes)}</span>
           <span class="job-card-meta-item">📅 ${formatDate(job.created_at)}</span>
