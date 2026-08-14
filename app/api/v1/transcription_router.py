@@ -167,6 +167,14 @@ async def transcribe_audio(
             with open(temp_audio_path, "wb") as f:
                 f.write(content)
 
+            # Convert to 16kHz mono WAV before diarization. PyAnnote's Audio.crop()
+            # re-decodes the file per segmentation chunk; feeding it the raw MP3/FLAC/OGG
+            # costs seconds per crop (~3500x slower than WAV), turning a 1-minute job
+            # into a 10+ minute grind. The media/worker path already converts first.
+            from app.audio_utils import extract_audio_ffmpeg
+            temp_wav_path = os.path.join(temp_dir, "diarization_input.wav")
+            await asyncio.to_thread(extract_audio_ffmpeg, temp_audio_path, temp_wav_path)
+
             if task == "translate":
                 from app.engine_router import transcribe_file as router_transcribe_file
                 from app.pyannote_engine import diarize_audio, merge_speaker_overlap
@@ -182,7 +190,7 @@ async def transcribe_audio(
                 timestamps = res.get("timestamps", [])
                 turns = await asyncio.to_thread(
                     diarize_audio,
-                    temp_audio_path,
+                    temp_wav_path,
                     num_speakers=num_speakers,
                     min_speakers=min_speakers,
                     max_speakers=max_speakers,
@@ -202,7 +210,7 @@ async def transcribe_audio(
                 timestamps = res.get("timestamps", [])
                 turns = await asyncio.to_thread(
                     diarize_audio,
-                    temp_audio_path,
+                    temp_wav_path,
                     num_speakers=num_speakers,
                     min_speakers=min_speakers,
                     max_speakers=max_speakers,
@@ -212,7 +220,7 @@ async def transcribe_audio(
                 from app.whisperx_engine import transcribe_and_diarize_whisperx
                 wx_res = await asyncio.to_thread(
                     transcribe_and_diarize_whisperx,
-                    temp_audio_path,
+                    temp_wav_path,
                     lang,
                     num_speakers,
                     min_speakers,
