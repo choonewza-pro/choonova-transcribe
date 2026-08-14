@@ -185,8 +185,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (diarizationCheck && diarizationCheck.checked) {
       formData.append('enable_diarization', 'true');
       const numSpeakersInput = document.getElementById('numSpeakersInput');
-      if (numSpeakersInput && numSpeakersInput.value) {
+      if (numSpeakersInput && numSpeakersInput.value && parseInt(numSpeakersInput.value, 10) > 0) {
         formData.append('num_speakers', numSpeakersInput.value);
+      }
+      const minSpeakersInput = document.getElementById('minSpeakersInput');
+      if (minSpeakersInput && minSpeakersInput.value && parseInt(minSpeakersInput.value, 10) > 0) {
+        formData.append('min_speakers', minSpeakersInput.value);
+      }
+      const maxSpeakersInput = document.getElementById('maxSpeakersInput');
+      if (maxSpeakersInput && maxSpeakersInput.value && parseInt(maxSpeakersInput.value, 10) > 0) {
+        formData.append('max_speakers', maxSpeakersInput.value);
       }
     }
 
