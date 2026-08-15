@@ -1,0 +1,58 @@
+# GPU ทำงานเต็มทั้งสองตัว (Intel iGPU + NVIDIA) — สาเหตุที่แท้จริง
+
+## สรุปปัญหา (Symptom)
+
+รันหน้า `/audio/transcribe` (sync `POST /v1/audio/transcribe`) แบบ **Thai Whisper + ไม่แยกผู้พูด** บนเครื่องโน้ตบุ๊กแบบ hybrid GPU (Intel UHD Graphics + NVIDIA):
+
+- **Intel UHD Graphics (iGPU):** ทำงานเต็ม ~92% **ตั้งแต่เริ่ม** ทันที
+- **NVIDIA (dGPU):** ตอนแรกทำงานนิดเดียว **ค่อย ๆ ขึ้น** แล้วทำงานเต็ม 100%
+- ผลสุดท้าย GPU ทั้งสองตัวแสดงว่า "เต็ม"
+
+ผู้ใช้สันนิษฐานว่าเป็นเพราะ "Intel GPU ไม่มีตัวประมวลผล AI"
+
+## ต้นเหตุ (Root Cause)
+
+### AI ทำงานบน NVIDIA ตัวเดียวเท่านั้น
+
+โมเดล Thai Whisper **ไม่เคยรันบน Intel iGPU เลย** เส้นทางจริงคือ:
+
+```
+/v1/audio/transcribe (FastAPI router)
+  → subprocess python -m app.run_inline_transcribe
+    → engine_router.transcribe_bytes()
+      → whisper_thai_engine (faster-whisper / CTranslate2)
+        → device="cuda"  ← NVIDIA เท่านั้น
+```
+
+- `app/core/config.py` กำหนด `DEVICE = "cuda"` เมื่อ `torch.cuda.is_available()` (บรรทัด 66-70)
+- `WhisperEngine` (`app/whisper_engine.py`) ส่ง `device=self.device` ไปที่ `WhisperModel(...)` ของ faster-whisper
+- ทั้งโปรเจกต์ไม่มี path ไหนเรียกใช้ iGPU (ไม่มี OpenCL/Vulkan/DirectML/oneAPI)
+
+### NVIDIA ขึ้นช้า → เต็มทีหลัง (ปกติ ไม่ใช่ปัญหา)
+
+1. **โหลดโมเดล:** `WhisperModel(...)` อ่านน้ำหนัก ~GB (CT2 int8_float16) จากดิสก์ → RAM → อัปโหลดขึ้น VRAM — ตอนนี้ NVIDIA ทำงานเบา (เฉพาะ copy engine) = "ทำงานนิดเดียว"
+2. **Warm-up:** สร้าง CUDA context + cuDNN/cuBLAS autotune ครั้งแรก — GPU เริ่มไต่
+3. **Steady-state:** transformer inference เป็นชุด — GPU เต็ม 100%
+
+### Intel iGPU ขึ้น 92% ตั้งแต่เริ่ม (เป็น artifact ของการวัด ไม่ใช่ AI)
+
+- **iGPU เป็น display adapter** — DWM (desktop compositing) รันบนตัวมัน ขณะ monitor (Task Manager / dashboard) รีเฟรชหน้าจอตลอดช่วง transcribe
+- **iGPU ใช้ shared memory กับ CPU** (ไม่มี VRAM แยก) — ตอนโหลดโมเดล + inference มีการ copy ข้อมูล RAM↔GPU มหาศาล → memory controller ร่วมอิ่มตัว → Intel driver รายงาน "engine active" สูงเกินจริง
+- Task Manager แสดง % ต่อ engine — engine **"Copy"** ที่ทำงานหนักจะอ่านเป็น % สูง ทั้งที่ไม่ได้ประมวลผล AI
+
+**ดังนั้น "Intel GPU ไม่มีตัวประมวลผล AI" ไม่ใช่สาเหตุ** — มันไม่เคยถูกเรียกให้ทำงาน AI เลย ที่เห็น 92% คือค่าที่บิดเบือนจากการวัด
+
+## วิธีพิสูจน์ (Verification)
+
+1. รัน `nvidia-smi` — จะเห็นเฉพาะ NVIDIA โหลดจริง (VRAM + SM utilization) ส่วน iGPU ไม่โผล่เลย เพราะไม่ได้ใช้ CUDA
+2. Task Manager → Performance → GPU 0 (Intel) → คลิกเลือก engine — ดูว่าที่ 92% คือ engine ตัวไหน:
+   - ถ้าเป็น **"Copy"** = memory-transfer artifact (ข้อสรุปหลัก)
+   - ถ้าเป็น **"3D"** = DWM compositing ของจอภาพ
+   - จะเห็นว่า "Video Decode/Encode" ไม่เกี่ยวข้อง (ไฟล์เสียงไม่ได้ decode ด้วย hardware)
+
+## บทเรียน (Prevention)
+
+1. **อย่าตีความ Task Manager GPU % บนเครื่อง hybrid ตรง ๆ** — iGPU ที่ขึ้นสูงไม่ได้แปลว่า model รันผิด GPU; ใช้ `nvidia-smi` เป็นแหล่งอ้างอิงการทำงานจริงของ AI
+2. **เมื่อ debug "GPU ทำงานไม่เต็ม/เป็นช่วง"** ให้แยกช่วงเวลา: model load (GPU เบา) → warm-up (ขึ้น) → steady-state (เต็ม) — ถ้าไม่ถึง full load นาน ๆ แล้วมีผลลัพธ์ช้า ให้ดู CPU/disk/memory แทน
+3. **ข้อควรรู้:** iGPU (Intel UHD) ไม่มี tensor/AI core แบบ NVIDIA — ถ้าบังคับให้รัน ASR บน iGPU จะช้าและอิ่มตัวเต็ม 100% ทันที นี่คือเหตุผลที่โปรเจกต์นี้บังคับ inference บน `cuda` (NVIDIA) เสมอเมื่อมี
+4. ถ้าต้องการลดสัญญาณรบกวนบน iGPU (cosmetic เท่านั้น): ปิดรีเฟรชจอภาพ/monitor UI ระหว่างรัน หรือใช้จอแบบ dGPU exclusive
