@@ -45,7 +45,7 @@
         <div class="dropzone" id="dropzone">
           <div class="icon">☁️</div>
           <h3 id="fileName">ลากไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์</h3>
-          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">ขนาดไฟล์ไม่เกิน {{ max_audio_upload_mb|default(50)|int }}MB</p>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">ขนาดไฟล์ไม่เกิน {{ max_audio_upload_mb|default(50)|int }}MB{% if max_audio_duration_sec > 0 %} / ความยาวไม่เกิน {{ (max_audio_duration_sec / 3600)|round(1) }} ชั่วโมง{% endif %}</p>
           <input type="file" id="audioFileInput" accept="audio/*" style="display: none;">
         </div>
 

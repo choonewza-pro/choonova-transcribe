@@ -18,10 +18,11 @@ from app.core.state import _active_workers, _active_inline_workers
 from app.core.media_validator import validate_magic_bytes, validate_extension, validate_with_ffprobe, secure_filename
 from app.config import (
     MAX_AUDIO_UPLOAD_SIZE_MB, MAX_UPLOAD_SIZE_MB,
+    MAX_AUDIO_DURATION_SEC,
     TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC, TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC,
     TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC, TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC,
     TRANSCRIBE_MAX_QUEUED,
-    TEMP_JOBS_DIR, MIN_FREE_DISK_GB, SERVICE_DIR, HF_TOKEN
+    TEMP_JOBS_DIR, MIN_FREE_DISK_GB, SERVICE_DIR
 )
 from app.schemas import TranscribeResponse, JobCreateResponse, JobStatusResponse
 from app.modules.transcription.adapters.outbound.repositories.sqlite_job_repository import SQLiteJobRepository
@@ -86,6 +87,37 @@ def _job_to_dict(job) -> Dict[str, Any]:
     }
 
 
+async def _save_upload_to_disk(file: UploadFile, save_path: str, max_bytes: int) -> int:
+    """Stream an UploadFile to disk enforcing a size cap. Returns total bytes written.
+
+    Raises HTTPException(413) if the upload exceeds max_bytes. This is inbound-adapter
+    concern: it consumes the HTTP multipart body, so it stays out of the application layer.
+    """
+    total_bytes = 0
+    with open(save_path, "wb") as buffer:
+        while chunk := await file.read(1024 * 1024):
+            total_bytes += len(chunk)
+            if total_bytes > max_bytes:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Audio file exceeds maximum size of {MAX_AUDIO_UPLOAD_SIZE_MB:.0f} MB",
+                )
+            buffer.write(chunk)
+    return total_bytes
+
+
+def _validate_saved_file(save_path: str, max_duration_sec: float | None = None) -> None:
+    """Deep-validate a saved upload: magic-byte sniffing + ffprobe container inspection.
+
+    Mirrors the media endpoint's 3-layer file security (extension + magic bytes + ffprobe)
+    to protect the audio endpoints against polyglot/malicious containers. Raises HTTPException.
+    """
+    with open(save_path, "rb") as f:
+        header_bytes = f.read(2048)
+    validate_magic_bytes(header_bytes)
+    validate_with_ffprobe(save_path, max_duration_sec=max_duration_sec)
+
+
 @router.post("/v1/audio/transcribe", response_model=TranscribeResponse)
 async def transcribe_audio(
     request: Request,
@@ -113,49 +145,20 @@ async def transcribe_audio(
 
     validate_extension(file.filename)
 
-    lang_clean = (language or "th").strip().lower()
-    if lang_clean in ("translate_en", "translate"):
-        task = "translate"
-        lang = "auto"
-    elif task == "translate":
-        lang = "auto" if lang_clean not in ("th", "en") else lang_clean
-    else:
-        try:
-            lang = TranscriptionService.normalize_language(language)
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
-
-    if num_speakers is not None and num_speakers <= 0:
-        raise HTTPException(status_code=422, detail="num_speakers must be greater than 0.")
-    if min_speakers is not None and min_speakers <= 0:
-        raise HTTPException(status_code=422, detail="min_speakers must be greater than 0.")
-    if max_speakers is not None and max_speakers <= 0:
-        raise HTTPException(status_code=422, detail="max_speakers must be greater than 0.")
-    if min_speakers is not None and max_speakers is not None and min_speakers > max_speakers:
-        raise HTTPException(status_code=422, detail="min_speakers cannot exceed max_speakers.")
-
-    if num_speakers or min_speakers or max_speakers:
-        enable_diarization = True
-
-    from app.engine_router import resolve_transcription_model
-    try:
-        model = resolve_transcription_model(lang, enable_diarization, task, model)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-
-    if model == "whisperx" and not HF_TOKEN:
-        raise HTTPException(
-            status_code=422,
-            detail="model='whisperx' requires HF_TOKEN to be set in the server environment.",
-        )
-
     svc = get_transcription_service()
 
-    if not svc.check_disk_space(TEMP_JOBS_DIR, MIN_FREE_DISK_GB):
-        raise HTTPException(
-            status_code=507,
-            detail=f"Insufficient disk space. At least {MIN_FREE_DISK_GB} GB free disk space is required.",
-        )
+    req = svc.prepare_request(
+        language=language,
+        task=task,
+        model=model,
+        enable_diarization=enable_diarization,
+        num_speakers=num_speakers,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
+        with_timestamps=with_timestamps,
+    )
+
+    svc.ensure_capacity(TEMP_JOBS_DIR, MIN_FREE_DISK_GB)
 
     try:
         max_audio_bytes = int(MAX_AUDIO_UPLOAD_SIZE_MB * 1024 * 1024)
@@ -179,6 +182,9 @@ async def transcribe_audio(
         with open(temp_audio_path, "wb") as f:
             f.write(content)
 
+        # Deep container validation (ffprobe) — same security layer as media jobs.
+        validate_with_ffprobe(temp_audio_path, MAX_AUDIO_DURATION_SEC)
+
         # Run the transcription in an isolated subprocess so a client cancel can
         # terminate it and free GPU/CPU immediately (in-process threads cannot be
         # killed mid-inference).
@@ -187,14 +193,14 @@ async def transcribe_audio(
         cmd = [
             sys.executable, "-m", "app.run_inline_transcribe",
             temp_audio_path,
-            lang,
-            str(with_timestamps).lower(),
-            task,
-            model,
-            str(num_speakers) if num_speakers is not None else "none",
-            str(min_speakers) if min_speakers is not None else "none",
-            str(max_speakers) if max_speakers is not None else "none",
-            str(enable_diarization).lower(),
+            req.language,
+            str(req.with_timestamps).lower(),
+            req.task,
+            req.model,
+            str(req.num_speakers) if req.num_speakers is not None else "none",
+            str(req.min_speakers) if req.min_speakers is not None else "none",
+            str(req.max_speakers) if req.max_speakers is not None else "none",
+            str(req.enable_diarization).lower(),
             out_json_path,
         ]
         proc = subprocess.Popen(
@@ -249,8 +255,8 @@ async def transcribe_audio(
             duration_seconds=round(duration, 2),
             elapsed_seconds=round(elapsed, 3),
             rtf=round(rtf, 5),
-            timestamps=timestamps if (with_timestamps or enable_diarization) else None,
-            model=model,
+            timestamps=timestamps if (req.with_timestamps or req.enable_diarization) else None,
+            model=req.model,
         )
     except HTTPException:
         raise
@@ -289,59 +295,19 @@ async def create_audio_transcription_job(
 
     validate_extension(file.filename)
 
-    lang_clean = (language or "th").strip().lower()
-    if lang_clean in ("translate_en", "translate"):
-        task_mode = "translate"
-        lang = "auto"
-    elif task == "translate":
-        task_mode = "translate"
-        lang = "auto" if lang_clean not in ("th", "en") else lang_clean
-    else:
-        task_mode = "transcribe"
-        try:
-            lang = TranscriptionService.normalize_language(language)
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
-
-    if num_speakers is not None and num_speakers <= 0:
-        raise HTTPException(status_code=422, detail="num_speakers must be greater than 0.")
-    if min_speakers is not None and min_speakers <= 0:
-        raise HTTPException(status_code=422, detail="min_speakers must be greater than 0.")
-    if max_speakers is not None and max_speakers <= 0:
-        raise HTTPException(status_code=422, detail="max_speakers must be greater than 0.")
-    if min_speakers is not None and max_speakers is not None and min_speakers > max_speakers:
-        raise HTTPException(status_code=422, detail="min_speakers cannot exceed max_speakers.")
-
-    if num_speakers or min_speakers or max_speakers:
-        enable_diarization = True
-
-    from app.engine_router import resolve_transcription_model
-    try:
-        model = resolve_transcription_model(lang, enable_diarization, task_mode, model)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-
-    if model == "whisperx" and not HF_TOKEN:
-        raise HTTPException(
-            status_code=422,
-            detail="model='whisperx' requires HF_TOKEN to be set in the server environment.",
-        )
-
     svc = get_transcription_service()
 
-    queued = svc.count_queued()
-    if queued >= TRANSCRIBE_MAX_QUEUED:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Transcription queue is full ({TRANSCRIBE_MAX_QUEUED} jobs). "
-            "Wait for pending jobs to finish and try again.",
-        )
+    req = svc.prepare_request(
+        language=language,
+        task=task,
+        model=model,
+        enable_diarization=enable_diarization,
+        num_speakers=num_speakers,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
+    )
 
-    if not svc.check_disk_space(TEMP_JOBS_DIR, MIN_FREE_DISK_GB):
-        raise HTTPException(
-            status_code=507,
-            detail=f"Insufficient disk space. At least {MIN_FREE_DISK_GB} GB free disk space is required.",
-        )
+    svc.ensure_capacity(TEMP_JOBS_DIR, MIN_FREE_DISK_GB, TRANSCRIBE_MAX_QUEUED)
 
     job_id = str(uuid.uuid4())
     job_dir = os.path.join(TEMP_JOBS_DIR, job_id)
@@ -352,49 +318,29 @@ async def create_audio_transcription_job(
     save_path = os.path.join(job_dir, f"input{file_ext}")
 
     max_audio_bytes = int(MAX_AUDIO_UPLOAD_SIZE_MB * 1024 * 1024)
-    total_bytes = 0
     try:
-        with open(save_path, "wb") as buffer:
-            while chunk := await file.read(1024 * 1024):
-                total_bytes += len(chunk)
-                if total_bytes > max_audio_bytes:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"Audio file exceeds maximum size of {MAX_AUDIO_UPLOAD_SIZE_MB:.0f} MB",
-                    )
-                buffer.write(chunk)
+        total_bytes = await _save_upload_to_disk(file, save_path, max_audio_bytes)
+        _validate_saved_file(save_path, MAX_AUDIO_DURATION_SEC)
     except HTTPException:
         svc.safe_delete_dir(job_dir)
         raise
     except Exception as e:
         svc.safe_delete_dir(job_dir)
-        logger.error(f"Error saving upload file for audio job {job_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save upload file: {e}")
-
-    try:
-        with open(save_path, "rb") as f:
-            header_bytes = f.read(2048)
-        validate_magic_bytes(header_bytes)
-    except HTTPException:
-        svc.safe_delete_dir(job_dir)
-        raise
-    except Exception as e:
-        svc.safe_delete_dir(job_dir)
-        logger.error(f"Validation error for audio job {job_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to validate audio file")
+        logger.error(f"Error saving/validating upload for audio job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save or validate audio file")
 
     # Create job record via service → repository port (queued status)
     job = svc.create_job(
         job_id=job_id,
         filename=file.filename,
         file_size_bytes=total_bytes,
-        language=lang,
-        enable_diarization=enable_diarization,
-        num_speakers=num_speakers,
-        min_speakers=min_speakers,
-        max_speakers=max_speakers,
-        task=task_mode,
-        model=model,
+        language=req.language,
+        enable_diarization=req.enable_diarization,
+        num_speakers=req.num_speakers,
+        min_speakers=req.min_speakers,
+        max_speakers=req.max_speakers,
+        task=req.task,
+        model=req.model,
         type="audio",
     )
 
@@ -402,13 +348,13 @@ async def create_audio_transcription_job(
         status="accepted",
         id=job.id,
         filename=file.filename,
-        language=lang,
-        task=task_mode,
-        model=model,
-        enable_diarization=enable_diarization,
-        num_speakers=num_speakers,
-        min_speakers=min_speakers,
-        max_speakers=max_speakers,
+        language=req.language,
+        task=req.task,
+        model=req.model,
+        enable_diarization=req.enable_diarization,
+        num_speakers=req.num_speakers,
+        min_speakers=req.min_speakers,
+        max_speakers=req.max_speakers,
         message="Job created and enqueued for audio transcription",
     )
 

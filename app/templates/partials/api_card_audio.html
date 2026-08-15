@@ -4,7 +4,7 @@
           <span class="api-group-icon">📁</span>
           <div>
             <h3 class="api-group-title">ถอดไฟล์เสียง (Audio File Transcription)</h3>
-            <p class="api-group-desc">แปลงไฟล์เสียงสั้น (สูงสุด {{ max_audio_upload_mb|default(50)|int }}MB, ตั้งค่าได้ผ่าน env <code>MAX_AUDIO_UPLOAD_SIZE_MB</code>) เป็นข้อความ รองรับภาษา ไทย/อังกฤษ/อัตโนมัติ</p>
+            <p class="api-group-desc">แปลงไฟล์เสียงสั้น (สูงสุด {{ max_audio_upload_mb|default(50)|int }}MB{% if max_audio_duration_sec > 0 %} / ความยาวไม่เกิน {{ (max_audio_duration_sec / 3600)|round(1) }} ชั่วโมง{% endif %}, ตั้งค่าได้ผ่าน env <code>MAX_AUDIO_UPLOAD_SIZE_MB</code> และ <code>MAX_AUDIO_DURATION_SEC</code>) เป็นข้อความ รองรับภาษา ไทย/อังกฤษ/อัตโนมัติ</p>
           </div>
         </div>
 
@@ -15,7 +15,7 @@
           </summary>
           <div class="api-endpoint-body">
             <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
-              แปลงไฟล์เสียงเป็นข้อความ (สูงสุด {{ max_audio_upload_mb|default(50)|int }}MB, เกิน → HTTP 413) รองรับการเลือกภาษา
+              แปลงไฟล์เสียงเป็นข้อความ (สูงสุด {{ max_audio_upload_mb|default(50)|int }}MB{% if max_audio_duration_sec > 0 %} / ยาวเกิน {{ (max_audio_duration_sec / 3600)|round(1) }} ชั่วโมง{% endif %} → HTTP 413) รองรับการเลือกภาษา
               พร้อมสถิติเวลาและ Word Timestamps
             </p>
             <div class="code-container">

@@ -1,8 +1,12 @@
 import unittest
+import os
+import tempfile
 from typing import Optional, List, Dict, Any
-from app.modules.transcription.domain.entities import TranscriptionJob
-from app.modules.transcription.domain.ports import JobRepositoryPort
+from fastapi import HTTPException
+from app.modules.transcription.domain.entities import TranscriptionJob, TranscriptionRequest
+from app.modules.transcription.domain.ports import JobRepositoryPort, MediaProcessorPort
 from app.modules.transcription.application.transcription_service import TranscriptionService
+from app.core.exceptions import ValidationException, StorageException, QueueFullException
 
 
 class FakeJobRepository(JobRepositoryPort):
@@ -81,6 +85,25 @@ class FakeJobRepository(JobRepositoryPort):
 
     def get_retention_summary(self) -> Dict[str, Any]:
         return {"retention_hours": 24}
+
+
+class FakeMediaProcessor(MediaProcessorPort):
+    """In-memory fake media processor so tests control disk-space responses without touching the filesystem."""
+
+    def __init__(self, disk_ok: bool = True):
+        self.disk_ok = disk_ok
+
+    def extract_and_chunk_audio(self, media_path: str, target_chunk_sec: float = 30.0) -> List[Any]:
+        return []
+
+    def check_disk_space(self, path: str, required_gb: float = 5.0) -> bool:
+        return self.disk_ok
+
+    def safe_delete_dir(self, dir_path: str) -> bool:
+        return True
+
+    def get_duration(self, media_path: str) -> float:
+        return 0.0
 
 
 class TestTranscriptionService(unittest.TestCase):
@@ -213,6 +236,126 @@ class TestTranscriptionService(unittest.TestCase):
         self.assertEqual(d["max_speakers"], 4)
         self.assertEqual(d["task"], "transcribe")
         self.assertTrue(d["enable_diarization"])
+
+    # ------------------------------------------------------------------
+    # prepare_request — shared request-preparation use case (audio endpoints)
+    # ------------------------------------------------------------------
+
+    def test_prepare_request_default_th_transcribe(self):
+        req = TranscriptionService.prepare_request(
+            language="th", task="transcribe", model="thai-whisper"
+        )
+        self.assertIsInstance(req, TranscriptionRequest)
+        self.assertEqual(req.language, "th")
+        self.assertEqual(req.task, "transcribe")
+        self.assertEqual(req.model, "thai-whisper")
+        self.assertFalse(req.enable_diarization)
+        self.assertFalse(req.with_timestamps)
+
+    def test_prepare_request_translate_en_maps_to_auto(self):
+        req = TranscriptionService.prepare_request(
+            language="translate_en", task="transcribe", model="whisper"
+        )
+        self.assertEqual(req.language, "auto")
+        self.assertEqual(req.task, "translate")
+
+    def test_prepare_request_task_translate_keeps_explicit_language(self):
+        req = TranscriptionService.prepare_request(
+            language="en", task="translate", model="whisper"
+        )
+        self.assertEqual(req.language, "en")
+        self.assertEqual(req.task, "translate")
+
+    def test_prepare_request_invalid_language_raises(self):
+        with self.assertRaises(ValidationException) as ctx:
+            TranscriptionService.prepare_request(
+                language="xx", task="transcribe", model="whisper"
+            )
+        self.assertIn("Unsupported language", ctx.exception.message)
+
+    def test_prepare_request_invalid_speaker_counts(self):
+        cases = [
+            ({"num_speakers": 0}, "num_speakers must be greater than 0."),
+            ({"min_speakers": 0}, "min_speakers must be greater than 0."),
+            ({"max_speakers": 0}, "max_speakers must be greater than 0."),
+            ({"min_speakers": 3, "max_speakers": 2}, "min_speakers cannot exceed max_speakers."),
+        ]
+        for kwargs, message in cases:
+            with self.subTest(kwargs=kwargs):
+                with self.assertRaises(ValidationException) as ctx:
+                    TranscriptionService.prepare_request(
+                        language="th", task="transcribe", model="thai-whisper", **kwargs
+                    )
+                self.assertEqual(ctx.exception.message, message)
+
+    def test_prepare_request_auto_enables_diarization_when_speakers_set(self):
+        req = TranscriptionService.prepare_request(
+            language="th", task="transcribe", model="thai-whisper", num_speakers=2
+        )
+        self.assertTrue(req.enable_diarization)
+        self.assertEqual(req.num_speakers, 2)
+
+    def test_prepare_request_rejects_model_not_in_matrix(self):
+        with self.assertRaises(ValidationException) as ctx:
+            TranscriptionService.prepare_request(
+                language="th", task="transcribe", model="whisperx"
+            )
+        self.assertIn("not supported", ctx.exception.message)
+
+    def test_prepare_request_whisperx_requires_hf_token(self):
+        import app.config as config_module
+        original = config_module.HF_TOKEN
+        config_module.HF_TOKEN = ""
+        try:
+            with self.assertRaises(ValidationException) as ctx:
+                TranscriptionService.prepare_request(
+                    language="th", task="transcribe", model="whisperx",
+                    enable_diarization=True,
+                )
+            self.assertIn("HF_TOKEN", ctx.exception.message)
+        finally:
+            config_module.HF_TOKEN = original
+
+    # ------------------------------------------------------------------
+    # ensure_capacity — queue/disk guards before persisting uploads
+    # ------------------------------------------------------------------
+
+    def test_ensure_capacity_raises_when_queue_full(self):
+        repo = FakeJobRepository()
+        service = TranscriptionService(repo)
+        service.create_job(filename="a.wav", file_size_bytes=100, language="th")
+        service.create_job(filename="b.wav", file_size_bytes=100, language="th")
+        with self.assertRaises(QueueFullException) as ctx:
+            service.ensure_capacity("/tmp", 5.0, max_queued=2)
+        self.assertIn("queue is full", ctx.exception.message)
+
+    def test_ensure_capacity_raises_when_disk_full(self):
+        repo = FakeJobRepository()
+        service = TranscriptionService(repo, media_processor=FakeMediaProcessor(disk_ok=False))
+        with self.assertRaises(StorageException) as ctx:
+            service.ensure_capacity("/tmp", 5.0, max_queued=10)
+        self.assertIn("Insufficient disk space", ctx.exception.message)
+
+    def test_ensure_capacity_passes_with_headroom(self):
+        repo = FakeJobRepository()
+        service = TranscriptionService(repo, media_processor=FakeMediaProcessor(disk_ok=True))
+        service.ensure_capacity("/tmp", 5.0, max_queued=10)
+
+    # ------------------------------------------------------------------
+    # _validate_saved_file — 3-layer file security (magic bytes + ffprobe)
+    # ------------------------------------------------------------------
+
+    def test_validate_saved_file_rejects_non_media_file(self):
+        from app.api.v1.transcription_router import _validate_saved_file
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp.write(b"this is definitely not a media file")
+            path = tmp.name
+        try:
+            with self.assertRaises(HTTPException) as ctx:
+                _validate_saved_file(path, max_duration_sec=3600.0)
+            self.assertEqual(ctx.exception.status_code, 422)
+        finally:
+            os.unlink(path)
 
 
 if __name__ == "__main__":

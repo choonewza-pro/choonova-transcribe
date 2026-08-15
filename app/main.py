@@ -32,6 +32,7 @@ from app.core.media_validator import (
     validate_with_ffprobe,
     secure_filename
 )
+from app.core.exceptions import ChooNovaException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse, Response, PlainTextResponse, FileResponse
@@ -146,6 +147,13 @@ app = FastAPI(
     description="Speech-to-Text API Service powered by Typhoon ASR Realtime model (114M parameters)",
     version="1.0.0",
 )
+
+
+@app.exception_handler(ChooNovaException)
+async def choonova_exception_handler(request: Request, exc: ChooNovaException):
+    """Map domain/application exceptions to their HTTP status in the delivery layer."""
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+
 
 # CORS configuration
 app.add_middleware(

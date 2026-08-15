@@ -22,6 +22,7 @@ from app.core.config import (
     TRANSCRIBE_MAX_CONCURRENT,
     TRANSCRIBE_MAX_QUEUED,
     MAX_MEDIA_DURATION_SEC,
+    MAX_AUDIO_DURATION_SEC,
     GATEWAY_API_KEY,
     GATEWAY_API_KEY_IS_DEFAULT,
     ALLOW_ACCESS_TRANSCRIBE_HISTORY,
@@ -75,6 +76,7 @@ async def home_page(request: Request):
         name="index.html",
         context={
             "max_audio_upload_mb": MAX_AUDIO_UPLOAD_SIZE_MB,
+            "max_audio_duration_sec": MAX_AUDIO_DURATION_SEC,
             "max_media_duration_sec": MAX_MEDIA_DURATION_SEC,
             "max_upload_mb": MAX_UPLOAD_SIZE_MB,
             "allow_access_transcribe_history": ALLOW_ACCESS_TRANSCRIBE_HISTORY,
@@ -89,7 +91,10 @@ async def audio_transcribe_page(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="upload.html",
-        context={"max_audio_upload_mb": MAX_AUDIO_UPLOAD_SIZE_MB},
+        context={
+            "max_audio_upload_mb": MAX_AUDIO_UPLOAD_SIZE_MB,
+            "max_audio_duration_sec": MAX_AUDIO_DURATION_SEC,
+        },
     )
 
 
@@ -100,6 +105,7 @@ async def audio_jobs_page(request: Request):
         name="audio_jobs.html",
         context={
             "max_audio_upload_mb": MAX_AUDIO_UPLOAD_SIZE_MB,
+            "max_audio_duration_sec": MAX_AUDIO_DURATION_SEC,
             "max_concurrent": TRANSCRIBE_MAX_CONCURRENT,
             "max_queued": TRANSCRIBE_MAX_QUEUED,
         },

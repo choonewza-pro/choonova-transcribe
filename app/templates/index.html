@@ -157,7 +157,7 @@
               <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                 <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.05);">📦 ขนาดไฟล์สูงสุด (Max Payload)</td>
                 <td style="padding: 0.9rem 1.2rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05);">
-                  <strong>{{ max_audio_upload_mb|default(50)|int }} MB</strong> ต่อการอัปโหลด 1 ครั้งผ่าน REST API (<code>POST /v1/audio/transcribe</code>) — ไฟล์ใหญ่กว่าใช้หน้า/endpoint งานเบื้องหลัง
+                  <strong>{{ max_audio_upload_mb|default(50)|int }} MB</strong> ต่อการอัปโหลด 1 ครั้งผ่าน REST API (<code>POST /v1/audio/transcribe</code>){% if max_audio_duration_sec > 0 %} / ความยาวไม่เกิน {{ (max_audio_duration_sec / 3600)|round(1) }} ชั่วโมง{% endif %} — ไฟล์ใหญ่กว่าใช้หน้า/endpoint งานเบื้องหลัง
                 </td>
               </tr>
               <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">

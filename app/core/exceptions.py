@@ -38,6 +38,12 @@ class StorageException(ChooNovaException):
         super().__init__(message=message, status_code=507)
 
 
+class QueueFullException(ChooNovaException):
+    """Raised when the transcription queue is at capacity."""
+    def __init__(self, message: str):
+        super().__init__(message=message, status_code=429)
+
+
 class ASREngineException(ChooNovaException):
     """Raised when an ASR engine (Typhoon or Whisper) fails."""
     def __init__(self, message: str):

@@ -4,7 +4,7 @@
           <span class="api-group-icon">⏳</span>
           <div>
             <h3 class="api-group-title">ถอดไฟล์เสียงแบบคิว (Audio Transcribe Jobs)</h3>
-            <p class="api-group-desc">ส่งไฟล์เสียงเข้าระบบคิว (สูงสุด {{ max_audio_upload_mb|default(50)|int }}MB) ประมวลผลเบื้องหลัง แบบเดียวกับหน้า
+            <p class="api-group-desc">ส่งไฟล์เสียงเข้าระบบคิว (สูงสุด {{ max_audio_upload_mb|default(50)|int }}MB{% if max_audio_duration_sec > 0 %} / ความยาวไม่เกิน {{ (max_audio_duration_sec / 3600)|round(1) }} ชั่วโมง{% endif %}) ประมวลผลเบื้องหลัง แบบเดียวกับหน้า
             <code>/v1/audio/transcribe</code> (matrix โมเดลเดียวกัน) แต่ยกเลิกได้ + ดูประวัติที่หน้า "ประวัติการถอดความ"</p>
           </div>
         </div>
@@ -156,7 +156,7 @@
               พารามิเตอร์เหมือน <code>/v1/audio/transcribe</code> (ดูการ์ด "ถอดไฟล์เสียง" ด้านล่าง): <code>file</code>, <code>language</code>,
               <code>task</code>, <code>model</code>, <code>with_timestamps</code>, <code>enable_diarization</code>, <code>num_speakers</code>,
               <code>min_speakers</code>, <code>max_speakers</code> — คิวเต็ม (≥ {{ max_queued|default(10) }}) → <code>429</code>,
-              ไฟล์เกิน {{ max_audio_upload_mb|default(50)|int }}MB → <code>413</code>, โมเดลไม่ตรงกับภาษา/การระบุผู้พูด → <code>422</code>
+              ไฟล์เกิน {{ max_audio_upload_mb|default(50)|int }}MB{% if max_audio_duration_sec > 0 %} / ยาวเกิน {{ (max_audio_duration_sec / 3600)|round(1) }} ชั่วโมง{% endif %} → <code>413</code>, โมเดลไม่ตรงกับภาษา/การระบุผู้พูด → <code>422</code>
             </p>
             <div class="code-container">
               <div class="code-header">ตัวอย่าง Response (202 Accepted)</div>

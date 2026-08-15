@@ -48,6 +48,8 @@ MAX_UPLOAD_SIZE_MB = float(os.getenv("MAX_UPLOAD_SIZE_MB", "0"))
 MAX_AUDIO_UPLOAD_SIZE_MB = float(os.getenv("MAX_AUDIO_UPLOAD_SIZE_MB", "50.0"))
 # Max duration in seconds for uploaded media to prevent GPU hogging (0 = unlimited, default 21600 = 6 hours)
 MAX_MEDIA_DURATION_SEC = float(os.getenv("MAX_MEDIA_DURATION_SEC", "21600.0"))
+# Max duration in seconds for short audio endpoints (full-file, single-pass — no chunking; default 3600 = 1 hour)
+MAX_AUDIO_DURATION_SEC = float(os.getenv("MAX_AUDIO_DURATION_SEC", "3600.0"))
 
 # =========================================================================
 # Video Compressor (FFmpeg) configuration

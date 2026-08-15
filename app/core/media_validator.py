@@ -44,10 +44,14 @@ def validate_extension(filename: str):
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=422, detail=f"Extension '{ext}' is not allowed.")
 
-def validate_with_ffprobe(filepath: str):
+def validate_with_ffprobe(filepath: str, max_duration_sec: float | None = None):
     """
     Use ffprobe to deeply inspect the media file container.
     This protects against Polyglot files and deeply hidden malicious streams.
+
+    max_duration_sec: optional duration limit override. Defaults to
+    MAX_MEDIA_DURATION_SEC (long-form media). Short audio endpoints pass their
+    own MAX_AUDIO_DURATION_SEC since they process the file in a single pass.
     """
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="File not found for validation.")
@@ -78,10 +82,11 @@ def validate_with_ffprobe(filepath: str):
             duration = float(duration_str)
             if duration <= 0:
                 raise ValueError()
-            if MAX_MEDIA_DURATION_SEC > 0 and duration > MAX_MEDIA_DURATION_SEC:
+            max_duration = max_duration_sec if max_duration_sec is not None else MAX_MEDIA_DURATION_SEC
+            if max_duration > 0 and duration > max_duration:
                 raise HTTPException(
                     status_code=413,
-                    detail=f"Media duration ({duration:.1f}s) exceeds maximum allowed ({MAX_MEDIA_DURATION_SEC:.0f}s)."
+                    detail=f"Media duration ({duration:.1f}s) exceeds maximum allowed ({max_duration:.0f}s)."
                 )
         except ValueError:
             raise HTTPException(status_code=422, detail="Invalid media duration parsed.")

@@ -151,6 +151,7 @@ Application behavior is controlled via environment variables. Copy `.env.example
 | `MAX_AUDIO_UPLOAD_SIZE_MB`   | `50.0`                    | No       | Size limit for synchronous audio endpoint.                                  |
 | `MAX_UPLOAD_SIZE_MB`         | `0`                       | No       | Size limit for async long-form jobs (0 = unlimited).                        |
 | `MAX_MEDIA_DURATION_SEC`     | `21600.0`                 | No       | Max duration in seconds for uploaded media to prevent GPU hogging.          |
+| `MAX_AUDIO_DURATION_SEC`     | `3600.0`                  | No       | Max duration in seconds for short audio endpoints (full-file single-pass).  |
 | `MIN_FREE_DISK_GB`           | `5.0`                     | No       | Minimum required free disk space in GB before rejecting new jobs.           |
 | `ALLOW_ACCESS_TRANSCRIBE_HISTORY` | `false`              | No       | Bypasses API key authentication on ASR history. **⚠️ SECURITY RISK**: Enabling this allows public access to transcripts and media files. |
 | `ALLOW_ACCESS_COMPRESS_HISTORY` | `false`                | No       | Bypasses API key authentication on compress history. **⚠️ SECURITY RISK**: Enabling this allows public access to compression logs and videos. |
