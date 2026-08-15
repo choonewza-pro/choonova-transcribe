@@ -10,6 +10,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusMessage = document.getElementById('statusMessage');
   const resultText = document.getElementById('resultText');
   const copyResultBtn = document.getElementById('copyResultBtn');
+  const copyJsonBtn = document.getElementById('copyJsonBtn');
+  const jsonBox = document.getElementById('jsonBox');
+  const resultJson = document.getElementById('resultJson');
   const statsBar = document.getElementById('statsBar');
   const statElapsed = document.getElementById('statElapsed');
   const statDuration = document.getElementById('statDuration');
@@ -83,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedFile = null;
   let activeController = null;
   let fileDialogActive = false;
+  let isProcessing = false;
 
   // --- API Key Management ---
   function getApiKey() {
@@ -91,8 +95,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateTranscribeBtnState() {
     const hasKey = !!getApiKey();
-    transcribeBtn.disabled = !hasKey;
-    transcribeBtn.title = hasKey ? '' : 'กรุณาตั้งค่า API Key ในหน้า Settings ก่อนใช้งาน';
+    const hasFile = !!selectedFile;
+    transcribeBtn.disabled = !hasKey || !hasFile || isProcessing;
+    transcribeBtn.title = !hasKey
+      ? 'กรุณาตั้งค่า API Key ในหน้า Settings ก่อนใช้งาน'
+      : (!hasFile
+        ? 'กรุณาเลือกไฟล์เสียงก่อน'
+        : (isProcessing ? 'กำลังประมวลผล... (ยกเลิกได้ด้วยปุ่ม Cancel)' : ''));
   }
 
   // Copy text to clipboard handler
@@ -113,6 +122,27 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 2000);
     } catch (err) {
       alert('ไม่สามารถคัดลอกข้อความได้: ' + err.message);
+    }
+  });
+
+  // Copy JSON result to clipboard handler
+  copyJsonBtn.addEventListener('click', async () => {
+    const jsonToCopy = resultJson.textContent;
+    if (!jsonToCopy) {
+      alert('ไม่มี JSON ให้คัดลอก');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(jsonToCopy);
+      const originalText = copyJsonBtn.textContent;
+      copyJsonBtn.textContent = '✅ คัดลอกแล้ว!';
+      copyJsonBtn.style.color = 'var(--success)';
+      setTimeout(() => {
+        copyJsonBtn.textContent = originalText;
+        copyJsonBtn.style.color = '';
+      }, 2000);
+    } catch (err) {
+      alert('ไม่สามารถคัดลอก JSON ได้: ' + err.message);
     }
   });
 
@@ -166,13 +196,13 @@ document.addEventListener('DOMContentLoaded', () => {
       alert(`ไฟล์ใหญ่เกินไป! ขนาดสูงสุดที่อนุญาตคือ ${maxAudioMb} MB`);
       selectedFile = null;
       fileNameDisplay.textContent = `📁 ไม่มีไฟล์ (ขนาดเกิน ${maxAudioMb} MB)`;
-      transcribeBtn.disabled = true;
+      updateTranscribeBtnState();
       document.getElementById('audioPlayerContainer').style.display = 'none';
       return;
     }
     selectedFile = file;
     fileNameDisplay.textContent = `📁 ไฟล์ที่เลือก: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
-    transcribeBtn.disabled = false;
+    updateTranscribeBtnState();
 
     // Load Audio Preview
     const fileURL = URL.createObjectURL(file);
@@ -185,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedFile = null;
     fileInput.value = '';
     fileNameDisplay.textContent = '📁 ลากไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์';
-    transcribeBtn.disabled = true;
+    updateTranscribeBtnState();
     document.getElementById('audioPlayerContainer').style.display = 'none';
     audioPreview.src = '';
     playerStatus.textContent = '';
@@ -207,6 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    isProcessing = true;
     transcribeBtn.disabled = true;
     dropzone.style.display = 'none';
     cancelBtn.style.display = 'inline-flex';
@@ -215,6 +246,8 @@ document.addEventListener('DOMContentLoaded', () => {
     resultText.textContent = 'กำลังแปลงเสียงพูดเป็นข้อความ...';
     statsBar.style.display = 'none';
     timestampsBox.style.display = 'none';
+    jsonBox.style.display = 'none';
+    resultJson.textContent = '';
     newTranscribeBtn.style.display = 'none';
 
     const formData = new FormData();
@@ -322,6 +355,9 @@ document.addEventListener('DOMContentLoaded', () => {
           timestampsBox.style.display = 'block';
           timestampsJson.textContent = JSON.stringify(data.timestamps, null, 2);
         }
+
+        jsonBox.style.display = 'block';
+        resultJson.textContent = JSON.stringify(data, null, 2);
       } else {
         statusMessage.textContent = `❌ เกิดข้อผิดพลาด: ${data.detail || 'ไม่สามารถแปลงไฟล์เสียงได้'}`;
         statusMessage.style.color = 'var(--danger)';
@@ -343,9 +379,10 @@ document.addEventListener('DOMContentLoaded', () => {
         resultText.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
       }
     } finally {
+      isProcessing = false;
       activeController = null;
       cancelBtn.style.display = 'none';
-      transcribeBtn.disabled = false;
+      updateTranscribeBtnState();
     }
   });
 
@@ -378,6 +415,8 @@ document.addEventListener('DOMContentLoaded', () => {
     resultText.textContent = '📁 ผลลัพธ์ข้อความภาษาไทยจะแสดงตรงนี้...';
     statsBar.style.display = 'none';
     timestampsBox.style.display = 'none';
+    jsonBox.style.display = 'none';
+    resultJson.textContent = '';
   }
 
   if (newTranscribeBtn) newTranscribeBtn.addEventListener('click', resetUploadUI);

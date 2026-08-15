@@ -10,3 +10,7 @@ _active_workers: Dict[str, "subprocess.Popen"] = {}
 
 # Track running video compressor subprocesses (FFmpeg jobs). 
 _active_compress_workers: Dict[str, "subprocess.Popen"] = {}
+
+# Track synchronous inline transcription subprocesses (/v1/audio/transcribe)
+# so the request handler can terminate them on client cancel.
+_active_inline_workers: Dict[str, "subprocess.Popen"] = {}

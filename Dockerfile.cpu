@@ -46,12 +46,11 @@ COPY app /app/app
 # Copy sample assets used by the API Endpoint Self-Test page (/test → /v1/tests/*)
 COPY assets /app/assets
 
-# Create empty SQLite jobs DB inside the image (no volume mount required).
-# At runtime app/db.init_db() runs CREATE TABLE IF NOT EXISTS which is a no-op here.
-RUN python3 -c "\
-from app.db import init_db; \
-init_db(); \
-print('  ✅ EMPTY SQLite JOBS DB CREATED at /app/data/choonova-transcribe.db')"
+# NOTE: The SQLite jobs DB is intentionally NOT created at build time.
+# Building it here would seed the `settings` table with build-time env
+# defaults (MODEL_LOAD_MODE etc.) that the runtime container env cannot
+# override (init_db uses INSERT OR IGNORE). Let runtime init_db() create
+# it so the container's .env-driven settings are honored.
 
 EXPOSE 8830
 

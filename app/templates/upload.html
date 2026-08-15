@@ -92,11 +92,16 @@
       <div id="statusMessage" style="margin-top: 1.5rem; font-weight: 500;"></div>
 
       <div style="margin-top: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
           <h3 style="font-size: 1.2rem;">ข้อความที่ถอดได้ (Result Text):</h3>
-          <button id="copyResultBtn" class="nav-link action-btn" style="cursor: pointer; padding: 0.4rem 0.8rem; font-size: 0.9rem;">
-            📋 คัดลอกข้อความ
-          </button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button id="copyResultBtn" class="nav-link action-btn" style="cursor: pointer; padding: 0.4rem 0.8rem; font-size: 0.9rem;">
+              📋 คัดลอกข้อความ
+            </button>
+            <button id="copyJsonBtn" class="nav-link action-btn" style="cursor: pointer; padding: 0.4rem 0.8rem; font-size: 0.9rem;">
+              📋 คัดลอก JSON
+            </button>
+          </div>
         </div>
         <div class="result-box" id="resultText">ผลลัพธ์ข้อความภาษาไทยจะแสดงตรงนี้...</div>
         
@@ -104,6 +109,11 @@
           <div class="stats-badge" id="statElapsed">⏱️ เวลาประมวลผล: -</div>
           <div class="stats-badge" id="statDuration">🎵 ความยาวไฟล์เสียง: -</div>
           <div class="stats-badge" id="statRtf">⚡ RTF Multiplier: -</div>
+        </div>
+
+        <div id="jsonBox" style="margin-top: 1.5rem; display: none;">
+          <h4 style="margin-bottom: 0.5rem; color: var(--accent-cyan);">ผลลัพธ์แบบ JSON:</h4>
+          <pre id="resultJson" style="background: rgba(0,0,0,0.5); padding: 1rem; border-radius: 8px; font-size: 0.85rem; max-height: 300px; overflow-y: auto;"></pre>
         </div>
 
         <div id="timestampsBox" style="margin-top: 1.5rem; display: none;">

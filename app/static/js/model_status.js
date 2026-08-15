@@ -102,7 +102,7 @@
     pollTimer = setInterval(() => {
       if (document.hidden) return;
       refresh();
-    }, intervalMs || 3000);
+    }, intervalMs || 15000);
   }
 
   // ============================================================
@@ -279,11 +279,11 @@
   };
 
   if (getBadgeEl()) {
-    startPolling(3000);
+    startPolling(15000);
     initModalEvents();
   } else {
     document.addEventListener('DOMContentLoaded', function () {
-      if (getBadgeEl()) startPolling(3000);
+      if (getBadgeEl()) startPolling(15000);
       initModalEvents();
     });
   }
