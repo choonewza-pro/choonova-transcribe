@@ -46,6 +46,42 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function bindSpeakerMode() {
+    const radios = document.querySelectorAll('input[name="speakerMode"]');
+    const exactRow = document.getElementById('exactSpeakersRow');
+    const rangeRow = document.getElementById('rangeSpeakersRow');
+    function sync() {
+      const checked = document.querySelector('input[name="speakerMode"]:checked');
+      const mode = (checked && checked.value) || 'auto';
+      if (exactRow) exactRow.style.display = mode === 'exact' ? 'flex' : 'none';
+      if (rangeRow) rangeRow.style.display = mode === 'range' ? 'flex' : 'none';
+    }
+    radios.forEach(r => r.addEventListener('change', sync));
+    sync();
+  }
+
+  function collectSpeakerParams(formData) {
+    const checked = document.querySelector('input[name="speakerMode"]:checked');
+    const mode = (checked && checked.value) || 'auto';
+    const num = document.getElementById('numSpeakersInput');
+    const min = document.getElementById('minSpeakersInput');
+    const max = document.getElementById('maxSpeakersInput');
+    if (mode === 'exact') {
+      if (num && num.value && parseInt(num.value, 10) > 0) {
+        formData.append('num_speakers', num.value);
+      }
+    } else if (mode === 'range') {
+      if (min && min.value && parseInt(min.value, 10) > 0) {
+        formData.append('min_speakers', min.value);
+      }
+      if (max && max.value && parseInt(max.value, 10) > 0) {
+        formData.append('max_speakers', max.value);
+      }
+    }
+  }
+
+  bindSpeakerMode();
+
   let selectedFile = null;
   let activeJobId = null;
   let pollInterval = null;
@@ -318,18 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const enableDiarizationCheck = document.getElementById('enableDiarization');
     if (enableDiarizationCheck && enableDiarizationCheck.checked) {
       formData.append('enable_diarization', 'true');
-      const numSpeakersInput = document.getElementById('numSpeakersInput');
-      if (numSpeakersInput && numSpeakersInput.value && parseInt(numSpeakersInput.value, 10) > 0) {
-        formData.append('num_speakers', numSpeakersInput.value);
-      }
-      const minSpeakersInput = document.getElementById('minSpeakersInput');
-      if (minSpeakersInput && minSpeakersInput.value && parseInt(minSpeakersInput.value, 10) > 0) {
-        formData.append('min_speakers', minSpeakersInput.value);
-      }
-      const maxSpeakersInput = document.getElementById('maxSpeakersInput');
-      if (maxSpeakersInput && maxSpeakersInput.value && parseInt(maxSpeakersInput.value, 10) > 0) {
-        formData.append('max_speakers', maxSpeakersInput.value);
-      }
+      collectSpeakerParams(formData);
     }
 
     const xhr = new XMLHttpRequest();

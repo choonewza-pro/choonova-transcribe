@@ -106,7 +106,6 @@ class JobCreateResponse(BaseModel):
     id: str
     filename: str
     language: str = "th"
-    task: str = "transcribe"
     model: Optional[str] = None
     enable_diarization: bool = False
     num_speakers: Optional[int] = None
@@ -120,7 +119,6 @@ class JobStatusResponse(BaseModel):
     filename: str
     file_size_bytes: int = 0
     language: str = "th"
-    task: str = "transcribe"
     model: Optional[str] = None
     status: JobStatus
     stage: str
@@ -198,7 +196,7 @@ class CompressJobStatusResponse(BaseModel):
 # =========================================================================
 
 class ResponseFormat(str, Enum):
-    """Supported response formats for OpenAI transcription / translation."""
+    """Supported response formats for OpenAI transcription."""
     JSON = "json"
     TEXT = "text"
     SRT = "srt"
@@ -240,7 +238,7 @@ class OpenAITranscriptionJsonResponse(BaseModel):
 
 class OpenAITranscriptionVerboseJsonResponse(BaseModel):
     """Verbose JSON response with segments and optional words."""
-    task: Literal["transcribe", "translate"]
+    task: Literal["transcribe"]
     language: str
     duration: float
     text: str

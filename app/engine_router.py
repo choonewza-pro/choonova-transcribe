@@ -94,39 +94,24 @@ def transcribe_file(
     language: str = "th",
     with_timestamps: bool = False,
     is_chunk: bool = False,
-    task: str = "transcribe",
     temperature: Optional[float] = None,
     initial_prompt: Optional[str] = None,
     hotwords: Optional[str] = None,
     model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Route a transcription/translation request to the appropriate engine:
-      - task='translate' -> Whisper (translates speech into English text)
+    Route a transcription request to the appropriate engine:
       - model='thai-whisper'/'typhoon'/'whisper' -> explicit engine selection
-      - 'th' (transcribe, model=None) -> Thai-tuned Whisper (accurate Thai offline ASR + real word timestamps)
-      - 'en'/'auto' (transcribe, model=None) -> Whisper
+      - 'th' (model=None) -> Thai-tuned Whisper (accurate Thai offline ASR + real word timestamps)
+      - 'en'/'auto' (model=None) -> Whisper
     """
     lang = normalize_language(language) if language else "th"
     model_clean = (model or "").strip().lower() or None
 
-    if task == "translate":
-        res = whisper_engine.transcribe_file(
-            audio_path,
-            language=lang,
-            with_timestamps=with_timestamps,
-            task="translate",
-            temperature=temperature,
-            initial_prompt=initial_prompt,
-            hotwords=hotwords,
-        )
-        res["model"] = "whisper"
-        return res
-
     if model_clean == "typhoon":
         res = engine.transcribe_file(
             audio_path,
-            with_timestamps=with_timestamps,
+            with_timestamps=False,
             is_chunk=is_chunk,
         )
         res["model"] = "typhoon"
@@ -137,7 +122,6 @@ def transcribe_file(
             audio_path,
             language=lang,
             with_timestamps=with_timestamps,
-            task="transcribe",
             temperature=temperature,
             initial_prompt=initial_prompt,
             hotwords=hotwords,
@@ -150,7 +134,6 @@ def transcribe_file(
             audio_path,
             language="th",
             with_timestamps=with_timestamps,
-            task="transcribe",
         )
         res["model"] = model_clean or "thai-whisper"
         return res
@@ -158,7 +141,6 @@ def transcribe_file(
         audio_path,
         language=lang,
         with_timestamps=with_timestamps,
-        task="transcribe",
         temperature=temperature,
         initial_prompt=initial_prompt,
         hotwords=hotwords,
@@ -172,37 +154,22 @@ def transcribe_bytes(
     filename_hint: str = "audio.wav",
     language: str = "th",
     with_timestamps: bool = False,
-    task: str = "transcribe",
     temperature: Optional[float] = None,
     initial_prompt: Optional[str] = None,
     hotwords: Optional[str] = None,
     model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Route a raw-bytes transcription/translation request to the appropriate engine.
+    Route a raw-bytes transcription request to the appropriate engine.
     """
     lang = normalize_language(language) if language else "th"
     model_clean = (model or "").strip().lower() or None
-
-    if task == "translate":
-        res = whisper_engine.transcribe_bytes(
-            audio_bytes,
-            filename_hint=filename_hint,
-            language=lang,
-            with_timestamps=with_timestamps,
-            task="translate",
-            temperature=temperature,
-            initial_prompt=initial_prompt,
-            hotwords=hotwords,
-        )
-        res["model"] = "whisper"
-        return res
 
     if model_clean == "typhoon":
         res = engine.transcribe_bytes(
             audio_bytes,
             filename_hint=filename_hint,
-            with_timestamps=with_timestamps,
+            with_timestamps=False,
         )
         res["model"] = "typhoon"
         return res
@@ -213,7 +180,6 @@ def transcribe_bytes(
             filename_hint=filename_hint,
             language=lang,
             with_timestamps=with_timestamps,
-            task="transcribe",
             temperature=temperature,
             initial_prompt=initial_prompt,
             hotwords=hotwords,
@@ -227,7 +193,6 @@ def transcribe_bytes(
             filename_hint=filename_hint,
             language="th",
             with_timestamps=with_timestamps,
-            task="transcribe",
         )
         res["model"] = model_clean or "thai-whisper"
         return res
@@ -236,7 +201,6 @@ def transcribe_bytes(
         filename_hint=filename_hint,
         language=lang,
         with_timestamps=with_timestamps,
-        task="transcribe",
         temperature=temperature,
         initial_prompt=initial_prompt,
         hotwords=hotwords,

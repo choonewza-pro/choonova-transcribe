@@ -2,7 +2,6 @@
 OpenAI-Compatible Audio API Endpoints for ChooNova Transcribe.
 Provides standard drop-in replacement endpoints:
   - POST /v1/audio/transcriptions
-  - POST /v1/audio/translations
   - GET  /v1/models
   - GET  /v1/models/{model_id}
 """
@@ -89,42 +88,6 @@ async def create_transcription(
         response_format=response_format,
         temperature=temperature,
         timestamp_granularities=timestamp_granularities,
-        task="transcribe",
-    )
-
-
-@router.post("/v1/audio/translations")
-async def create_translation(
-    request: Request,
-    file: UploadFile = File(..., description="The audio file object (not file name) to translate."),
-    model: str = Form("whisper-1", description="ID of the model to use (whisper-1)."),
-    prompt: Optional[str] = Form(None, description="An optional text to guide the model's style."),
-    hotwords: Optional[str] = Form(None, description="Optional hotwords/phrases to bias translation."),
-    response_format: ResponseFormat = Form(ResponseFormat.JSON, description="The format of the transcript output."),
-    temperature: float = Form(0.0, description="The sampling temperature, between 0 and 1."),
-    authenticated: bool = Depends(verify_api_key),
-):
-    """
-    Translates audio into English.
-    OpenAI-compatible drop-in endpoint: POST /v1/audio/translations
-    """
-    form_data = await request.form()
-    timestamp_granularities = form_data.getlist("timestamp_granularities[]")
-    if not timestamp_granularities:
-        timestamp_granularities = []
-    if response_format == ResponseFormat.VERBOSE_JSON and not timestamp_granularities:
-        timestamp_granularities = ["segment"]
-
-    return await _handle_audio_request(
-        file=file,
-        model=model,
-        language=None,
-        prompt=prompt,
-        hotwords=hotwords,
-        response_format=response_format,
-        temperature=temperature,
-        timestamp_granularities=timestamp_granularities,
-        task="translate",
     )
 
 
@@ -137,9 +100,8 @@ async def _handle_audio_request(
     response_format: ResponseFormat,
     temperature: float,
     timestamp_granularities: List[str],
-    task: str = "transcribe",
 ):
-    """Internal handler for transcriptions and translations."""
+    """Internal handler for audio transcriptions."""
     if not file.filename:
         return create_openai_error(400, "Audio file must be provided.", param="file")
 
@@ -217,7 +179,6 @@ async def _handle_audio_request(
             filename_hint=file.filename,
             language=target_lang,
             with_timestamps=with_timestamps,
-            task=task,
             temperature=temperature,
             initial_prompt=prompt,
             hotwords=hotwords,
@@ -246,7 +207,7 @@ async def _handle_audio_request(
             include_segments = "segment" in timestamp_granularities or not timestamp_granularities
             verbose_resp = format_verbose_json_response(
                 result=res,
-                task=task,
+                task="transcribe",
                 language=detected_lang,
                 duration=duration,
                 include_words=include_words,

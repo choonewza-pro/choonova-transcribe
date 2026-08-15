@@ -76,7 +76,6 @@ def _job_to_dict(job) -> Dict[str, Any]:
         "num_speakers": getattr(job, "num_speakers", None),
         "min_speakers": getattr(job, "min_speakers", None),
         "max_speakers": getattr(job, "max_speakers", None),
-        "task": getattr(job, "task", None) or "transcribe",
         "model": job.model,
         "result": job.result,
         "error": job.error,
@@ -124,7 +123,6 @@ async def transcribe_audio(
     file: UploadFile = File(...),
     with_timestamps: bool = Form(False),
     language: str = Form("th"),
-    task: str = Form("transcribe"),
     enable_diarization: bool = Form(False),
     num_speakers: Optional[int] = Form(None),
     min_speakers: Optional[int] = Form(None),
@@ -133,11 +131,10 @@ async def transcribe_audio(
     authenticated: bool = Depends(verify_api_key),
 ):
     """
-    Transcribe or translate an uploaded audio file (WAV, MP3, M4A, OGG, FLAC).
+    Transcribe an uploaded audio file (WAV, MP3, M4A, OGG, FLAC).
 
-    language: 'th' (default, Typhoon Thai ASR), 'en' (Whisper English), or
+    language: 'th' (default, Thai Whisper), 'en' (Whisper English), or
     'auto' (Whisper auto-detect for Thai/English mixed audio).
-    task: 'transcribe' (default) or 'translate' (translate to English via Whisper).
     model: engine selection ('thai-whisper' | 'typhoon' | 'whisper' | 'whisperx').
     """
     if not file.filename:
@@ -149,7 +146,6 @@ async def transcribe_audio(
 
     req = svc.prepare_request(
         language=language,
-        task=task,
         model=model,
         enable_diarization=enable_diarization,
         num_speakers=num_speakers,
@@ -195,7 +191,6 @@ async def transcribe_audio(
             temp_audio_path,
             req.language,
             str(req.with_timestamps).lower(),
-            req.task,
             req.model,
             str(req.num_speakers) if req.num_speakers is not None else "none",
             str(req.min_speakers) if req.min_speakers is not None else "none",
@@ -275,7 +270,6 @@ async def create_audio_transcription_job(
     file: UploadFile = File(...),
     with_timestamps: bool = Form(False),
     language: str = Form("th"),
-    task: str = Form("transcribe"),
     enable_diarization: bool = Form(False),
     num_speakers: Optional[int] = Form(None),
     min_speakers: Optional[int] = Form(None),
@@ -299,7 +293,6 @@ async def create_audio_transcription_job(
 
     req = svc.prepare_request(
         language=language,
-        task=task,
         model=model,
         enable_diarization=enable_diarization,
         num_speakers=num_speakers,
@@ -339,7 +332,6 @@ async def create_audio_transcription_job(
         num_speakers=req.num_speakers,
         min_speakers=req.min_speakers,
         max_speakers=req.max_speakers,
-        task=req.task,
         model=req.model,
         type="audio",
     )
@@ -349,7 +341,6 @@ async def create_audio_transcription_job(
         id=job.id,
         filename=file.filename,
         language=req.language,
-        task=req.task,
         model=req.model,
         enable_diarization=req.enable_diarization,
         num_speakers=req.num_speakers,
@@ -368,7 +359,6 @@ async def create_audio_transcription_job(
 async def create_transcription_job(
     file: UploadFile = File(...),
     language: str = Form("th"),
-    task: str = Form("transcribe"),
     target_chunk_sec: float = Form(None),
     max_chunk_sec: float = Form(None),
     enable_diarization: bool = Form(False),
@@ -381,8 +371,8 @@ async def create_transcription_job(
     Upload a large video/audio file (MP4, MKV, MOV, WAV up to 1GB+) for long-form transcription.
     Returns job_id immediately with 202 Accepted status for async background processing.
 
-    language: 'th' (default, Typhoon Thai ASR), 'en' (Whisper English),
-    'auto' (Whisper auto-detect for Thai/English mixed audio), or 'translate_en' (Whisper speech-to-English translation).
+    language: 'th' (default, Thai Whisper), 'en' (Whisper English),
+    'auto' (Whisper auto-detect for Thai/English mixed audio).
 
     target_chunk_sec / max_chunk_sec: chunk duration bounds for silence-based splitting.
     Defaults come from env based on the selected language model.
@@ -394,17 +384,10 @@ async def create_transcription_job(
 
     validate_extension(file.filename)
 
-    lang_clean = (language or "th").strip().lower()
-    task_clean = (task or "transcribe").strip().lower()
-    if lang_clean in ("translate_en", "translate") or task_clean == "translate":
-        task_mode = "translate"
-        lang = "auto"
-    else:
-        task_mode = "transcribe"
-        try:
-            lang = TranscriptionService.normalize_language(language)
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+    try:
+        lang = TranscriptionService.normalize_language(language)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
     if num_speakers is not None and num_speakers <= 0:
         raise HTTPException(status_code=422, detail="num_speakers must be greater than 0.")
@@ -501,7 +484,6 @@ async def create_transcription_job(
         num_speakers=num_speakers,
         min_speakers=min_speakers,
         max_speakers=max_speakers,
-        task=task_mode,
     )
 
     return JobCreateResponse(
@@ -509,7 +491,6 @@ async def create_transcription_job(
         id=job.id,
         filename=file.filename,
         language=lang,
-        task=task_mode,
         enable_diarization=enable_diarization,
         num_speakers=num_speakers,
         min_speakers=min_speakers,

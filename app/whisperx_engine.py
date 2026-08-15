@@ -122,7 +122,6 @@ class WhisperXDiarizer:
         num_speakers: Optional[int] = None,
         min_speakers: Optional[int] = None,
         max_speakers: Optional[int] = None,
-        task: str = "transcribe",
     ) -> Dict[str, Any]:
         """
         Run WhisperX full pipeline: Transcribe -> Forced Alignment (with fallback) -> Diarize -> Assign Speakers.
@@ -142,9 +141,9 @@ class WhisperXDiarizer:
         # 1. ASR Transcribe
         batch_size = 16
         lang_arg = language if language and language != "auto" else None
-        logger.info(f"Step 1: WhisperX Transcribe (lang={lang_arg}, task={task}, batch_size={batch_size})")
+        logger.info(f"Step 1: WhisperX Transcribe (lang={lang_arg}, batch_size={batch_size})")
         start_t = time.time()
-        result = self._asr_model.transcribe(audio, batch_size=batch_size, language=lang_arg, task=task)
+        result = self._asr_model.transcribe(audio, batch_size=batch_size, language=lang_arg, task="transcribe")
         detected_lang = result.get("language", language or "en")
         logger.info(f"ASR step finished in {time.time() - start_t:.2f}s (detected_lang={detected_lang})")
 
@@ -230,7 +229,7 @@ class WhisperXDiarizer:
         if current_speaker is not None and current_speaker_texts:
             turn_text_parts.append(f"[{current_speaker}]: {' '.join(current_speaker_texts)}")
 
-        formatted_full_text = "\n".join(turn_text_parts) if turn_text_parts else " ".join([s["text"] for s in formatted_segments])
+        formatted_full_text = "\n\n".join(turn_text_parts) if turn_text_parts else " ".join([s["text"] for s in formatted_segments])
 
         return {
             "text": formatted_full_text,
@@ -280,7 +279,6 @@ def transcribe_and_diarize_whisperx(
     num_speakers: Optional[int] = None,
     min_speakers: Optional[int] = None,
     max_speakers: Optional[int] = None,
-    task: str = "transcribe",
 ) -> Dict[str, Any]:
     diarizer = get_whisperx_diarizer()
     return diarizer.transcribe_and_diarize(
@@ -289,5 +287,4 @@ def transcribe_and_diarize_whisperx(
         num_speakers=num_speakers,
         min_speakers=min_speakers,
         max_speakers=max_speakers,
-        task=task,
     )

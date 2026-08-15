@@ -3,7 +3,7 @@
         <summary style="cursor: pointer; padding: 1rem 1.2rem; background: rgba(168, 85, 247, 0.08); display: flex; align-items: center; justify-content: space-between; user-select: none;">
           <div style="display: flex; align-items: center; gap: 0.75rem;">
             <span style="font-weight: 700; color: #c084fc; background: rgba(168, 85, 247, 0.15); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.85rem;">POST & GET</span>
-            <span style="font-weight: 600; font-family: monospace; font-size: 1rem;">/v1/audio/transcriptions & /v1/audio/translations</span>
+            <span style="font-weight: 600; font-family: monospace; font-size: 1rem;">/v1/audio/transcriptions</span>
           </div>
           <span style="font-size: 0.85rem; color: var(--text-muted);">🤖 OpenAI-Compatible Drop-in API</span>
         </summary>
@@ -26,11 +26,6 @@
                   <td style="padding: 0.5rem;"><code>/v1/audio/transcriptions</code></td>
                   <td style="padding: 0.5rem;"><span style="color: #40c057; font-weight: 600;">POST</span></td>
                   <td style="padding: 0.5rem;">ถอดเสียงพูดเป็นข้อความตามภาษาต้นทาง (รองรับ <code>model="whisper-1"</code>, <code>"typhoon-asr"</code>)</td>
-                </tr>
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                  <td style="padding: 0.5rem;"><code>/v1/audio/translations</code></td>
-                  <td style="padding: 0.5rem;"><span style="color: #40c057; font-weight: 600;">POST</span></td>
-                  <td style="padding: 0.5rem;">แปลเสียงพูดทุกภาษาเป็นภาษาอังกฤษ (English Translation)</td>
                 </tr>
                 <tr>
                   <td style="padding: 0.5rem;"><code>/v1/models</code></td>
@@ -57,15 +52,7 @@ with open("meeting.mp3", "rb") as audio_file:
         file=audio_file,
         response_format="verbose_json",  # "json", "text", "srt", "vtt", "verbose_json"
     )
-print(transcript)
-
-# 2. Translate Audio to English
-with open("thai_speech.mp3", "rb") as audio_file:
-    translation = client.audio.translations.create(
-        model="whisper-1",
-        file=audio_file
-    )
-print(translation.text)</pre>
+print(transcript)</pre>
           </div>
 
           <div class="code-container">
@@ -75,13 +62,7 @@ curl -X POST http://localhost:8830/v1/audio/transcriptions \
   -H "Authorization: Bearer change-me-in-production" \
   -F "file=@/path/to/sample.wav" \
   -F "model=whisper-1" \
-  -F "response_format=srt"
-
-# Translate to English
-curl -X POST http://localhost:8830/v1/audio/translations \
-  -H "Authorization: Bearer change-me-in-production" \
-  -F "file=@/path/to/sample.wav" \
-  -F "model=whisper-1"</pre>
+  -F "response_format=srt"</pre>
           </div>
         </div>
       </details>

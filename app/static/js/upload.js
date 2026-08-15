@@ -29,59 +29,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const languageSelect = document.getElementById('languageSelect');
   const modelSelect = document.getElementById('modelSelect');
 
-  function modelOptionsFor(lang, diarization) {
-    if (lang === 'translate_en') {
-      return [{ value: 'whisper', label: 'Faster-Whisper (large-v3-turbo)' }];
-    }
-    if (lang === 'th') {
-      if (diarization) {
-        return [
-          { value: 'thai-whisper', label: 'Thai Whisper (คำต่อคำ + PyAnnote)' },
-          { value: 'whisperx', label: 'WhisperX (ASR + Diarization)' },
-        ];
-      }
-      return [
-        { value: 'thai-whisper', label: 'Thai Whisper (faster-whisper CT2)' },
-        { value: 'typhoon', label: 'Typhoon ASR (NeMo)' },
-        { value: 'whisper', label: 'Faster-Whisper (large-v3-turbo)' },
-      ];
-    }
-    return diarization
-      ? [{ value: 'whisperx', label: 'WhisperX (ASR + Diarization)' }]
-      : [{ value: 'whisper', label: 'Faster-Whisper (large-v3-turbo)' }];
-  }
-
-  function populateModelOptions() {
-    if (!modelSelect) return;
-    const lang = (languageSelect && languageSelect.value) || 'th';
-    const diar = !!(diarizationCheck && diarizationCheck.checked);
-    const opts = modelOptionsFor(lang, diar);
-    const previous = modelSelect.value;
-    modelSelect.innerHTML = '';
-    opts.forEach(o => {
-      const opt = document.createElement('option');
-      opt.value = o.value;
-      opt.textContent = o.label;
-      modelSelect.appendChild(opt);
-    });
-    if (opts.some(o => o.value === previous)) {
-      modelSelect.value = previous;
-    }
-    modelSelect.disabled = lang === 'translate_en';
-  }
-
-  if (languageSelect) {
-    languageSelect.addEventListener('change', populateModelOptions);
+  if (window.TranscribeCommon) {
+    window.TranscribeCommon.bindModelSelect(modelSelect, languageSelect, diarizationCheck);
   }
 
   if (diarizationCheck && diarizationOptions) {
     diarizationCheck.addEventListener('change', () => {
       diarizationOptions.style.display = diarizationCheck.checked ? 'block' : 'none';
-      populateModelOptions();
     });
   }
 
-  populateModelOptions();
+  if (window.TranscribeCommon) {
+    window.TranscribeCommon.bindSpeakerMode();
+    window.TranscribeCommon.bindTimestampHint();
+  }
 
   let selectedFile = null;
   let activeController = null;
@@ -254,14 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.append('file', selectedFile);
     const languageSelect = document.getElementById('languageSelect');
     const selectedLang = languageSelect ? languageSelect.value : 'th';
-    if (selectedLang === 'translate_en') {
-      formData.append('language', 'auto');
-      formData.append('task', 'translate');
-      resultText.textContent = 'กำลังแปลเสียงพูดเป็นภาษาอังกฤษ...';
-    } else {
-      formData.append('language', selectedLang);
-      formData.append('task', 'transcribe');
-    }
+    formData.append('language', selectedLang);
     if (modelSelect) {
       formData.append('model', modelSelect.value);
     }
@@ -270,17 +224,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (diarizationCheck && diarizationCheck.checked) {
       formData.append('enable_diarization', 'true');
-      const numSpeakersInput = document.getElementById('numSpeakersInput');
-      if (numSpeakersInput && numSpeakersInput.value && parseInt(numSpeakersInput.value, 10) > 0) {
-        formData.append('num_speakers', numSpeakersInput.value);
-      }
-      const minSpeakersInput = document.getElementById('minSpeakersInput');
-      if (minSpeakersInput && minSpeakersInput.value && parseInt(minSpeakersInput.value, 10) > 0) {
-        formData.append('min_speakers', minSpeakersInput.value);
-      }
-      const maxSpeakersInput = document.getElementById('maxSpeakersInput');
-      if (maxSpeakersInput && maxSpeakersInput.value && parseInt(maxSpeakersInput.value, 10) > 0) {
-        formData.append('max_speakers', maxSpeakersInput.value);
+      if (window.TranscribeCommon) {
+        window.TranscribeCommon.collectSpeakerParams(formData);
       }
     }
 
@@ -307,7 +252,8 @@ document.addEventListener('DOMContentLoaded', () => {
         dialogShown = true;
         window.ModelLoadingDialog.show({
           engine: targetEngine,
-          title: `กำลังโหลดโมเดล ${modelLabels[targetEngine] || 'Whisper'} เข้า VRAM / RAM...`,
+          title: `กำลังโหลดโมเดล ${modelLabels[targetEngine] || 'Whisper'} และประมวลผลเสียง...`,
+          subtitle: 'ครั้งแรกจะโหลดโมเดลเข้าหน่วยความจำ (VRAM/RAM) ก่อน แล้วจึงถอดความเสียงตามความยาวไฟล์ หน้าจอนี้จะปิดอัตโนมัติเมื่อเสร็จสิ้น (ปุ่มยกเลิกจะหยุดงานจริง)',
           onCancel: () => {
             if (activeController) {
               activeController.abort();

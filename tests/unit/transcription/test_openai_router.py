@@ -170,7 +170,6 @@ class TestOpenAIModelResolutionAndAuth(unittest.TestCase):
                 temperature=None,
                 prompt=None,
                 timestamp_granularities=[],
-                task="transcribe",
                 hotwords=None,
             )
         )

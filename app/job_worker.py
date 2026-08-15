@@ -66,7 +66,6 @@ async def transcribe_chunk_with_retry(
     with_timestamps: bool,
     chunk_idx: int,
     language: str = "th",
-    task: str = "transcribe",
 ) -> Dict[str, Any]:
     """
     Run the routed engine's transcribe_file for a single chunk, retrying on
@@ -86,7 +85,6 @@ async def transcribe_chunk_with_retry(
                 language,
                 with_timestamps,
                 True,
-                task,
             )
         except Exception as e:
             if not is_cuda_error(e):
@@ -105,7 +103,6 @@ async def transcribe_chunk_with_retry(
                     language,
                     with_timestamps,
                     True,
-                    task,
                 )
             if is_allocator_corruption(e):
                 # Allocator corruption but device reset disabled: keep reloading
@@ -122,7 +119,6 @@ async def transcribe_chunk_with_retry(
                     language,
                     with_timestamps,
                     True,
-                    task,
                 )
             if attempt == CUDA_RETRY_ATTEMPTS:
                 logger.warning(
@@ -137,7 +133,6 @@ async def transcribe_chunk_with_retry(
                     language,
                     with_timestamps,
                     True,
-                    task,
                 )
             backoff = CUDA_RETRY_BACKOFF_SEC * attempt
             logger.warning(
@@ -276,7 +271,6 @@ async def process_transcription_job(
         if job and job.get("enable_diarization"):
             enable_diarization = True
 
-        task = job.get("task", "transcribe") if job else "transcribe"
         num_speakers = job.get("num_speakers") if job else None
         min_speakers = job.get("min_speakers") if job else None
         max_speakers = job.get("max_speakers") if job else None
@@ -318,7 +312,6 @@ async def process_transcription_job(
                     num_speakers,
                     min_speakers,
                     max_speakers,
-                    task,
                 )
                 result_obj = {
                     "text": wx_res.get("text", ""),
@@ -378,7 +371,7 @@ async def process_transcription_job(
                     progress=25.0,
                     stage="transcribing",
                 )
-                if language == "th" and task != "translate":
+                if language == "th":
                     await loop.run_in_executor(None, whisper_thai_engine.load_model)
                 else:
                     await loop.run_in_executor(None, whisper_engine.load_model)
@@ -403,7 +396,7 @@ async def process_transcription_job(
                     )
 
                     res = await transcribe_chunk_with_retry(
-                        loop, chunk_path, True, idx, language, task=task
+                        loop, chunk_path, True, idx, language
                     )
 
                     chunk_text = res.get("text", "").strip()
@@ -484,7 +477,7 @@ async def process_transcription_job(
                     thai_words = reconstruct_thai_words(global_segments)
                     grouped_segments = group_words_by_turns(thai_words, turns)
 
-                    full_text = "\n".join(
+                    full_text = "\n\n".join(
                         [f"[{s['speaker']}]: {s['text']}" for s in grouped_segments]
                     ) if grouped_segments else " ".join(combined_text_parts)
 

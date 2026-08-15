@@ -38,7 +38,6 @@ def normalize_language(language: str) -> str:
 def resolve_transcription_model(
     language: str,
     enable_diarization: bool,
-    task: str = "transcribe",
     model: Optional[str] = None,
 ) -> str:
     """
@@ -48,12 +47,7 @@ def resolve_transcription_model(
     Raises ValueError with an actionable message listing the allowed models.
     """
     lang = normalize_language(language) if language else "th"
-    task_clean = (task or "transcribe").strip().lower()
-
-    if task_clean == "translate":
-        allowed = {"whisper"}
-    else:
-        allowed = _MODEL_MATRIX.get((lang, bool(enable_diarization)), set())
+    allowed = _MODEL_MATRIX.get((lang, bool(enable_diarization)), set())
 
     if not model:
         raise ValueError(

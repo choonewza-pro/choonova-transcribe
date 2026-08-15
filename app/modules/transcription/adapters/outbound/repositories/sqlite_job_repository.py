@@ -49,7 +49,6 @@ def _row_to_job(r) -> TranscriptionJob:
         num_speakers=d.get("num_speakers"),
         min_speakers=d.get("min_speakers"),
         max_speakers=d.get("max_speakers"),
-        task=d.get("task") or "transcribe",
         result=result,
         error=error,
         created_at=str(d["created_at"]) if d.get("created_at") else now_iso,
@@ -73,8 +72,8 @@ class SQLiteJobRepository(JobRepositoryPort):
                     progress, stage, total_chunks, completed_chunks,
                     duration, processing_time, target_chunk_sec, max_chunk_sec,
                     enable_diarization, num_speakers, min_speakers, max_speakers,
-                    task, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job.id, job.type, job.filename, job.file_size_bytes, job.language,
@@ -86,7 +85,6 @@ class SQLiteJobRepository(JobRepositoryPort):
                     job.num_speakers,
                     job.min_speakers,
                     job.max_speakers,
-                    job.task,
                     now, now,
                 ),
             )

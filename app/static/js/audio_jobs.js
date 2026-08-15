@@ -66,6 +66,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  if (common) {
+    common.bindSpeakerMode();
+    common.bindTimestampHint();
+  }
+
   // --- Dropzone & file selection ---
   dropzone.addEventListener('click', () => {
     fileDialogActive = true;
@@ -255,35 +260,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const formData = new FormData();
     formData.append('file', selectedFile);
     const selectedLang = (languageSelect && languageSelect.value) || 'th';
-    if (selectedLang === 'translate_en') {
-      formData.append('language', 'auto');
-      formData.append('task', 'translate');
-      resultText.textContent = 'กำลังแปลเสียงพูดเป็นภาษาอังกฤษ...';
-    } else {
-      formData.append('language', selectedLang);
-      formData.append('task', 'transcribe');
-    }
+    formData.append('language', selectedLang);
     if (modelSelect) {
       formData.append('model', modelSelect.value);
     }
     if (timestampsCheck.checked) {
       formData.append('with_timestamps', 'true');
     }
-    if (diarizationCheck && diarizationCheck.checked) {
-      formData.append('enable_diarization', 'true');
-      const numSpeakersInput = document.getElementById('numSpeakersInput');
-      if (numSpeakersInput && numSpeakersInput.value && parseInt(numSpeakersInput.value, 10) > 0) {
-        formData.append('num_speakers', numSpeakersInput.value);
+if (diarizationCheck && diarizationCheck.checked) {
+        formData.append('enable_diarization', 'true');
+        if (common) {
+          common.collectSpeakerParams(formData);
+        }
       }
-      const minSpeakersInput = document.getElementById('minSpeakersInput');
-      if (minSpeakersInput && minSpeakersInput.value && parseInt(minSpeakersInput.value, 10) > 0) {
-        formData.append('min_speakers', minSpeakersInput.value);
-      }
-      const maxSpeakersInput = document.getElementById('maxSpeakersInput');
-      if (maxSpeakersInput && maxSpeakersInput.value && parseInt(maxSpeakersInput.value, 10) > 0) {
-        formData.append('max_speakers', maxSpeakersInput.value);
-      }
-    }
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/v1/audio/transcribe/jobs', true);

@@ -75,7 +75,6 @@ def init_db() -> None:
                 num_speakers INTEGER DEFAULT NULL,
                 min_speakers INTEGER DEFAULT NULL,
                 max_speakers INTEGER DEFAULT NULL,
-                task TEXT DEFAULT 'transcribe',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 started_at TIMESTAMP,
@@ -95,8 +94,8 @@ def init_db() -> None:
             cursor.execute("ALTER TABLE jobs ADD COLUMN min_speakers INTEGER DEFAULT NULL")
         if "max_speakers" not in jobs_columns:
             cursor.execute("ALTER TABLE jobs ADD COLUMN max_speakers INTEGER DEFAULT NULL")
-        if "task" not in jobs_columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN task TEXT DEFAULT 'transcribe'")
+        if "task" in jobs_columns:
+            cursor.execute("ALTER TABLE jobs DROP COLUMN task")
 
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);
@@ -200,7 +199,6 @@ def create_job(
     num_speakers: Optional[int] = None,
     min_speakers: Optional[int] = None,
     max_speakers: Optional[int] = None,
-    task: str = "transcribe",
 ) -> Dict[str, Any]:
     """
     Insert a new job record in SQLite with status='queued'.
@@ -221,8 +219,8 @@ def create_job(
             INSERT INTO jobs (
                 id, type, filename, file_size_bytes, language, status, progress,
                 stage, target_chunk_sec, max_chunk_sec, enable_diarization,
-                num_speakers, min_speakers, max_speakers, task, created_at, updated_at
-            ) VALUES (?, 'transcription', ?, ?, ?, 'queued', 0.0, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                num_speakers, min_speakers, max_speakers, created_at, updated_at
+            ) VALUES (?, 'transcription', ?, ?, ?, 'queued', 0.0, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 id,
@@ -235,7 +233,6 @@ def create_job(
                 num_speakers,
                 min_speakers,
                 max_speakers,
-                task,
                 now,
                 now,
             ),

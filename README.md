@@ -14,11 +14,11 @@ ChooNova Transcribe is a high-performance audio transcription and media processi
 
 ## Key Features
 
-- **OpenAI-Compatible Audio API**: Full drop-in replacement for OpenAI Whisper API (`/v1/audio/transcriptions`, `/v1/audio/translations`, `/v1/models`). Seamlessly integrates with official OpenAI Python/Node SDKs, Open WebUI, Obsidian, and third-party clients. Supports output formats: `json`, `text`, `srt`, `vtt`, and `verbose_json` (with `timestamp_granularities[]`).
+- **OpenAI-Compatible Audio API**: Full drop-in replacement for OpenAI Whisper API (`/v1/audio/transcriptions`, `/v1/models`). Seamlessly integrates with official OpenAI Python/Node SDKs, Open WebUI, Obsidian, and third-party clients. Supports output formats: `json`, `text`, `srt`, `vtt`, and `verbose_json` (with `timestamp_granularities[]`).
 - **Real-time Transcription**: High-performance WebSocket endpoint (`/v1/realtime/stream`) for zero-disk-write live microphone transcription with in-memory FFmpeg pipes, 600ms streaming updates, and sliding window preview (Thai only).
-- **Short Audio Transcription & Translation**: REST API for quick, synchronous processing of short multipart audio uploads, including speech-to-English translation (`task="translate"`).
+- **Short Audio Transcription**: REST API for quick, synchronous processing of short multipart audio uploads.
 - **Long-form Media Pipeline**: Asynchronous processing for large video/audio files (up to 1GB+) with silence-aware chunking and automatic cleanup.
-- **Auto Language Detection & Secondary ASR**: Uses **Faster Whisper (`large-v3-turbo`)** (~809M params) for English, Thai-English mixed content, and speech-to-English translation, delivering 4-6x faster decoding speed than standard Large-v3 with low VRAM footprint (~3.5GB).
+- **Auto Language Detection & Secondary ASR**: Uses **Faster Whisper (`large-v3-turbo`)** (~809M params) for English and Thai-English mixed content, delivering 4-6x faster decoding speed than standard Large-v3 with low VRAM footprint (~3.5GB).
 - **Speaker Diarization with Speaker Count Controls**: Multi-speaker identification and labeling (`[SPEAKER_00]`, `[SPEAKER_01]`, ...) powered by PyAnnote 3.1 & WhisperX. Supports explicit speaker count controls (`num_speakers`, `min_speakers`, `max_speakers`) to lock clustering and maximize accuracy. Uses a 4 Pathways Matrix with automatic VRAM swapping and graceful fallback.
 - **Video Compression**: Asynchronous FFmpeg-based video compressor with queue management, supporting both CPU (libx264) and GPU (NVENC) encoding.
 - **Job History & Management**: Built-in SQLite tracking for transcription and compression jobs with a web-based dashboard and export capabilities (.txt, .srt, .json).
@@ -201,7 +201,6 @@ You can toggle this mode at runtime without restarting the server via the web da
 | Method | Path                                             | Auth | Description                                        |
 | ------ | ------------------------------------------------ | ---- | -------------------------------------------------- |
 | POST   | `/v1/audio/transcriptions`                       | ✅   | **OpenAI Drop-in**: Transcribe audio (JSON/SRT/VTT/verbose_json). |
-| POST   | `/v1/audio/translations`                         | ✅   | **OpenAI Drop-in**: Translate audio to English text. |
 | GET    | `/v1/models`                                     | ❌   | **OpenAI Drop-in**: List available models (`whisper-1`, `typhoon-asr`). |
 | GET    | `/v1/models/{model_id}`                          | ❌   | **OpenAI Drop-in**: Retrieve model metadata.       |
 | POST   | `/v1/audio/transcribe`                           | ✅   | Synchronously transcribe short audio (multipart).  |
@@ -233,14 +232,6 @@ with open("meeting.mp3", "rb") as audio_file:
         timestamp_granularities=["word", "segment"]
     )
 print(transcript.text)
-
-# Translate audio to English
-with open("thai_speech.mp3", "rb") as audio_file:
-    translation = client.audio.translations.create(
-        model="whisper-1",
-        file=audio_file
-    )
-print(translation.text)
 ```
 
 #### 2. cURL Examples
@@ -338,6 +329,8 @@ run_compress_job.py (isolated subprocess)
 Local development setup requires manually installing dependencies:
 
 ```bash
+# Requires Python 3.12 (see .python-version) — GPU torch has no wheel for other versions.
+
 # GPU environment
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8830
@@ -345,6 +338,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8830
 # CPU environment
 pip install -r requirements-cpu.txt
 DEVICE=cpu uvicorn app.main:app --host 0.0.0.0 --port 8830
+```
+
+Verify the compute device after install:
+
+```bash
+# Must print True + your Nvidia GPU name on a GPU machine; False on CPU machines.
+python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else '')"
 ```
 
 ## Testing

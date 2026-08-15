@@ -45,7 +45,6 @@ class TranscriptionService:
         num_speakers: Optional[int] = None,
         min_speakers: Optional[int] = None,
         max_speakers: Optional[int] = None,
-        task: str = "transcribe",
         model: Optional[str] = None,
         type: str = "transcription",
     ) -> TranscriptionJob:
@@ -66,7 +65,6 @@ class TranscriptionService:
             num_speakers=num_speakers,
             min_speakers=min_speakers,
             max_speakers=max_speakers,
-            task=task,
         )
         return self.repo.create_job(job)
 
@@ -207,7 +205,6 @@ class TranscriptionService:
     def prepare_request(
         cls,
         language: str,
-        task: str = "transcribe",
         model: Optional[str] = None,
         enable_diarization: bool = False,
         num_speakers: Optional[int] = None,
@@ -222,20 +219,11 @@ class TranscriptionService:
         endpoints. Raises ValidationException (→ HTTP 422) with the same messages
         the endpoints previously produced inline.
         """
-        lang_clean = (language or "th").strip().lower()
-        if lang_clean in ("translate_en", "translate"):
-            task_mode = "translate"
-            lang = "auto"
-        elif task == "translate":
-            task_mode = "translate"
-            lang = "auto" if lang_clean not in ("th", "en") else lang_clean
-        else:
-            task_mode = "transcribe"
-            try:
-                from app.model_selection import normalize_language
-                lang = normalize_language(language)
-            except ValueError as e:
-                raise ValidationException(str(e))
+        try:
+            from app.model_selection import normalize_language
+            lang = normalize_language(language)
+        except ValueError as e:
+            raise ValidationException(str(e))
 
         if num_speakers is not None and num_speakers <= 0:
             raise ValidationException("num_speakers must be greater than 0.")
@@ -252,7 +240,7 @@ class TranscriptionService:
         from app.model_selection import resolve_transcription_model
         try:
             resolved_model = resolve_transcription_model(
-                lang, enable_diarization, task_mode, model
+                lang, enable_diarization, model
             )
         except ValueError as e:
             raise ValidationException(str(e))
@@ -264,9 +252,13 @@ class TranscriptionService:
                     "model='whisperx' requires HF_TOKEN to be set in the server environment."
                 )
 
+        if resolved_model == "typhoon" and with_timestamps:
+            raise ValidationException(
+                "with_timestamps is not supported for model='typhoon'."
+            )
+
         return TranscriptionRequest(
             language=lang,
-            task=task_mode,
             model=resolved_model,
             enable_diarization=enable_diarization,
             num_speakers=num_speakers,

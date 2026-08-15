@@ -133,17 +133,15 @@ class WhisperEngine:
         audio_path: str,
         language: str = "auto",
         with_timestamps: bool = False,
-        task: str = "transcribe",
         temperature: Optional[float] = None,
         initial_prompt: Optional[str] = None,
         hotwords: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Transcribe or translate an audio file using the Whisper model.
+        Transcribe an audio file using the Whisper model.
 
         language: 'en' forces English, 'auto' uses Whisper's language detection
         (handles Thai, English, and Thai-English mixed content).
-        task: 'transcribe' (default) or 'translate' (translate to English).
         """
         with self._lifecycle_lock:
             self._last_used = time.monotonic()
@@ -160,7 +158,7 @@ class WhisperEngine:
 
             transcribe_kwargs = {
                 "language": whisper_lang,
-                "task": task or "transcribe",
+                "task": "transcribe",
                 "word_timestamps": with_timestamps,
                 "vad_filter": True,
                 "condition_on_previous_text": self.condition_on_prev_text,
@@ -236,7 +234,6 @@ class WhisperEngine:
         filename_hint: str = "audio.wav",
         language: str = "auto",
         with_timestamps: bool = False,
-        task: str = "transcribe",
         temperature: Optional[float] = None,
         initial_prompt: Optional[str] = None,
         hotwords: Optional[str] = None,
@@ -254,7 +251,6 @@ class WhisperEngine:
                 tmp_path,
                 language=language,
                 with_timestamps=with_timestamps,
-                task=task,
                 temperature=temperature,
                 initial_prompt=initial_prompt,
                 hotwords=hotwords,

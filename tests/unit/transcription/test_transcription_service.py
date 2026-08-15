@@ -202,21 +202,7 @@ class TestTranscriptionService(unittest.TestCase):
         self.assertIsNotNone(retrieved)
         self.assertEqual(retrieved.num_speakers, 2)
 
-    def test_create_job_with_task(self):
-        repo = FakeJobRepository()
-        service = TranscriptionService(repo)
-        job = service.create_job(
-            filename="lecture.mp4",
-            file_size_bytes=5000000,
-            language="auto",
-            task="translate",
-        )
-        self.assertEqual(job.task, "translate")
-        retrieved = service.get_job_or_none(job.id)
-        self.assertIsNotNone(retrieved)
-        self.assertEqual(retrieved.task, "translate")
-
-    def test_job_to_dict_includes_speakers_and_task(self):
+    def test_job_to_dict_includes_speakers(self):
         from app.api.v1.transcription_router import _job_to_dict
         repo = FakeJobRepository()
         service = TranscriptionService(repo)
@@ -228,13 +214,11 @@ class TestTranscriptionService(unittest.TestCase):
             num_speakers=3,
             min_speakers=2,
             max_speakers=4,
-            task="transcribe",
         )
         d = _job_to_dict(job)
         self.assertEqual(d["num_speakers"], 3)
         self.assertEqual(d["min_speakers"], 2)
         self.assertEqual(d["max_speakers"], 4)
-        self.assertEqual(d["task"], "transcribe")
         self.assertTrue(d["enable_diarization"])
 
     # ------------------------------------------------------------------
@@ -243,33 +227,18 @@ class TestTranscriptionService(unittest.TestCase):
 
     def test_prepare_request_default_th_transcribe(self):
         req = TranscriptionService.prepare_request(
-            language="th", task="transcribe", model="thai-whisper"
+            language="th", model="thai-whisper"
         )
         self.assertIsInstance(req, TranscriptionRequest)
         self.assertEqual(req.language, "th")
-        self.assertEqual(req.task, "transcribe")
         self.assertEqual(req.model, "thai-whisper")
         self.assertFalse(req.enable_diarization)
         self.assertFalse(req.with_timestamps)
 
-    def test_prepare_request_translate_en_maps_to_auto(self):
-        req = TranscriptionService.prepare_request(
-            language="translate_en", task="transcribe", model="whisper"
-        )
-        self.assertEqual(req.language, "auto")
-        self.assertEqual(req.task, "translate")
-
-    def test_prepare_request_task_translate_keeps_explicit_language(self):
-        req = TranscriptionService.prepare_request(
-            language="en", task="translate", model="whisper"
-        )
-        self.assertEqual(req.language, "en")
-        self.assertEqual(req.task, "translate")
-
     def test_prepare_request_invalid_language_raises(self):
         with self.assertRaises(ValidationException) as ctx:
             TranscriptionService.prepare_request(
-                language="xx", task="transcribe", model="whisper"
+                language="xx", model="whisper"
             )
         self.assertIn("Unsupported language", ctx.exception.message)
 
@@ -284,13 +253,30 @@ class TestTranscriptionService(unittest.TestCase):
             with self.subTest(kwargs=kwargs):
                 with self.assertRaises(ValidationException) as ctx:
                     TranscriptionService.prepare_request(
-                        language="th", task="transcribe", model="thai-whisper", **kwargs
+                        language="th", model="thai-whisper", **kwargs
                     )
                 self.assertEqual(ctx.exception.message, message)
 
+    def test_prepare_request_typhoon_with_timestamps_raises(self):
+        with self.assertRaises(ValidationException) as ctx:
+            TranscriptionService.prepare_request(
+                language="th", model="typhoon", with_timestamps=True
+            )
+        self.assertEqual(
+            ctx.exception.message,
+            "with_timestamps is not supported for model='typhoon'.",
+        )
+
+    def test_prepare_request_typhoon_without_timestamps_ok(self):
+        req = TranscriptionService.prepare_request(
+            language="th", model="typhoon"
+        )
+        self.assertEqual(req.model, "typhoon")
+        self.assertFalse(req.with_timestamps)
+
     def test_prepare_request_auto_enables_diarization_when_speakers_set(self):
         req = TranscriptionService.prepare_request(
-            language="th", task="transcribe", model="thai-whisper", num_speakers=2
+            language="th", model="thai-whisper", num_speakers=2
         )
         self.assertTrue(req.enable_diarization)
         self.assertEqual(req.num_speakers, 2)
@@ -298,7 +284,7 @@ class TestTranscriptionService(unittest.TestCase):
     def test_prepare_request_rejects_model_not_in_matrix(self):
         with self.assertRaises(ValidationException) as ctx:
             TranscriptionService.prepare_request(
-                language="th", task="transcribe", model="whisperx"
+                language="th", model="whisperx"
             )
         self.assertIn("not supported", ctx.exception.message)
 
@@ -309,7 +295,7 @@ class TestTranscriptionService(unittest.TestCase):
         try:
             with self.assertRaises(ValidationException) as ctx:
                 TranscriptionService.prepare_request(
-                    language="th", task="transcribe", model="whisperx",
+                    language="th", model="whisperx",
                     enable_diarization=True,
                 )
             self.assertIn("HF_TOKEN", ctx.exception.message)

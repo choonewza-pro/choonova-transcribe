@@ -202,19 +202,18 @@ class ApiTestRunner:
         inputs = [
             InputParam("file", f"{AUDIO_ASSET_NAME} ({len(audio_bytes):,} bytes)", "file"),
             InputParam("language", "th", "field"),
-            InputParam("with_timestamps", "true", "field"),
             InputParam("model", "typhoon", "field"),
         ]
         specs = [
             ("status", "str"), ("text", "str"), ("duration_seconds", "num"),
-            ("elapsed_seconds", "num"), ("rtf", "num"), ("timestamps", "list"),
+            ("elapsed_seconds", "num"), ("rtf", "num"),
         ]
         start = time.monotonic()
         try:
             status, body = await self._http.post_multipart(
                 path,
                 files={"file": (AUDIO_ASSET_NAME, audio_bytes, "audio/wav")},
-                data={"language": "th", "with_timestamps": "true", "model": "typhoon"},
+                data={"language": "th", "model": "typhoon"},
                 headers=self._auth_headers(),
                 timeout=120,
             )
@@ -223,7 +222,6 @@ class ApiTestRunner:
                 checks.append(_value_check("status==success", body.get("status") == "success", body.get("status")))
                 checks.append(_value_check("text ไม่ว่าง", bool(body.get("text") and str(body["text"]).strip()), body.get("text")))
                 checks.append(_value_check("duration_seconds>0", (body.get("duration_seconds") or 0) > 0, body.get("duration_seconds")))
-                checks.append(_value_check("timestamps ไม่ว่าง", isinstance(body.get("timestamps"), list) and len(body["timestamps"]) > 0, body.get("timestamps")))
             passed = status == expected and all(c.passed for c in checks)
             return EndpointTest(method, path, name, status, passed,
                                 time.monotonic() - start, inputs, checks)

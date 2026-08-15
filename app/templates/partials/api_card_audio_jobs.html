@@ -30,7 +30,7 @@
                     <div class="flow-step-arrow">↓</div>
                     <div class="flow-step-text">
                       Client ส่งไฟล์เสียงแบบ multipart ไปที่
-                      <code>POST /v1/audio/transcribe/jobs</code> — <code>file</code>, <code>language</code>, <code>task</code>, <code>model</code>, <code>with_timestamps</code>, <code>enable_diarization</code>, <code>num/min/max_speakers</code>
+                      <code>POST /v1/audio/transcribe/jobs</code> — <code>file</code>, <code>language</code>, <code>model</code>, <code>with_timestamps</code>, <code>enable_diarization</code>, <code>num/min/max_speakers</code>
                       <span class="flow-tag">upload</span>
                     </div>
                   </div>
@@ -65,7 +65,7 @@
                     <div class="flow-step-arrow">↓</div>
                     <div class="flow-step-text">
                       <code>transcribe_queue_dispatcher</code> (poll ทุก 1s) หยิบงานที่เก่าที่สุด แล้วสปอว์น subprocess
-                      <code>python -m app.run_audio_job &lt;job_id&gt; &lt;input&gt; &lt;lang&gt; &lt;task&gt; &lt;model&gt; &lt;num&gt; &lt;min&gt; &lt;max&gt; &lt;diar&gt;</code>
+                      <code>python -m app.run_audio_job &lt;job_id&gt; &lt;input&gt; &lt;lang&gt; &lt;model&gt; &lt;num&gt; &lt;min&gt; &lt;max&gt; &lt;diar&gt;</code>
                       — รันพร้อมกันได้ไม่เกิน <span class="flow-msg">{{ max_concurrent|default(1) }}</span> งาน (ยกเลิกได้ผ่าน <code>DELETE</code> → terminate + คืน GPU)
                       <span class="flow-tag">dispatch</span>
                     </div>
@@ -154,7 +154,7 @@
             <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
               สร้างงานถอดเสียง (Multipart/form-data) — คืน <code>202 Accepted</code> พร้อม <code>id</code> ทันที
               พารามิเตอร์เหมือน <code>/v1/audio/transcribe</code> (ดูการ์ด "ถอดไฟล์เสียง" ด้านล่าง): <code>file</code>, <code>language</code>,
-              <code>task</code>, <code>model</code>, <code>with_timestamps</code>, <code>enable_diarization</code>, <code>num_speakers</code>,
+              <code>model</code>, <code>with_timestamps</code>, <code>enable_diarization</code>, <code>num_speakers</code>,
               <code>min_speakers</code>, <code>max_speakers</code> — คิวเต็ม (≥ {{ max_queued|default(10) }}) → <code>429</code>,
               ไฟล์เกิน {{ max_audio_upload_mb|default(50)|int }}MB{% if max_audio_duration_sec > 0 %} / ยาวเกิน {{ (max_audio_duration_sec / 3600)|round(1) }} ชั่วโมง{% endif %} → <code>413</code>, โมเดลไม่ตรงกับภาษา/การระบุผู้พูด → <code>422</code>
             </p>
@@ -165,7 +165,6 @@
   "id": "8f2a9c1e-...",
   "filename": "interview.mp3",
   "language": "th",
-  "task": "transcribe",
   "model": "thai-whisper",
   "enable_diarization": false,
   "num_speakers": null,

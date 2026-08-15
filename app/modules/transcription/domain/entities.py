@@ -21,11 +21,10 @@ class TranscriptionRequest:
     """Validated/normalized transcription request parameters (pure value object).
 
     Produced by TranscriptionService.prepare_request() and consumed by the
-    audio endpoints. Keeps request-level domain rules (language/task/model/
+    audio endpoints. Keeps request-level domain rules (language/model/
     speaker validation) out of the FastAPI delivery layer.
     """
     language: str
-    task: str                      # 'transcribe' | 'translate'
     model: Optional[str] = None
     enable_diarization: bool = False
     num_speakers: Optional[int] = None
@@ -55,7 +54,6 @@ class TranscriptionJob:
     num_speakers: Optional[int] = None
     min_speakers: Optional[int] = None
     max_speakers: Optional[int] = None
-    task: str = "transcribe"
     result: Optional[Dict[str, Any]] = None
     error: Optional[Dict[str, Any]] = None
     created_at: Optional[str] = None

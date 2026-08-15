@@ -36,10 +36,10 @@ logger = logging.getLogger("choonova-audio-job-worker")
 
 
 def main():
-    if len(sys.argv) < 10:
+    if len(sys.argv) < 9:
         logger.error(
             "Usage: python -m app.run_audio_job <job_id> <input_path> <language> "
-            "<task> <model> <num_speakers> <min_speakers> <max_speakers> "
+            "<model> <num_speakers> <min_speakers> <max_speakers> "
             "<enable_diarization>"
         )
         sys.exit(1)
@@ -47,12 +47,11 @@ def main():
     job_id = sys.argv[1]
     input_path = sys.argv[2]
     language = sys.argv[3]
-    task = sys.argv[4]
-    model = sys.argv[5]
-    num_speakers = _parse_int(sys.argv[6])
-    min_speakers = _parse_int(sys.argv[7])
-    max_speakers = _parse_int(sys.argv[8])
-    enable_diarization = _parse_bool(sys.argv[9])
+    model = sys.argv[4]
+    num_speakers = _parse_int(sys.argv[5])
+    min_speakers = _parse_int(sys.argv[6])
+    max_speakers = _parse_int(sys.argv[7])
+    enable_diarization = _parse_bool(sys.argv[8])
 
     job_dir = os.path.dirname(input_path)
 
@@ -69,7 +68,6 @@ def main():
             input_path,
             language,
             True,
-            task,
             model,
             num_speakers,
             min_speakers,

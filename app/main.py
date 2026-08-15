@@ -108,7 +108,6 @@ from app.job_worker import (
 )
 from app.asr_engine import engine
 from app.engine_router import (
-    transcribe_bytes as router_transcribe_bytes,
     reset_all,
     cuda_device_reset_all,
     normalize_language,
@@ -420,7 +419,6 @@ async def transcribe_queue_dispatcher():
                 cmd = [
                     sys.executable, "-m", "app.run_audio_job",
                     job_id, save_path, lang,
-                    job.get("task") or "transcribe",
                     job.get("model") or "thai-whisper",
                     str(num) if num is not None else "none",
                     str(min_s) if min_s is not None else "none",

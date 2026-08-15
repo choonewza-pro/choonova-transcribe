@@ -49,10 +49,9 @@
           <label style="display: flex; align-items: center; gap: 0.5rem;">
             <span>🌐 ภาษา:</span>
             <select id="languageSelect" class="form-select" style="padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(0,0,0,0.25); color: #fff; border: 1px solid var(--card-border);">
-              <option value="th">ไทย (Thai Whisper)</option>
-              <option value="en">อังกฤษ (Whisper)</option>
-              <option value="auto">อัตโนมัติ / ผสม (Whisper)</option>
-              <option value="translate_en">🌐 แปลเป็นอังกฤษ (Translate to English - Whisper)</option>
+              <option value="th">ไทย</option>
+              <option value="en">อังกฤษ</option>
+              <option value="auto">อัตโนมัติ / ผสม</option>
             </select>
           </label>
           <label style="display: flex; align-items: center; gap: 0.5rem;">
@@ -62,22 +61,33 @@
           </label>
         </div>
 
+        <div id="timestampHint" style="display: none; margin: -0.5rem 0 1rem 0; padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.85rem; line-height: 1.5;"></div>
+
         <div id="diarizationOptions" style="display: none; margin: -0.5rem 0 1rem 0; padding: 1rem 1.25rem; background: rgba(168,85,247,0.12); border-radius: 10px; border: 1px solid rgba(168,85,247,0.35); gap: 1.5rem; align-items: center; flex-wrap: wrap;">
           <div style="width: 100%; font-size: 0.9rem; font-weight: 600; color: #d8b4fe; margin-bottom: 0.25rem;">
-            👥 ตั้งค่าจำนวนผู้พูด (Speaker Count Configuration - ปล่อยว่างเพื่อตรวจจับอัตโนมัติ):
+            👥 จำนวนผู้พูด:
           </div>
-          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
-            <span>🎯 จำนวนคนแน่นอน (num_speakers):</span>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 999px; background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.4); cursor: pointer;">
+              <input type="radio" name="speakerMode" value="auto" checked style="accent-color: #a855f7;"> อัตโนมัติ
+            </label>
+            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 999px; background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.4); cursor: pointer;">
+              <input type="radio" name="speakerMode" value="exact" style="accent-color: #a855f7;"> ระบุจำนวนแน่นอน
+            </label>
+            <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 999px; background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.4); cursor: pointer;">
+              <input type="radio" name="speakerMode" value="range" style="accent-color: #a855f7;"> ระบุช่วง (ขั้นต่ำ–สูงสุด)
+            </label>
+          </div>
+          <div id="exactSpeakersRow" style="display: none; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+            <span>🎯 จำนวนผู้พูด:</span>
             <input type="number" id="numSpeakersInput" min="1" max="20" placeholder="เช่น 2" style="width: 75px; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(168,85,247,0.4);">
-          </label>
-          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
-            <span>⬇️ ขั้นต่ำ (min_speakers):</span>
-            <input type="number" id="minSpeakersInput" min="1" max="20" placeholder="Auto" style="width: 75px; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(168,85,247,0.4);">
-          </label>
-          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
-            <span>⬆️ สูงสุด (max_speakers):</span>
-            <input type="number" id="maxSpeakersInput" min="1" max="20" placeholder="Auto" style="width: 75px; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(168,85,247,0.4);">
-          </label>
+          </div>
+          <div id="rangeSpeakersRow" style="display: none; align-items: center; gap: 0.5rem; font-size: 0.85rem; flex-wrap: wrap;">
+            <span>⬇️ ขั้นต่ำ:</span>
+            <input type="number" id="minSpeakersInput" min="1" max="20" placeholder="เช่น 2" style="width: 75px; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(168,85,247,0.4);">
+            <span>⬆️ สูงสุด:</span>
+            <input type="number" id="maxSpeakersInput" min="1" max="20" placeholder="เช่น 5" style="width: 75px; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(168,85,247,0.4);">
+          </div>
         </div>
 
         <div style="display: flex; gap: 1rem; align-items: center; margin: 1.5rem 0; flex-wrap: wrap;">
@@ -129,6 +139,7 @@
     </div>
   </main>
 
-  <script src="/static/js/upload.js?v=9"></script>
+<script src="/static/js/transcribe_common.js?v=6"></script>
+ <script src="/static/js/upload.js?v=13"></script>
 </body>
 </html>
