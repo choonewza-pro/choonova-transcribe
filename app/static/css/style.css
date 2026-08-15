@@ -20,6 +20,14 @@
   box-sizing: border-box;
 }
 
+/* Pause GPU-compositing CSS animations while the tab is hidden (reduces
+   spurious load on the display adapter / iGPU on hybrid laptops). */
+html.page-hidden *,
+html.page-hidden *::before,
+html.page-hidden *::after {
+  animation-play-state: paused !important;
+}
+
 body {
   background-color: var(--bg-dark);
   color: var(--text-main);

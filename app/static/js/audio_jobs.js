@@ -316,44 +316,50 @@ if (diarizationCheck && diarizationCheck.checked) {
     xhr.send(formData);
   });
 
-  // --- Poll job status every 2 seconds ---
+  // --- Poll job status (throttled; skips work while the tab is hidden to
+  // reduce continuous GPU compositing on the display adapter) ---
+  async function pollJob(jobId) {
+    try {
+      const headers = {};
+      const apiKey = getApiKey();
+      if (apiKey) headers['x-api-key'] = apiKey;
+
+      const res = await fetch(`/v1/media/transcribe/jobs/${jobId}`, { headers });
+      if (!res.ok) return;
+
+      const job = await res.json();
+      updateProgress(job.progress, job.stage || job.status);
+      cancelJobBtn.style.display = isProcessingStatus(job.status) ? 'inline-flex' : 'none';
+
+      if (job.status === 'completed') {
+        stopPolling();
+        handleJobCompleted(job);
+      } else if (job.status === 'failed') {
+        stopPolling();
+        const errMsg = job.error ? (job.error.message || job.error.detail || 'Unknown error') : 'Unknown error';
+        currentStageText.textContent = `❌ เกิดข้อผิดพลาด: ${errMsg}`;
+        statusMessage.textContent = `❌ งานล้มเหลว: ${errMsg}`;
+        statusMessage.style.color = 'var(--danger)';
+        cancelJobBtn.style.display = 'none';
+        isProcessing = false;
+        dropzone.style.display = '';
+        updateBtnState();
+      } else if (job.status === 'cancelled') {
+        stopPolling();
+        resetToIdle('❌ ยกเลิกงานเรียบร้อยแล้ว (Cancelled)');
+      }
+    } catch (err) {
+      console.error('Error polling job status:', err);
+    }
+  }
+
   function startPolling(jobId) {
     if (pollInterval) clearInterval(pollInterval);
 
-    pollInterval = setInterval(async () => {
-      try {
-        const headers = {};
-        const apiKey = getApiKey();
-        if (apiKey) headers['x-api-key'] = apiKey;
-
-        const res = await fetch(`/v1/media/transcribe/jobs/${jobId}`, { headers });
-        if (!res.ok) return;
-
-        const job = await res.json();
-        updateProgress(job.progress, job.stage || job.status);
-        cancelJobBtn.style.display = isProcessingStatus(job.status) ? 'inline-flex' : 'none';
-
-        if (job.status === 'completed') {
-          stopPolling();
-          handleJobCompleted(job);
-        } else if (job.status === 'failed') {
-          stopPolling();
-          const errMsg = job.error ? (job.error.message || job.error.detail || 'Unknown error') : 'Unknown error';
-          currentStageText.textContent = `❌ เกิดข้อผิดพลาด: ${errMsg}`;
-          statusMessage.textContent = `❌ งานล้มเหลว: ${errMsg}`;
-          statusMessage.style.color = 'var(--danger)';
-          cancelJobBtn.style.display = 'none';
-          isProcessing = false;
-          dropzone.style.display = '';
-          updateBtnState();
-        } else if (job.status === 'cancelled') {
-          stopPolling();
-          resetToIdle('❌ ยกเลิกงานเรียบร้อยแล้ว (Cancelled)');
-        }
-      } catch (err) {
-        console.error('Error polling job status:', err);
-      }
-    }, 2000);
+    pollJob(jobId);
+    pollInterval = setInterval(() => {
+      if (!document.hidden) pollJob(jobId);
+    }, 5000);
   }
 
   // --- Render completed result ---

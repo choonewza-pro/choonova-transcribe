@@ -415,44 +415,49 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // --- Poll Job Status every 2 seconds ---
+  // --- Poll Job Status (throttled; skips work while tab is hidden) ---
+  async function pollJobStatus(jobId) {
+    try {
+      const apiKey = getApiKey();
+      const headers = {};
+      if (apiKey) {
+        headers['x-api-key'] = apiKey;
+      }
+
+      const res = await fetch(`/v1/media/transcribe/jobs/${jobId}`, { headers });
+      if (!res.ok) return;
+
+      const job = await res.json();
+      updateProgress(job.progress, job.stage || job.status);
+      updateStepper(job.stage, job.status);
+      updateCancelBtn(job.status);
+
+
+      if (job.status === 'completed') {
+        if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
+        stopPolling();
+        handleJobCompleted(job);
+      } else if (job.status === 'failed') {
+        if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
+        stopPolling();
+        const errMsg = job.error ? job.error.message : 'Unknown error';
+        alert(`กระบวนการถอดความล้มเหลว: ${errMsg}`);
+        currentStageText.textContent = `❌ เกิดข้อผิดพลาด: ${errMsg}`;
+        startJobBtn.disabled = false;
+        mediaDropzone.style.display = '';
+      }
+    } catch (err) {
+      console.error('Error polling job status:', err);
+    }
+  }
+
   function startPollingJobStatus(jobId) {
     if (pollInterval) clearInterval(pollInterval);
 
-    pollInterval = setInterval(async () => {
-      try {
-        const apiKey = getApiKey();
-        const headers = {};
-        if (apiKey) {
-          headers['x-api-key'] = apiKey;
-        }
-
-        const res = await fetch(`/v1/media/transcribe/jobs/${jobId}`, { headers });
-        if (!res.ok) return;
-
-        const job = await res.json();
-        updateProgress(job.progress, job.stage || job.status);
-        updateStepper(job.stage, job.status);
-        updateCancelBtn(job.status);
-
-
-        if (job.status === 'completed') {
-          if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
-          stopPolling();
-          handleJobCompleted(job);
-        } else if (job.status === 'failed') {
-          if (window.ModelLoadingDialog) window.ModelLoadingDialog.hide();
-          stopPolling();
-          const errMsg = job.error ? job.error.message : 'Unknown error';
-          alert(`กระบวนการถอดความล้มเหลว: ${errMsg}`);
-          currentStageText.textContent = `❌ เกิดข้อผิดพลาด: ${errMsg}`;
-          startJobBtn.disabled = false;
-          mediaDropzone.style.display = '';
-        }
-      } catch (err) {
-        console.error('Error polling job status:', err);
-      }
-    }, 2000);
+    pollJobStatus(jobId);
+    pollInterval = setInterval(() => {
+      if (!document.hidden) pollJobStatus(jobId);
+    }, 5000);
   }
 
   let activeJobFilename = '';

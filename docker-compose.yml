@@ -34,6 +34,11 @@ services:
       # Models are baked into the image at build time (/app/models) via COPY models.
       # DEV: use host volume mount to avoid copying ~5GB into build context.
       - ./models:/app/models
+      # Live-mount static assets so frontend changes (JS/CSS) take effect without
+      # a full image rebuild. To stop overriding, delete this line and restart.
+      - ./app/static:/app/app/static
+      # Live-mount Jinja2 templates (cache-buster version refs to the assets above).
+      - ./app/templates:/app/app/templates
       # - ./data:/app/data   # Enable to persist the jobs DB on the host (baked empty DB is used otherwise)
     deploy:
       resources:

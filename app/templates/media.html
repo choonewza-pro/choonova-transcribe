@@ -103,6 +103,12 @@
       0% { background-position: 0% 0%; }
       100% { background-position: 200% 0%; }
     }
+    /* Pause GPU-compositing animations while the tab is hidden */
+    html.page-hidden *,
+    html.page-hidden *::before,
+    html.page-hidden *::after {
+      animation-play-state: paused !important;
+    }
     .export-toolbar {
       display: flex;
       gap: 0.75rem;
@@ -288,6 +294,6 @@
     </div>
   </main>
 
-  <script src="/static/js/media.js?v=9"></script>
+  <script src="/static/js/media.js?v=10"></script>
 </body>
 </html>

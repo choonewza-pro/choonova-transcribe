@@ -3,6 +3,14 @@
 (function () {
   const API_KEY_STORAGE = 'typhoon_asr_api_key';
 
+  // Pause all CSS animations while the tab is hidden so the browser stops
+  // compositing on the display adapter (Intel iGPU on hybrid laptops) when the
+  // dashboard is not visible.
+  const rootEl = document.documentElement;
+  function syncVisibility() { rootEl.classList.toggle('page-hidden', document.hidden); }
+  document.addEventListener('visibilitychange', syncVisibility);
+  syncVisibility();
+
   let last = { mode: 'always', typhoon: 'idle', whisper: 'idle', whisper_thai: 'idle' };
   let pollTimer = null;
 
@@ -85,15 +93,17 @@
       return null;
     }
     return setInterval(async () => {
-      const data = await fetchStatus();
-      if (data) {
-        render(data);
-        if (isReady(data)) {
-          clearInterval(intervalId);
-          cb();
+      if (!document.hidden) {
+        const data = await fetchStatus();
+        if (data) {
+          render(data);
+          if (isReady(data)) {
+            clearInterval(intervalId);
+            cb();
+          }
         }
       }
-    }, 2000);
+    }, 4000);
   }
 
   function startPolling(intervalMs) {
@@ -193,10 +203,11 @@
       if (timerEl) timerEl.textContent = formatTimer(elapsedSec);
     }, 1000);
 
-    // Poll /healthz frequently (every 1s) while modal is open
+    // Poll /healthz (throttled while modal is open; skip when tab hidden)
     if (dialogState.pollId) clearInterval(dialogState.pollId);
     dialogState.pollId = setInterval(async () => {
       if (!dialogState.active) return;
+      if (document.hidden) return;
       const data = await fetchStatus();
       if (!data) return;
 
@@ -221,7 +232,7 @@
         // Automatically hide modal once model is loaded
         hideLoadingDialog();
       }
-    }, 1000);
+    }, 2000);
   }
 
   function hideLoadingDialog() {

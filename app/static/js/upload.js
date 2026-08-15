@@ -165,11 +165,12 @@ document.addEventListener('DOMContentLoaded', () => {
     fileNameDisplay.textContent = `📁 ไฟล์ที่เลือก: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
     updateTranscribeBtnState();
 
-    // Load Audio Preview
-    const fileURL = URL.createObjectURL(file);
-    audioPreview.src = fileURL;
-    document.getElementById('audioPlayerContainer').style.display = 'block';
-    playerStatus.textContent = 'พร้อมเล่นไฟล์';
+    // Defer loading the audio preview until after transcription completes.
+    // Creating an object URL + decoding the file into the <audio> element makes
+    // the browser engage GPU audio/video decode engines on the display adapter
+    // (Intel iGPU on hybrid laptops), which shows up as spurious GPU load.
+    document.getElementById('audioPlayerContainer').style.display = 'none';
+    playerStatus.textContent = 'ไฟล์พร้อมถอดความ (preview จะเปิดหลังเสร็จงาน)';
   }
 
   function clearFilePreview() {
@@ -282,6 +283,13 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMessage.style.color = 'var(--success)';
         resultText.textContent = data.text || '(ไม่พบข้อความเสียงพูด)';
         newTranscribeBtn.style.display = 'inline-flex';
+
+        // Load the audio preview now that GPU-heavy transcription is done.
+        if (selectedFile) {
+          audioPreview.src = URL.createObjectURL(selectedFile);
+          document.getElementById('audioPlayerContainer').style.display = 'block';
+          playerStatus.textContent = 'พร้อมเล่นไฟล์';
+        }
 
         // Update stats
         statsBar.style.display = 'flex';
