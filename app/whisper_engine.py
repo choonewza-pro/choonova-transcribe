@@ -20,10 +20,16 @@ class WhisperEngine:
     language, and emits real word-level timestamps.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        model_name: str = WHISPER_MODEL,
+        compute_type: str = WHISPER_COMPUTE_TYPE,
+        condition_on_prev_text: bool = True,
+    ):
         self.device = DEVICE
-        self.model_name = WHISPER_MODEL
-        self.compute_type = WHISPER_COMPUTE_TYPE
+        self.model_name = model_name
+        self.compute_type = compute_type
+        self.condition_on_prev_text = condition_on_prev_text
         self._is_loaded = False
         self._is_loading = False
         self._model = None
@@ -157,6 +163,7 @@ class WhisperEngine:
                 "task": task or "transcribe",
                 "word_timestamps": with_timestamps,
                 "vad_filter": True,
+                "condition_on_previous_text": self.condition_on_prev_text,
             }
             if temperature is not None:
                 transcribe_kwargs["temperature"] = temperature

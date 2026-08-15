@@ -62,18 +62,21 @@ app/
 ## Engine Routing
 
 `app/engine_router.py` dispatches by `normalize_language(lang)`:
-- `"th"` → Typhoon ASR (Thai-only, NeMo FastConformer-Transducer 114M, ~1GB VRAM at FP16)
+- `"th"` → **Thai-tuned Whisper** (faster-whisper CT2, `Avocaduu14/whisper-th-large-v3-ct2`, int8_float16; local copy at `models/whisper-th-large-v3-ct2/` preferred via `whisper_thai_engine.resolve_thai_model_name()`, fallback to HF)
 - `"en"` → Whisper (English, faster-whisper `large-v3-turbo`, ~3.5GB VRAM)
 - `"auto"` → Whisper (auto-detect language, handles Thai-English mixed)
 - Raises `ValueError` for anything else. Defaults to `"th"` if `None`/empty.
 
-Chunk durations differ: Typhoon target=45s/max=90s, Whisper target=25s/max=30s.
+Chunk durations differ: Thai Whisper target=25s/max=30s, English Whisper target=25s/max=30s. Engine singleton: `app/whisper_thai_engine.py` (lazy-imports faster-whisper). `WHISPER_THAI_MODEL` / `WHISPER_THAI_COMPUTE_TYPE` env vars in `app/core/config.py`. `scripts/download_models.py --whisper-thai` pre-downloads (also a Dockerfile build step).
 
 ## Speaker Diarization (Thai Path 3)
 
-- **PyAnnote is the source of truth for who speaks when** — it runs on the full 16kHz WAV and labels turns correctly. The ASR does **NOT** provide real word timestamps: NeMo Typhoon returns text only, so `app/asr_engine.py` **synthesizes proportional timestamps** by evenly spacing tokens across each chunk.
-- **Thai tokenization matters for merge quality.** Thai text has no spaces, so `str.split()` would produce one giant token per chunk (2–49s), collapsing speaker merges. `app/asr_engine.py:_split_into_words()` uses **PyThaiNLP `newmm`** (falls back to a 2-char run splitter if unavailable) so each chunk yields fine-grained (0.2–0.5s) pseudo-words.
-- Merge pipeline in `app/pyannote_engine.py`: `merge_speaker_overlap` (max-overlap + nearest-turn fallback, `gap_tolerance_sec=0.3`) → `smooth_speaker_labels` (absorbs `UNKNOWN` + snaps <1.5s blips sandwiched by the same speaker) → `group_speaker_segments`. Called from both `transcription_router.py` (`/v1/audio/transcribe`) and `job_worker.py` Path 3.
+- **PyAnnote is the source of truth for who speaks when** — it runs on the full 16kHz WAV and labels turns correctly. Thai-tuned Whisper (`app/whisper_thai_engine.py`) emits **real word-level timestamps** (faster-whisper), so speaker attribution is no longer proportional-synthetic.
+- **Turn consolidation is required before word bucketing.** Raw PyAnnote turns are fragmented (232 turns on `test_3_talk.mp3`) and contain cross-speaker time overlaps. `app/pyannote_engine.py:consolidate_diarization_turns()` resolves overlaps (longer turn dominates, later turn truncated), merges same-speaker gaps ≤0.6s, drops turns <0.5s → ~98 clean turns. `group_words_by_turns()` then buckets each word into the max-overlap turn.
+- Thai path uses `group_words_by_turns` (turn-based grouping, ~89 segments on the test file) instead of the older `merge_speaker_overlap` + `group_speaker_segments` word-run approach — the older approach produced per-character speaker flapping (faster-whisper Thai tokens are character-level) and floods of UNKNOWN.
+- **PyAnnote is the measured accuracy ceiling (~46% speaker agreement vs the Gemini reference, best-permutation over 0.1s samples);** no post-processing improves speaker identity, only output shape/granularity.
+- **Typhoon ASR still exists** for the non-diarization inline/`en` paths via `app/asr_engine.py`; Thai + diarization now routes to Thai Whisper.
+- Merge pipeline in `app/pyannote_engine.py`: `merge_speaker_overlap` (max-overlap + nearest-turn fallback, `gap_tolerance_sec=0.3`) → `smooth_speaker_labels` (absorbs `UNKNOWN` + snaps <1.5s blips sandwiched by the same speaker) → `group_speaker_segments`. Called from `transcription_router.py` (`/v1/audio/transcribe`) for the non-Thai word-level path and `job_worker.py` Path 3.
 - `PyAnnoteDiarizer.diarize()` calls `relabel_speakers_chronological()` so `SPEAKER_00` is **always the first speaker in time** (PyAnnote cluster IDs are arbitrary).
 - With diarization enabled, `/v1/audio/transcribe` returns `text` grouped as `[SPEAKER_00]: ...` lines (was plain text).
 - `pythainlp==5.0.4` added to `requirements.txt` / `requirements-cpu.txt`.

@@ -174,7 +174,7 @@
           <label style="display: flex; align-items: center; gap: 0.5rem;">
             <span>🌐 ภาษา:</span>
             <select id="languageSelect" class="form-select" style="padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(0,0,0,0.25); color: #fff; border: 1px solid var(--card-border);">
-              <option value="th">ไทย (Typhoon)</option>
+              <option value="th">ไทย (Thai Whisper)</option>
               <option value="en">อังกฤษ (Whisper)</option>
               <option value="auto">อัตโนมัติ / ผสม (Whisper)</option>
               <option value="translate_en">🌐 แปลเป็นอังกฤษ (Translate to English - Whisper)</option>
@@ -219,7 +219,7 @@
         <div style="font-size: 0.85rem; color: #a1a1aa; background: rgba(255,255,255,0.05); padding: 0.75rem; border-radius: 8px; margin-bottom: 1.5rem; line-height: 1.6;">
           <strong>💡 คำแนะนำการตั้งค่า Chunk Size (ปล่อยว่างไว้เพื่อใช้ค่าเริ่มต้นของระบบ)</strong><br>
           <span style="color: #60a5fa;">Target</span> คือเป้าหมายความยาวต่อก้อน (ตัดเมื่อเจอจังหวะเงียบ), <span style="color: #60a5fa;">Max</span> คือบังคับตัดเพื่อป้องกัน VRAM เต็ม<br>
-          • <strong>Typhoon (ไทย):</strong> แนะนำ <code>Target = 45</code>, <code>Max = 90</code> (สำหรับ GPU) หากรันบน CPU แล้วแรมจำกัด ควรปรับลดลง (เช่น 30/60)<br>
+          • <strong>Thai Whisper (ไทย):</strong> แนะนำ <code>Target = 25</code>, <code>Max = 30</code> (สำหรับ GPU) หากรันบน CPU แล้วแรมจำกัด ควรปรับลดลง (เช่น 20/25)<br>
           • <strong>Whisper (อังกฤษ/ออโต้):</strong> แนะนำ <code>Target = 25</code>, <code>Max = 30</code> เพื่อประสิทธิภาพสูงสุด
         </div>
 

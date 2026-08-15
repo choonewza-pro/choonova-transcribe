@@ -24,6 +24,7 @@ from app.audio_utils import (
 from app.cuda_utils import is_cuda_error, is_allocator_corruption
 from app.asr_engine import engine
 from app.whisper_engine import whisper_engine
+from app.whisper_thai_engine import whisper_thai_engine
 from app.engine_router import (
     transcribe_file as router_transcribe_file,
     reset_all,
@@ -363,6 +364,7 @@ async def process_transcription_job(
 
             combined_text_parts = []
             global_timestamps = []
+            global_segments = []
 
             # Step 3: GPU Transcription Loop (Protected by asyncio.Lock)
             async with gpu_lock:
@@ -377,7 +379,7 @@ async def process_transcription_job(
                     stage="transcribing",
                 )
                 if language == "th" and task != "translate":
-                    await loop.run_in_executor(None, engine.load_model)
+                    await loop.run_in_executor(None, whisper_thai_engine.load_model)
                 else:
                     await loop.run_in_executor(None, whisper_engine.load_model)
 
@@ -421,6 +423,26 @@ async def process_transcription_job(
                             }
                         )
 
+                    chunk_segments = res.get("segments", [])
+                    for seg_item in chunk_segments:
+                        seg_words = [
+                            {
+                                "word": w.get("word", ""),
+                                "start": round(float(w.get("start", 0.0)) + chunk_start_sec, 3),
+                                "end": round(float(w.get("end", 0.0)) + chunk_start_sec, 3),
+                            }
+                            for w in (seg_item.get("words") or [])
+                            if w.get("word", "").strip()
+                        ]
+                        global_segments.append(
+                            {
+                                "text": seg_item.get("text", ""),
+                                "start": round(float(seg_item.get("start", 0.0)) + chunk_start_sec, 3),
+                                "end": round(float(seg_item.get("end", 0.0)) + chunk_start_sec, 3),
+                                "words": seg_words,
+                            }
+                        )
+
                     safe_delete_file(chunk_path)
                     engine.clear_cuda_cache()
                     update_job_status(id=job_id, completed_chunks=idx)
@@ -446,8 +468,8 @@ async def process_transcription_job(
 
                     from app.pyannote_engine import (
                         diarize_audio,
-                        merge_speaker_overlap,
-                        group_speaker_segments,
+                        group_words_by_turns,
+                        reconstruct_thai_words,
                     )
                     from functools import partial
 
@@ -459,8 +481,8 @@ async def process_transcription_job(
                         max_speakers=max_speakers,
                     )
                     turns = await loop.run_in_executor(None, diarize_fn)
-                    merged_timestamps = merge_speaker_overlap(global_timestamps, turns)
-                    grouped_segments = group_speaker_segments(merged_timestamps)
+                    thai_words = reconstruct_thai_words(global_segments)
+                    grouped_segments = group_words_by_turns(thai_words, turns)
 
                     full_text = "\n".join(
                         [f"[{s['speaker']}]: {s['text']}" for s in grouped_segments]

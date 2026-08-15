@@ -85,6 +85,7 @@ class HealthResponse(BaseModel):
     model_idle_timeout_sec: float = 900.0
     typhoon_model_state: str = "idle"
     whisper_model_state: str = "idle"
+    whisper_thai_model_state: str = "idle"
 
 class ModelSettings(BaseModel):
     mode: Literal["always", "idle"]
@@ -95,6 +96,7 @@ class ModelSettingsResponse(BaseModel):
     idle_timeout_sec: float
     typhoon_model_state: str
     whisper_model_state: str
+    whisper_thai_model_state: str = "idle"
     execution_device: str = "CPU"
 
 

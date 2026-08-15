@@ -53,6 +53,23 @@ def download_whisper(model_name: str = "large-v3-turbo", token: str | None = Non
     print()
 
 
+def download_whisper_thai(model_name: str | None = None, token: str | None = None) -> None:
+    from huggingface_hub import snapshot_download
+
+    token = token or os.getenv("HF_TOKEN", "").strip() or None
+    m = model_name or os.getenv("WHISPER_THAI_MODEL", "Avocaduu14/whisper-th-large-v3-ct2")
+    # Full HF repo ids (contain '/') are used verbatim; bare names map to
+    # Systran's faster-whisper mirror (e.g. "large-v3" -> Systran/faster-whisper-large-v3).
+    repo_id = m if "/" in m else f"Systran/faster-whisper-{m}"
+    p = snapshot_download(repo_id=repo_id, token=token)
+    print()
+    print("=" * 70)
+    print("  ✅ THAI WHISPER MODEL DOWNLOAD COMPLETE — " + repo_id)
+    print(f"  📁 {p}")
+    print("=" * 70)
+    print()
+
+
 def download_pyannote(model_dir: str = "/app/models", token: str | None = None) -> None:
     from huggingface_hub import snapshot_download
 
@@ -114,6 +131,7 @@ def main() -> None:
     parser.add_argument("--all", action="store_true", help="Download all models")
     parser.add_argument("--typhoon", action="store_true", help="Download Typhoon ASR model")
     parser.add_argument("--whisper", action="store_true", help="Download Whisper model")
+    parser.add_argument("--whisper-thai", action="store_true", help="Download Thai-tuned Whisper model")
     parser.add_argument("--pyannote", action="store_true", help="Download PyAnnote models")
     parser.add_argument(
         "--whisperx-align", action="store_true", help="Download WhisperX alignment model"
@@ -126,7 +144,7 @@ def main() -> None:
     args = parser.parse_args()
 
     # If no specific flags given, default to all
-    if not any([args.typhoon, args.whisper, args.pyannote, args.whisperx_align, args.all]):
+    if not any([args.typhoon, args.whisper, args.whisper_thai, args.pyannote, args.whisperx_align, args.all]):
         args.all = True
 
     token = args.hf_token or os.getenv("HF_TOKEN", "").strip() or None
@@ -136,6 +154,9 @@ def main() -> None:
 
     if args.whisper or args.all:
         download_whisper(model_name=args.whisper_model, token=token)
+
+    if args.whisper_thai or args.all:
+        download_whisper_thai(token=token)
 
     if args.pyannote or args.all:
         download_pyannote(model_dir=args.model_dir, token=token)

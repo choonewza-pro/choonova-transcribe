@@ -29,6 +29,7 @@ class ModelSettingsResponse(BaseModel):
     idle_timeout_sec: float
     typhoon_model_state: str = "unloaded"
     whisper_model_state: str = "unloaded"
+    whisper_thai_model_state: str = "unloaded"
     execution_device: str = "CPU"
 
 
@@ -49,6 +50,7 @@ async def get_model_settings(
         idle_timeout_sec=settings.model_idle_timeout_sec,
         typhoon_model_state=states.get("typhoon", "unloaded"),
         whisper_model_state=states.get("whisper", "unloaded"),
+        whisper_thai_model_state=states.get("whisper_thai", "unloaded"),
         execution_device=get_real_execution_device(),
     )
 
@@ -74,5 +76,6 @@ async def update_model_settings(
         idle_timeout_sec=settings.model_idle_timeout_sec,
         typhoon_model_state=states.get("typhoon", "unloaded"),
         whisper_model_state=states.get("whisper", "unloaded"),
+        whisper_thai_model_state=states.get("whisper_thai", "unloaded"),
         execution_device=get_real_execution_device(),
     )

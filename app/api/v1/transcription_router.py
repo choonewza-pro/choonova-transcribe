@@ -209,8 +209,8 @@ async def transcribe_audio(
                 from app.engine_router import transcribe_file as router_transcribe_file
                 from app.pyannote_engine import (
                     diarize_audio,
-                    merge_speaker_overlap,
-                    group_speaker_segments,
+                    group_words_by_turns,
+                    reconstruct_thai_words,
                 )
 
                 res = await asyncio.to_thread(
@@ -220,7 +220,13 @@ async def transcribe_audio(
                     with_timestamps=True,
                 )
                 text = res.get("text", "")
-                timestamps = res.get("timestamps", [])
+                # Thai Whisper emits REAL character-level word timestamps. Rebuild
+                # whole Thai words (PyThaiNLP newmm) so turns don't split words
+                # mid-way, then bucket each word into the turn with max time
+                # overlap, producing clean speaker-turn segments matching the
+                # Gemini reference shape.
+                segments = res.get("segments", [])
+                words = reconstruct_thai_words(segments)
                 turns = await asyncio.to_thread(
                     diarize_audio,
                     temp_wav_path,
@@ -228,8 +234,8 @@ async def transcribe_audio(
                     min_speakers=min_speakers,
                     max_speakers=max_speakers,
                 )
-                timestamps = merge_speaker_overlap(timestamps, turns)
-                grouped = group_speaker_segments(timestamps)
+                grouped = group_words_by_turns(words, turns)
+                timestamps = grouped
                 if grouped:
                     text = "\n".join(
                         f"[{s['speaker']}]: {s['text']}" for s in grouped

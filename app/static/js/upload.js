@@ -211,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Check if model loading dialog is needed
     const lang = (languageSelect && languageSelect.value) || 'th';
-    const targetEngine = lang === 'th' ? 'typhoon' : 'whisper';
+    const targetEngine = lang === 'th' ? 'whisper_thai' : 'whisper';
     let dialogShown = false;
 
     if (window.ModelStatus && window.ModelLoadingDialog) {
@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dialogShown = true;
         window.ModelLoadingDialog.show({
           engine: targetEngine,
-          title: `กำลังโหลดโมเดล ${targetEngine === 'typhoon' ? 'Typhoon ASR' : 'Whisper'} เข้า VRAM / RAM...`,
+          title: `กำลังโหลดโมเดล ${targetEngine === 'whisper_thai' ? 'Thai Whisper' : 'Whisper'} เข้า VRAM / RAM...`,
           onCancel: () => {
             if (activeController) {
               activeController.abort();

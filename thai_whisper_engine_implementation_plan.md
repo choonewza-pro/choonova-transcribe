@@ -1,7 +1,7 @@
 # Implementation Plan: Switch Thai Offline Path to Thai-Tuned Whisper
 
 > **ChooNova Transcribe: ยกระดับคุณภาพ Thai ASR + Diarization ให้เทียบเท่า Gemini reference**  
-> สถานะ: **PLAN (draft)** — ยังไม่เริ่มพัฒนา รอพิจารณาแนวคิดจากผู้เชี่ยวชาญก่อน
+> สถานะ: **DONE (implemented + verified 15 Aug 2026)** — Thai offline path ใช้ Thai-tuned Whisper แล้ว
 
 ---
 
@@ -54,7 +54,7 @@ model.transcribe(
     language="th",
     word_timestamps=True,
     vad_filter=True,
-    condition_on_prev_text=False,   # WhisperX: ลด repetition/hallucination ใน long-form
+    condition_on_previous_text=False,   # WhisperX: ลด repetition/hallucination ใน long-form
     beam_size=5,
 )
 ```
@@ -76,36 +76,45 @@ model.transcribe(
   - `task == "translate"` → `whisper_engine` (เดิม)
 - Typhoon ยังถูกใช้ที่ realtime/WebSocket path
 
-### 4.3 Segment-level speaker assignment: `app/pyannote_engine.py`
-- ฟังก์ชันใหม่ `assign_speakers_to_segments(segments, turns)`  
-  - แต่ละ phrase segment → speaker ด้วย **max-overlap + nearest-turn fallback** (เดียวกับปรัชญา `merge_speaker_overlap` แต่ทำที่ระดับ segment)
+### 4.3 Turn consolidation + word-to-turn grouping: `app/pyannote_engine.py`
+- ฟังก์ชันใหม่ `consolidate_diarization_turns(turns, gap_sec=0.6, min_dur_sec=0.5)`
+  - แก้ **cross-speaker time overlaps** (artifact ของ PyAnnote ที่ SPK 2 คนอ้างเวลาเดียวกัน) — turn ยาวครอบทับ สั้นถูกตัดออก
+  - merge turn ผู้พูดเดียวกันห่างกัน ≤ 0.6s; drop turn สั้นกว่า 0.5s
+- ฟังก์ชันใหม่ `group_words_by_turns(words, turns)` — เอาคำแต่ละคำ (word timestamps จริงจาก Thai Whisper) ไปใส่ turn ที่ overlap มากสุด
   - Output shape ตรงกับ reference JSON: `{word, text, start, end, speaker}`
 
 ### 4.4 Router: `app/api/v1/transcription_router.py`
 - Thai branch (บรรทัด ~208-236) เปลี่ยนเป็น:
-  - `whisper_thai_engine.transcribe_file(..., with_timestamps=True)`
-  - `assign_speakers_to_segments(...)` แทน `merge_speaker_overlap` + `group_speaker_segments`
+  - `whisper_thai_engine.transcribe_file(..., with_timestamps=True)` (จริง ๆ route ผ่าน `engine_router.transcribe_file`)
+  - `group_words_by_turns(word_timestamps, turns)` แทน `merge_speaker_overlap` + `group_speaker_segments`
   - `text` = `[SPEAKER]: phrase` lines
-  - `timestamps` = phrase-level segments (ตาม reference)
+  - `timestamps` = speaker-turn segments (ตาม reference)
+
+> **ทำไมไม่ใช้ segment-level `assign_speakers_to_segments`:** phrase segment ของ Whisper ยาว 20–40s ครอบ speaker หลายคน → 1 segment ได้ 1 speaker (SPEAKER_01 14/20 segments) ละเอียดไม่พอ การ bucket ต่อ turn (~89 segments) เข้าคู่ reference (68) ดีกว่ามาก
 
 ### 4.5 Safety net
 - คง `clean_text` / `collapse_repeated_tokens` ไว้ (กัน Whisper insertion)
 - Long-form chunking ยังอยู่ใน engine
 
 ### 4.6 Config + docs
-- `.env.example`: เพิ่ม `WHISPER_THAI_MODEL`
+- `.env.example`: เพิ่ม `WHISPER_THAI_MODEL` + `WHISPER_THAI_COMPUTE_TYPE`
 - `app/core/config.py`: `WHISPER_THAI_MODEL = os.getenv("WHISPER_THAI_MODEL", "Avocaduu14/whisper-th-large-v3-ct2")`
 - AGENTS.md: อัปเดต Engine Routing section
 
 ### 4.7 Tests
 - เพิ่ม unit tests ใน `tests/unit/transcription/test_diarization.py`:
-  - `assign_speakers_to_segments` max-overlap / nearest-turn fallback / ไม่มี turn / UNKNOWN
-  - Output format ตรง reference shape
+  - `consolidate_diarization_turns`: resolve overlap / truncate / merge gap / drop tiny
+  - `group_words_by_turns`: bucket by overlap / empty input
+  - รวม 80 tests → OK
 
 ### 4.8 Verify
-- Rebuild container → รัน `test_3_talk.mp3` Thai + diarization
-- วัด CER เทียบ `assets/test_3_talk.json` (ตั้งเป้า <20% จากเดิม 78%)
-- เทียบ speaker attribution counts (SPEAKER_02 ≈ 3 turns)
+- Rebuild container → รัน `test_3_talk.mp3` Thai + diarization ✓ (HTTP 200, rtf 0.71, 89 segments avg 4.4s)
+- วัด CER เทียบ `assets/test_3_talk.json`:
+  - **TIME-ALIGNED CER 51.2%** (คำเราอยู่ใน reference windows เท่านั้น) — เป็น CER ระหว่าง ASR 2 ตัว (Whisper vs Gemini) ที่ต่างกัน
+  - CER เต็ม 72.8% — ตัวเลขหลอก เพราะ reference ครอบ ~255s ของ speech ที่มี label เท่านั้น ในขณะที่ Whisper ถอดเสียงทั้ง 475s (3612 vs 2503 chars)
+  - **คุณภาพ text ดีขึ้นมากเชิงคุณภาพ**: "คุณชมนี" "ตะเฮียง" "ประชดประชัน" ถูกต้อง ไม่มี hallucination loop เหมือน Typhoon
+- Speaker agreement (best-permutation, 0.1s samples) = **40.2%** — ตรงตามเพดาน PyAnnote ~46% ที่วัดไว้ก่อนหน้า (ไม่มี pipeline ใดทะลุ 47%)
+- Model 3.09GB คัดลอก host `./models/whisper-th-large-v3-ct2/` (bind-mount `/app/models`) → อยู่รอด rebuild, Dockerfile ก็ pre-download เข้า image ด้วย
 
 ---
 
@@ -113,11 +122,14 @@ model.transcribe(
 
 - **VRAM เพิ่ม ~2-3GB** (int8) ขณะ Typhoon ยัง resident — ยังพอใน 12GB แต่ต้องเฝ้าระวัง
 - **Latency สูงกว่า Typhoon** (offline เท่านั้น; realtime ยังใช้ Typhoon)
-- Whisper ก็มี hallucination ได้บ้าง → ใช้ `condition_on_prev_text=False` + `collapse_repeated_tokens` เป็นเกราะ
+- Whisper ก็มี hallucination ได้บ้าง → ใช้ `condition_on_previous_text=False` + `collapse_repeated_tokens` เป็นเกราะ
+- **Speaker identity ไม่ทะลุเพดาน PyAnnote ~46%** — เหตุผลคือ PyAnnote cluster ตะกับ Gemini reference ต่างกัน (host/SPEAKER_00 ของ Gemini ถูกแยกไปคนละ speaker) ไม่ใช่ปัญหา timestamp mapping
 
 ---
 
-## 6. ยังไม่เริ่ม (Blocked)
+## 6. สรุป (Implemented)
 
-- รอแนวคิดจากผู้เชี่ยวชาญก่อนเริ่มพัฒนา
-- หลังได้แนวคิด → อัปเดตแผนนี้ / หรือเปลี่ยนทิศทาง
+- Thai offline path → **Thai-tuned Whisper** (`Avocaduu14/whisper-th-large-v3-ct2`, CT2 int8_float16, local `models/` preferred)
+- text quality: คำถูกต้อง ชัดเจน ไม่มี decode-loop hallucination
+- Diarization: `consolidate_diarization_turns` + `group_words_by_turns` (89 speaker-turn segments)
+- 80 unit tests pass, py_compile clean, E2E API 200

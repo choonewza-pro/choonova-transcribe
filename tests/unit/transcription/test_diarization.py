@@ -1,6 +1,7 @@
 """
 Unit tests for pure Diarization helper functions:
 - merge_speaker_overlap
+- assign_speakers_to_segments
 - group_speaker_segments
 - relabel_speakers_chronological
 - build_srt_subtitles
@@ -9,6 +10,7 @@ Unit tests for pure Diarization helper functions:
 import unittest
 from app.pyannote_engine import (
     merge_speaker_overlap,
+    assign_speakers_to_segments,
     group_speaker_segments,
     smooth_speaker_labels,
     relabel_speakers_chronological,
@@ -47,6 +49,50 @@ class TestDiarizationHelpers(unittest.TestCase):
         result = merge_speaker_overlap(segments, diarization_turns, gap_tolerance_sec=0.5)
         # 2.05 is closest to turn 0.0-2.0 (dist=0.05s) -> should be SPEAKER_00
         self.assertEqual(result[0]["speaker"], "SPEAKER_00")
+
+    def test_assign_speakers_to_segments_exact_match(self):
+        segments = [
+            {"text": "สวัสดีครับ", "start": 0.0, "end": 1.8},
+            {"text": "ยินดีที่ได้รู้จัก", "start": 2.2, "end": 3.8},
+        ]
+        turns = [
+            {"start": 0.0, "end": 2.0, "speaker": "SPEAKER_00"},
+            {"start": 2.2, "end": 4.0, "speaker": "SPEAKER_01"},
+        ]
+
+        result = assign_speakers_to_segments(segments, turns)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["speaker"], "SPEAKER_00")
+        self.assertEqual(result[1]["speaker"], "SPEAKER_01")
+        # Output shape matches the Gemini reference: word/text/start/end/speaker
+        self.assertEqual(result[0]["text"], "สวัสดีครับ")
+        self.assertEqual(result[0]["word"], "สวัสดีครับ")
+        self.assertEqual(result[0]["start"], 0.0)
+        self.assertEqual(result[0]["end"], 1.8)
+
+    def test_assign_speakers_to_segments_nearest_fallback(self):
+        # Segment lands in a silence gap; nearest turn within tolerance wins.
+        segments = [
+            {"text": "เอ่อ", "start": 2.05, "end": 2.15},
+        ]
+        turns = [
+            {"start": 0.0, "end": 2.0, "speaker": "SPEAKER_00"},
+            {"start": 2.5, "end": 4.0, "speaker": "SPEAKER_01"},
+        ]
+
+        result = assign_speakers_to_segments(segments, turns, gap_tolerance_sec=0.5)
+        self.assertEqual(result[0]["speaker"], "SPEAKER_00")
+
+    def test_assign_speakers_to_segments_no_turns_unknown(self):
+        segments = [
+            {"text": "สวัสดี", "start": 0.0, "end": 1.0},
+        ]
+        result = assign_speakers_to_segments(segments, [])
+        self.assertEqual(result[0]["speaker"], "UNKNOWN")
+        self.assertEqual(result[0]["text"], "สวัสดี")
+
+    def test_assign_speakers_to_segments_empty_segments(self):
+        self.assertEqual(assign_speakers_to_segments([], []), [])
 
     def test_group_speaker_segments(self):
         segments = [
@@ -163,6 +209,127 @@ class TestDiarizationHelpers(unittest.TestCase):
         grouped = group_speaker_segments(segments)
         self.assertEqual(grouped[0]["text"], "สวัสดีครับ")
         self.assertEqual(grouped[1]["text"], "hello there")
+
+    def test_consolidate_resolves_cross_speaker_overlap(self):
+        from app.pyannote_engine import consolidate_diarization_turns
+
+        # Two speakers claim overlapping time; the longer turn dominates.
+        turns = [
+            {"start": 0.0, "end": 4.0, "speaker": "SPEAKER_01"},
+            {"start": 1.0, "end": 3.0, "speaker": "SPEAKER_00"},
+        ]
+        result = consolidate_diarization_turns(turns)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["speaker"], "SPEAKER_01")
+        self.assertEqual(result[0]["start"], 0.0)
+        self.assertEqual(result[0]["end"], 4.0)
+
+    def test_consolidate_truncates_later_turn(self):
+        from app.pyannote_engine import consolidate_diarization_turns
+
+        # Overlapping turns: the later one is cut out of the overlap region.
+        turns = [
+            {"start": 0.0, "end": 2.0, "speaker": "SPEAKER_00"},
+            {"start": 1.0, "end": 5.0, "speaker": "SPEAKER_01"},
+        ]
+        result = consolidate_diarization_turns(turns)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["speaker"], "SPEAKER_00")
+        self.assertEqual(result[0]["end"], 2.0)
+        self.assertEqual(result[1]["speaker"], "SPEAKER_01")
+        self.assertEqual(result[1]["start"], 2.0)
+        self.assertEqual(result[1]["end"], 5.0)
+
+    def test_consolidate_merges_same_speaker_gap(self):
+        from app.pyannote_engine import consolidate_diarization_turns
+
+        turns = [
+            {"start": 0.0, "end": 2.0, "speaker": "SPEAKER_00"},
+            {"start": 2.4, "end": 4.0, "speaker": "SPEAKER_00"},   # gap 0.4 <= 0.6
+            {"start": 6.0, "end": 7.0, "speaker": "SPEAKER_01"},
+        ]
+        result = consolidate_diarization_turns(turns)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["speaker"], "SPEAKER_00")
+        self.assertEqual(result[0]["end"], 4.0)
+
+    def test_consolidate_drops_tiny_turns(self):
+        from app.pyannote_engine import consolidate_diarization_turns
+
+        turns = [
+            {"start": 0.0, "end": 4.0, "speaker": "SPEAKER_00"},
+            {"start": 5.0, "end": 5.3, "speaker": "SPEAKER_01"},   # 0.3s < 0.5s min
+        ]
+        result = consolidate_diarization_turns(turns)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["speaker"], "SPEAKER_00")
+
+    def test_group_words_by_turns_buckets_by_overlap(self):
+        from app.pyannote_engine import group_words_by_turns
+
+        words = [
+            {"word": "สวัสดี", "start": 0.1, "end": 0.9},
+            {"word": "ครับ", "start": 1.0, "end": 1.8},
+            {"word": "ยินดี", "start": 2.2, "end": 2.9},
+            {"word": "ที่รู้จัก", "start": 3.0, "end": 3.9},
+        ]
+        turns = [
+            {"start": 0.0, "end": 2.0, "speaker": "SPEAKER_00"},
+            {"start": 2.1, "end": 4.0, "speaker": "SPEAKER_01"},
+        ]
+        result = group_words_by_turns(words, turns)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["speaker"], "SPEAKER_00")
+        self.assertEqual(result[0]["text"], "สวัสดีครับ")
+        self.assertEqual(result[0]["start"], 0.0)
+        self.assertEqual(result[1]["speaker"], "SPEAKER_01")
+        self.assertEqual(result[1]["text"], "ยินดีที่รู้จัก")
+
+    def test_group_words_by_turns_empty(self):
+        from app.pyannote_engine import group_words_by_turns
+
+        self.assertEqual(group_words_by_turns([], []), [])
+        self.assertEqual(
+            group_words_by_turns(
+                [{"word": "ครับ", "start": 0.0, "end": 0.5}], []
+            ),
+            [],
+        )
+
+    def test_reconstruct_thai_words_rebuilds_whole_words(self):
+        from app.pyannote_engine import reconstruct_thai_words
+
+        # faster-whisper returns character-level tokens for Thai; reconstruct
+        # must re-tokenize the full text into whole words with real times.
+        segments = [
+            {
+                "text": "คุณชมนี เป็นอะไร",
+                "words": [
+                    {"word": "ค", "start": 0.0, "end": 0.1},
+                    {"word": "ุ", "start": 0.1, "end": 0.2},
+                    {"word": "ณ", "start": 0.2, "end": 0.3},
+                    {"word": "ช", "start": 0.3, "end": 0.4},
+                    {"word": "ม", "start": 0.4, "end": 0.5},
+                    {"word": "นี", "start": 0.5, "end": 0.7},
+                    {"word": "เป็น", "start": 0.8, "end": 1.2},
+                    {"word": "อะไร", "start": 1.3, "end": 1.8},
+                ],
+            }
+        ]
+        result = reconstruct_thai_words(segments)
+        self.assertTrue(result)
+        joined = "".join(w["word"] for w in result).replace(" ", "")
+        self.assertEqual(joined, "คุณชมนีเป็นอะไร")
+        self.assertGreaterEqual(result[0]["start"], 0.0)
+        self.assertLessEqual(result[-1]["end"], 1.8)
+
+    def test_reconstruct_thai_words_empty_and_without_pythainlp(self):
+        from app.pyannote_engine import reconstruct_thai_words
+
+        self.assertEqual(reconstruct_thai_words([]), [])
+        # segments without words fall back to char tokens
+        result = reconstruct_thai_words([{"text": "สวัสดี", "words": []}])
+        self.assertEqual(result, [])
 
 
 if __name__ == "__main__":

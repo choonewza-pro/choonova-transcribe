@@ -3,7 +3,7 @@
 (function () {
   const API_KEY_STORAGE = 'typhoon_asr_api_key';
 
-  let last = { mode: 'always', typhoon: 'idle', whisper: 'idle' };
+  let last = { mode: 'always', typhoon: 'idle', whisper: 'idle', whisper_thai: 'idle' };
   let pollTimer = null;
 
   function getBadgeEl() {
@@ -48,6 +48,7 @@
       `<div class="model-status-body">` +
       `<span class="model-status-item">${deviceIcon} ${execDevice}</span>` +
       `<span class="model-status-item">🌀 Typhoon: ${dot(data.typhoon_model_state)}</span>` +
+      `<span class="model-status-item">🇹🇭 Thai Whisper: ${dot(data.whisper_thai_model_state)}</span>` +
       `<span class="model-status-item">🕊️ Whisper: ${dot(data.whisper_model_state)}</span>` +
       `<span class="model-status-item">⚙️ โหมด: ${modeLabel}</span>` +
       `</div>`;
@@ -130,12 +131,19 @@
 
   function updateModalBadges(data) {
     const typhoonBadge = document.getElementById('modelLoadingTyphoonBadge');
+    const thaiWhisperBadge = document.getElementById('modelLoadingThaiWhisperBadge');
     const whisperBadge = document.getElementById('modelLoadingWhisperBadge');
 
     if (typhoonBadge && data.typhoon_model_state) {
       const state = data.typhoon_model_state;
       typhoonBadge.className = `status-badge ${BADGE_CLASS[state] || 'badge-idle'}`;
       typhoonBadge.textContent = BADGE_LABEL[state] || state;
+    }
+
+    if (thaiWhisperBadge && data.whisper_thai_model_state) {
+      const state = data.whisper_thai_model_state;
+      thaiWhisperBadge.className = `status-badge ${BADGE_CLASS[state] || 'badge-idle'}`;
+      thaiWhisperBadge.textContent = BADGE_LABEL[state] || state;
     }
 
     if (whisperBadge && data.whisper_model_state) {
@@ -198,13 +206,15 @@
       // Check if target engine is loaded
       const target = dialogState.targetEngine;
       let ready = false;
-      if (target === 'typhoon' && data.typhoon_model_state === 'loaded') ready = true;
+      if (target === 'whisper_thai' && data.whisper_thai_model_state === 'loaded') ready = true;
+      else if (target === 'typhoon' && data.typhoon_model_state === 'loaded') ready = true;
       else if (target === 'whisper' && data.whisper_model_state === 'loaded') ready = true;
-      else if (
-        (target === 'auto' || target === 'all') &&
-        (data.typhoon_model_state === 'loaded' || data.whisper_model_state === 'loaded')
-      ) {
-        ready = true;
+      else if (target === 'auto' || target === 'all') {
+        ready = (
+          data.typhoon_model_state === 'loaded' ||
+          data.whisper_model_state === 'loaded' ||
+          data.whisper_thai_model_state === 'loaded'
+        );
       }
 
       if (ready && opts.autoClose !== false) {

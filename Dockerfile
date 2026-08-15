@@ -36,6 +36,10 @@ RUN python3 /app/scripts/download_models.py --typhoon --hf-token "${HF_TOKEN}"
 # Pre-download Whisper model (for English / Thai-English mixed support via faster-whisper)
 RUN python3 /app/scripts/download_models.py --whisper --whisper-model "${WHISPER_MODEL}" --hf-token "${HF_TOKEN}"
 
+# Pre-download Thai-tuned Whisper model (for accurate Thai offline path via faster-whisper CT2)
+ARG WHISPER_THAI_MODEL=Avocaduu14/whisper-th-large-v3-ct2
+RUN WHISPER_THAI_MODEL="${WHISPER_THAI_MODEL}" python3 /app/scripts/download_models.py --whisper-thai --hf-token "${HF_TOKEN}"
+
 # Pre-download PyAnnote Diarization & SpeechBrain models (if HF_TOKEN is provided at build time)
 RUN python3 /app/scripts/download_models.py --pyannote --hf-token "${HF_TOKEN}"
 

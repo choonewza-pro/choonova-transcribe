@@ -4,17 +4,19 @@ from typing import Any, Dict, Optional
 from app.config import SUPPORTED_LANGUAGES
 from app.asr_engine import engine
 from app.whisper_engine import whisper_engine
+from app.whisper_thai_engine import whisper_thai_engine
 
 logger = logging.getLogger("engine-router")
 
 
 def get_engines_state() -> Dict[str, str]:
     """
-    Current residency state of both engines: 'loading' | 'loaded' | 'idle'.
+    Current residency state of the engines: 'loading' | 'loaded' | 'idle'.
     Also checks active background jobs to accurately reflect models loaded in isolated workers.
     """
     typhoon_state = engine.get_state()
     whisper_state = whisper_engine.get_state()
+    whisper_thai_state = whisper_thai_engine.get_state()
 
     # Check background workers
     try:
@@ -26,16 +28,16 @@ def get_engines_state() -> Dict[str, str]:
             for row in cursor.fetchall():
                 lang = row["language"]
                 stage = row["current_stage"]
-                target = "typhoon" if lang == "th" else "whisper"
+                target = "whisper_thai" if lang == "th" else "whisper"
                 
                 if stage == "Loading Model onto VRAM":
-                    if target == "typhoon" and typhoon_state != "loaded":
-                        typhoon_state = "loading"
+                    if target == "whisper_thai" and whisper_thai_state != "loaded":
+                        whisper_thai_state = "loading"
                     elif target == "whisper" and whisper_state != "loaded":
                         whisper_state = "loading"
                 elif stage in ("Transcribing", "Finalizing"):
-                    if target == "typhoon":
-                        typhoon_state = "loaded"
+                    if target == "whisper_thai":
+                        whisper_thai_state = "loaded"
                     elif target == "whisper":
                         whisper_state = "loaded"
     except Exception as e:
@@ -44,19 +46,21 @@ def get_engines_state() -> Dict[str, str]:
     return {
         "typhoon": typhoon_state,
         "whisper": whisper_state,
+        "whisper_thai": whisper_thai_state,
     }
 
 
 def apply_model_mode(mode: str) -> Dict[str, str]:
     """
     Apply a load-mode change at runtime.
-      - 'always': eagerly load both engines so they are warm and resident.
+      - 'always': eagerly load the engines so they are warm and resident.
       - 'idle':   leave them alone; the idle reaper will unload on timeout.
     Returns the engines state after applying.
     """
     if mode == "always":
         engine.load_model()
         whisper_engine.load_model()
+        whisper_thai_engine.load_model()
     return get_engines_state()
 
 
@@ -69,6 +73,8 @@ def unload_if_idle_all(timeout_sec: float) -> bool:
     if engine.unload_if_idle(timeout_sec):
         unloaded = True
     if whisper_engine.unload_if_idle(timeout_sec):
+        unloaded = True
+    if whisper_thai_engine.unload_if_idle(timeout_sec):
         unloaded = True
     return unloaded
 
@@ -99,7 +105,7 @@ def transcribe_file(
     """
     Route a transcription/translation request to the appropriate engine:
       - task='translate' -> Whisper (translates speech into English text)
-      - 'th' (transcribe) -> Typhoon ASR (Thai-only, fast, streaming-friendly)
+      - 'th' (transcribe) -> Thai-tuned Whisper (accurate Thai offline ASR + real word timestamps)
       - 'en'/'auto' (transcribe) -> Whisper
     """
     lang = normalize_language(language) if language else "th"
@@ -116,10 +122,11 @@ def transcribe_file(
         )
 
     if lang == "th":
-        return engine.transcribe_file(
+        return whisper_thai_engine.transcribe_file(
             audio_path,
+            language="th",
             with_timestamps=with_timestamps,
-            is_chunk=is_chunk,
+            task="transcribe",
         )
     return whisper_engine.transcribe_file(
         audio_path,
@@ -160,10 +167,12 @@ def transcribe_bytes(
         )
 
     if lang == "th":
-        return engine.transcribe_bytes(
+        return whisper_thai_engine.transcribe_bytes(
             audio_bytes,
             filename_hint=filename_hint,
+            language="th",
             with_timestamps=with_timestamps,
+            task="transcribe",
         )
     return whisper_engine.transcribe_bytes(
         audio_bytes,
@@ -179,12 +188,13 @@ def transcribe_bytes(
 
 def reset_all() -> None:
     """
-    Reset BOTH engines. Must be used instead of engine.reset() after any
+    Reset ALL engines. Must be used instead of engine.reset() after any
     cudaDeviceReset, which invalidates the entire CUDA context in the process
-    and would leave the Whisper model referencing dead memory.
+    and would leave the Whisper models referencing dead memory.
     """
     engine.reset()
     whisper_engine.reset()
+    whisper_thai_engine.reset()
 
 
 def cuda_device_reset_all() -> None:

@@ -135,6 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateTimeoutEnabled();
       statusEl.textContent =
         `สถานะปัจจุบัน: Typhoon ${stateLabel(data.typhoon_model_state)} · ` +
+        `Thai Whisper ${stateLabel(data.whisper_thai_model_state)} · ` +
         `Whisper ${stateLabel(data.whisper_model_state)}`;
     } catch (e) {
       statusEl.textContent = `ไม่สามารถโหลดการตั้งค่าได้: ${e.message} — กรุณากรอก API Key ด้านบน`;
@@ -187,6 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
       statusEl.textContent =
         `✅ บันทึกแล้ว: โหมด ${data.mode} (idle timeout ${Math.round(data.idle_timeout_sec)}s) · ` +
         `Typhoon ${stateLabel(data.typhoon_model_state)} · ` +
+        `Thai Whisper ${stateLabel(data.whisper_thai_model_state)} · ` +
         `Whisper ${stateLabel(data.whisper_model_state)}`;
       if (window.ModelStatus) window.ModelStatus.refresh();
     } catch (e) {

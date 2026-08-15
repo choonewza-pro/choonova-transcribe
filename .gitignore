@@ -8,6 +8,9 @@ venv/
 ENV/
 *.nemo
 models/*.nemo
+# Thai-tuned Whisper CT2 weights (bind-mounted from host ./models; ~3GB, auto-downloaded)
+models/whisper-th-large-v3-ct2/
+models/faster-whisper-*/
 .agents/skills/*
 !.agents/skills/project-onboarding/
 !.agents/skills/modular-hexagonal-architecture/

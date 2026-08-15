@@ -22,7 +22,7 @@
       <h1>ChooNova Transcribe API Service</h1>
       <p class="subtitle">
         ระบบแปลงเสียงพูดเป็นข้อความ (Speech-to-Text) ความเร็วสูง พร้อมรองรับ 2 ภาษาแบบดูอัล-เอนจิน:<br>
-        <strong>Typhoon ASR Realtime</strong> (FastConformer-Transducer 114M) สำหรับภาษาไทย และ
+        <strong>Thai Whisper</strong> (faster-whisper CT2, `whisper-th-large-v3`) สำหรับภาษาไทย และ
         <strong>Faster-Whisper (large-v3-turbo)</strong> สำหรับภาษาอังกฤษ / ไทย-อังกฤษผสม
         <br>พร้อมเครื่องมือ <strong>บีบอัดวิดีโอ</strong> ด้วย FFmpeg (ลดความละเอียด / บิตเรต / ตัดหัว-ท้าย start/end) แบบคิวอัตโนมัติ
       </p>
@@ -30,8 +30,8 @@
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
         <div style="background: rgba(255,255,255,0.03); padding: 1.2rem; border-radius: 10px; border: 1px solid var(--card-border);">
           <div style="color: var(--text-muted); font-size: 0.85rem;">โมเดลภาษาไทย (Thai ASR)</div>
-          <div style="font-size: 1.35rem; font-weight: 700; color: var(--accent-cyan); margin-top: 0.2rem;">Typhoon ASR Realtime</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">FastConformer 114M</div>
+          <div style="font-size: 1.35rem; font-weight: 700; color: var(--accent-cyan); margin-top: 0.2rem;">Thai Whisper</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">whisper-th-large-v3 CT2</div>
         </div>
         <div style="background: rgba(255,255,255,0.03); padding: 1.2rem; border-radius: 10px; border: 1px solid var(--card-border);">
           <div style="color: var(--text-muted); font-size: 0.85rem;">โมเดลภาษาอังกฤษ / Auto</div>
@@ -151,7 +151,7 @@
               <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                 <td style="padding: 0.9rem 1.2rem; font-weight: 600; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.05);">⚙️ การเลือกเอนจิน (Engine Routing)</td>
                 <td style="padding: 0.9rem 1.2rem; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.05);">
-                  <code>language=th</code> → <strong>Typhoon ASR</strong> (ไทย) • <code>language=en</code> / <code>auto</code> → <strong>Faster-Whisper</strong> (อังกฤษ / ไทย-อังกฤษผสม)
+                  <code>language=th</code> → <strong>Thai Whisper</strong> (ไทย, faster-whisper CT2) • <code>language=en</code> / <code>auto</code> → <strong>Faster-Whisper</strong> (อังกฤษ / ไทย-อังกฤษผสม)
                 </td>
               </tr>
               <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">

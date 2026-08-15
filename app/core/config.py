@@ -87,6 +87,10 @@ MODEL_IDLE_TIMEOUT_SEC_DEFAULT = float(os.getenv("MODEL_IDLE_TIMEOUT_SEC", "900"
 # Whisper secondary engine for English / Thai-English mixed audio
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "large-v3-turbo")
 WHISPER_COMPUTE_TYPE = "float16" if DEVICE == "cuda" else "int8"
+
+# Thai-tuned Whisper (CT2) for the Thai offline path — replaces Typhoon for accuracy
+WHISPER_THAI_MODEL = os.getenv("WHISPER_THAI_MODEL", "Avocaduu14/whisper-th-large-v3-ct2")
+WHISPER_THAI_COMPUTE_TYPE = os.getenv("WHISPER_THAI_COMPUTE_TYPE", "int8_float16" if DEVICE == "cuda" else "int8")
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip() or None
 SUPPORTED_LANGUAGES = ("th", "en", "auto")
 

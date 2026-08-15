@@ -206,6 +206,254 @@ def _join_words(parts: List[str]) -> str:
     return " ".join(parts)
 
 
+def assign_speakers_to_segments(
+    segments: List[Dict[str, Any]],
+    diarization_turns: List[Dict[str, Any]],
+    gap_tolerance_sec: float = 0.3,
+) -> List[Dict[str, Any]]:
+    """
+    Assign a speaker label to each ASR phrase/segment using Maximum Overlap
+    against the PyAnnote diarization turns, with a Nearest-Neighbor fallback
+    for phrases that fall inside a short pause gap.
+
+    Operates at the phrase-segment level (real ASR segment boundaries) instead
+    of word level, matching the Gemini reference shape:
+        {"word": str, "text": str, "start": float, "end": float, "speaker": str}
+
+    :param segments: List of Dicts with {"start": float, "end": float, "text": str}
+    :param diarization_turns: List of Dicts with {"start": float, "end": float, "speaker": str}
+    :param gap_tolerance_sec: Max gap to attach an unassigned segment to nearest speaker turn
+    :return: List of segment dicts with a "speaker" key added
+    """
+    if not segments:
+        return []
+
+    if not diarization_turns:
+        return [
+            {
+                "word": (seg.get("word") or seg.get("text") or "").strip(),
+                "text": (seg.get("text") or seg.get("word") or "").strip(),
+                "start": round(float(seg.get("start", 0.0)), 3),
+                "end": round(float(seg.get("end", 0.0)), 3),
+                "speaker": "UNKNOWN",
+            }
+            for seg in segments
+        ]
+
+    result = []
+    for seg in segments:
+        t_start = float(seg.get("start", 0.0))
+        t_end = float(seg.get("end", 0.0))
+        best_speaker = "UNKNOWN"
+        max_overlap = 0.0
+
+        for turn in diarization_turns:
+            turn_start = float(turn["start"])
+            turn_end = float(turn["end"])
+            overlap = max(0.0, min(t_end, turn_end) - max(t_start, turn_start))
+            if overlap > max_overlap:
+                max_overlap = overlap
+                best_speaker = turn["speaker"]
+
+        if max_overlap == 0.0 and diarization_turns:
+            closest_turn = min(
+                diarization_turns,
+                key=lambda t: min(
+                    abs(float(t["start"]) - t_end),
+                    abs(float(t["end"]) - t_start),
+                ),
+            )
+            dist = min(
+                abs(float(closest_turn["start"]) - t_end),
+                abs(float(closest_turn["end"]) - t_start),
+            )
+            if dist <= gap_tolerance_sec:
+                best_speaker = closest_turn["speaker"]
+
+        result.append(
+            {
+                "word": (seg.get("word") or seg.get("text") or "").strip(),
+                "text": (seg.get("text") or seg.get("word") or "").strip(),
+                "start": round(t_start, 3),
+                "end": round(t_end, 3),
+                "speaker": best_speaker,
+            }
+        )
+
+    return result
+
+
+def consolidate_diarization_turns(
+    turns: List[Dict[str, Any]],
+    gap_sec: float = 0.6,
+    min_dur_sec: float = 0.5,
+) -> List[Dict[str, Any]]:
+    """
+    Clean up raw PyAnnote turns into a single speaker timeline:
+
+    1. Resolve cross-speaker time overlaps (a PyAnnote artifact where two
+       speakers claim the same time span): the longer turn dominates and the
+       shorter one is truncated out of the overlap. Fully-contained turns are
+       dropped.
+    2. Merge same-speaker turns separated by a gap <= ``gap_sec``.
+    3. Drop turns shorter than ``min_dur_sec``.
+
+    Returns a list of non-overlapping turns, each {"start", "end", "speaker"}.
+    """
+    if not turns:
+        return []
+
+    ordered = sorted(turns, key=lambda t: (t["start"], -(t["end"] - t["start"])))
+    kept: List[Dict[str, Any]] = []
+    for t in ordered:
+        start, end, spk = float(t["start"]), float(t["end"]), t["speaker"]
+        for k in list(kept):
+            ks, ke, kspk = k["start"], k["end"], k["speaker"]
+            overlap = min(end, ke) - max(start, ks)
+            if overlap > 0 and kspk != spk:
+                if start >= ks and end <= ke:
+                    start, end = 0.0, 0.0
+                    break
+                elif start < ks:
+                    end = min(end, ks)
+                else:
+                    start = max(start, ke)
+        if end - start < min_dur_sec:
+            continue
+        kept.append({"start": round(start, 3), "end": round(end, 3), "speaker": spk})
+
+    merged: List[Dict[str, Any]] = []
+    for t in sorted(kept, key=lambda x: (x["start"], x["end"])):
+        if (
+            merged
+            and merged[-1]["speaker"] == t["speaker"]
+            and t["start"] - merged[-1]["end"] <= gap_sec
+        ):
+            merged[-1]["end"] = max(merged[-1]["end"], t["end"])
+        else:
+            merged.append(dict(t))
+    return [t for t in merged if t["end"] - t["start"] >= min_dur_sec]
+
+
+def reconstruct_thai_words(
+    segments: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Rebuild whole Thai words with real timestamps from Whisper segments.
+
+    faster-whisper returns character-level word tokens for Thai (ค, ุ, ณ, ...)
+    because Thai has no inter-word spaces. Bucketing those character tokens into
+    speaker turns splits words mid-way ("คุณชมนี" -> "คุ" + "ชมนี"), corrupting
+    the output text. Instead we re-tokenize each segment's *full text* with
+    PyThaiNLP ``newmm`` into whole words, then walk the segment's character
+    tokens (which carry real timestamps) in order, consuming as many as each
+    word spans. Each newmm word therefore keeps a real start/end.
+
+    :param segments: Engine segments, each with {"text": str, "words": [...]}
+    :return: List of {"word", "start", "end"} with whole words and real times.
+    """
+    try:
+        from pythainlp.tokenize import word_tokenize
+    except Exception:
+        return [
+            {"word": (w.get("word") or "").strip(), "start": float(w.get("start", 0)), "end": float(w.get("end", 0))}
+            for seg in segments
+            for w in (seg.get("words") or [])
+            if (w.get("word") or "").strip()
+        ]
+
+    result = []
+    for seg in segments:
+        text = seg.get("text") or ""
+        char_tokens = [
+            ((w.get("word") or "").strip(), float(w.get("start", 0)), float(w.get("end", 0)))
+            for w in (seg.get("words") or [])
+            if (w.get("word") or "").strip()
+        ]
+        if not char_tokens:
+            continue
+        try:
+            words = [w for w in word_tokenize(text, engine="newmm") if w.strip()]
+        except Exception:
+            words = [w for w in word_tokenize(text) if w.strip()]
+
+        ptr = 0
+        for nw in words:
+            acc = ""
+            c_start = None
+            c_end = 0.0
+            while len(acc) < len(nw) and ptr < len(char_tokens):
+                c, cs, ce = char_tokens[ptr]
+                ptr += 1
+                if c_start is None:
+                    c_start = cs
+                c_end = ce
+                acc += c
+            if acc:
+                result.append({
+                    "word": nw,
+                    "start": round(c_start, 3) if c_start is not None else 0.0,
+                    "end": round(c_end, 3),
+                })
+    return result
+
+
+def group_words_by_turns(
+    words: List[Dict[str, Any]],
+    diarization_turns: List[Dict[str, Any]],
+    gap_sec: float = 0.6,
+    min_dur_sec: float = 0.5,
+) -> List[Dict[str, Any]]:
+    """
+    Group ASR words into speaker-turn segments by assigning each word to the
+    diarization turn with maximum time overlap (nearest-turn fallback for words
+    in pause gaps). Returns reference-shaped segments:
+
+        {"speaker", "start", "end", "text", "word"}
+
+    :param words: List of {"word", "start", "end"} (real ASR word timestamps)
+    :param diarization_turns: Raw PyAnnote turns (consolidated internally)
+    """
+    if not words:
+        return []
+    turns = consolidate_diarization_turns(diarization_turns, gap_sec, min_dur_sec)
+    if not turns:
+        return []
+
+    buckets = {i: [] for i in range(len(turns))}
+    for w in words:
+        w_start = float(w["start"])
+        w_end = float(w["end"])
+        best_idx = None
+        best_overlap = 0.0
+        for i, t in enumerate(turns):
+            overlap = max(0.0, min(w_end, t["end"]) - max(w_start, t["start"]))
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_idx = i
+        if best_idx is not None and best_overlap > 0:
+            buckets[best_idx].append(w)
+
+    result = []
+    for i, t in enumerate(turns):
+        parts = buckets[i]
+        if not parts:
+            continue
+        text = _join_words([p.get("word", "") for p in parts])
+        if not text.strip():
+            continue
+        result.append(
+            {
+                "speaker": t["speaker"],
+                "start": round(float(t["start"]), 3),
+                "end": round(float(t["end"]), 3),
+                "text": text,
+                "word": text,
+            }
+        )
+    return result
+
+
 def group_speaker_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Group continuous segments belonging to the same speaker into coherent speaker turn segments.
