@@ -3,6 +3,7 @@ Core application configuration reading environment variables.
 """
 
 import os
+import logging
 import torch
 from dotenv import load_dotenv
 
@@ -11,6 +12,8 @@ from dotenv import load_dotenv
 # interpolates .env into the container. OS env vars still take precedence
 # (load_dotenv defaults to override=False).
 load_dotenv()
+
+logger = logging.getLogger("config")
 
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8830"))
@@ -66,6 +69,13 @@ COMPRESS_OUTPUT_DIR = os.getenv("COMPRESS_OUTPUT_DIR", TEMP_JOBS_DIR)
 requested_device = os.getenv("DEVICE", "cuda").lower()
 if requested_device == "cuda" and torch.cuda.is_available():
     DEVICE = "cuda"
+elif requested_device == "cuda":
+    DEVICE = "cpu"
+    logger.warning(
+        "DEVICE=cuda requested but torch has no CUDA support "
+        f"(torch {torch.__version__}) - falling back to CPU. "
+        "Install GPU torch with: pip install -r requirements.txt"
+    )
 else:
     DEVICE = "cpu"
 
