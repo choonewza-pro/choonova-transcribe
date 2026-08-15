@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ถอดไฟล์เสียง (คิว) - ChooNova Transcribe</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    .progress-bar-container {
+      width: 100%;
+      height: 12px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 1rem 0;
+      border: 1px solid var(--card-border);
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00f2fe, #4facfe, #00f2fe);
+      background-size: 200% 100%;
+      animation: gradientShift 2s linear infinite;
+      transition: width 0.3s ease;
+    }
+    @keyframes gradientShift {
+      0% { background-position: 0% 0%; }
+      100% { background-position: 200% 0%; }
+    }
+  </style>
+</head>
+<body>
+  {% set active_page = 'audio_jobs' %}
+  {% set header_badge = 'Audio Transcribe Queue' %}
+  {% include 'partials/header.html' %}
+
+  <main>
+    {% include 'partials/model_status_card.html' %}
+
+    <div class="glass-card">
+      <h1>📁 แปลงไฟล์เสียงเป็นข้อความ (ทำงานเบื้องหลัง)</h1>
+      <p class="subtitle" style="margin-bottom: 1.5rem;">รองรับไฟล์เสียงรูปแบบ WAV, MP3, M4A, OGG, FLAC — ส่งเข้าระบบคิว ประมวลผลเบื้องหลัง ยกเลิกได้ และดูประวัติได้ที่หน้า "ประวัติการถอดความ"<br>พร้อมกันสูงสุด {{ max_concurrent|default(1) }} งาน / รอคิวได้สูงสุด {{ max_queued|default(10) }} งาน</p>
+
+      <form id="audioJobsForm" data-max-audio-upload-mb="{{ max_audio_upload_mb|default(50) }}">
+        <div class="dropzone" id="dropzone">
+          <div class="icon">☁️</div>
+          <h3 id="fileName">ลากไฟล์เสียงมาวางที่นี่ หรือ คลิกเพื่อเลือกไฟล์</h3>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">ขนาดไฟล์ไม่เกิน {{ max_audio_upload_mb|default(50)|int }}MB</p>
+          <input type="file" id="audioFileInput" accept="audio/*" style="display: none;">
+        </div>
+
+        <!-- Audio Player Preview Container (Shown when file is selected) -->
+        <div id="audioPlayerContainer" style="display: none; margin-top: 1.25rem; text-align: left; background: rgba(0, 0, 0, 0.25); padding: 1rem 1.25rem; border-radius: 12px; border: 1px solid var(--card-border);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h4 style="font-size: 0.95rem; color: var(--accent-cyan);">🎧 ตัวเล่นไฟล์เสียง (Audio Preview):</h4>
+            <span id="playerStatus" style="font-size: 0.85rem; color: var(--text-muted);"></span>
+          </div>
+          <audio id="audioPreview" controls style="width: 100%; border-radius: 10px; outline: none; background: rgba(0,0,0,0.5); border: 1px solid var(--card-border);"></audio>
+        </div>
+
+        <div style="display: flex; gap: 1.5rem; align-items: center; margin: 1.5rem 0; flex-wrap: wrap;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="timestampsCheck" style="width: 18px; height: 18px;">
+            <span>เปิดใช้งาน Word-level Timestamps</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="diarizationCheck" style="width: 18px; height: 18px;">
+            <span>🎙️ ระบุผู้พูด (Speaker Diarization)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem;">
+            <span>🌐 ภาษา:</span>
+            <select id="languageSelect" class="form-select" style="padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(0,0,0,0.25); color: #fff; border: 1px solid var(--card-border);">
+              <option value="th">ไทย (Thai Whisper)</option>
+              <option value="en">อังกฤษ (Whisper)</option>
+              <option value="auto">อัตโนมัติ / ผสม (Whisper)</option>
+              <option value="translate_en">🌐 แปลเป็นอังกฤษ (Translate to English - Whisper)</option>
+            </select>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem;">
+            <span>🤖 โมเดล (Model):</span>
+            <select id="modelSelect" class="form-select" style="padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(0,0,0,0.25); color: #fff; border: 1px solid var(--card-border);">
+            </select>
+          </label>
+        </div>
+
+        <div id="diarizationOptions" style="display: none; margin: -0.5rem 0 1rem 0; padding: 1rem 1.25rem; background: rgba(168,85,247,0.12); border-radius: 10px; border: 1px solid rgba(168,85,247,0.35); gap: 1.5rem; align-items: center; flex-wrap: wrap;">
+          <div style="width: 100%; font-size: 0.9rem; font-weight: 600; color: #d8b4fe; margin-bottom: 0.25rem;">
+            👥 ตั้งค่าจำนวนผู้พูด (Speaker Count Configuration - ปล่อยว่างเพื่อตรวจจับอัตโนมัติ):
+          </div>
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+            <span>🎯 จำนวนคนแน่นอน (num_speakers):</span>
+            <input type="number" id="numSpeakersInput" min="1" max="20" placeholder="เช่น 2" style="width: 75px; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(168,85,247,0.4);">
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+            <span>⬇️ ขั้นต่ำ (min_speakers):</span>
+            <input type="number" id="minSpeakersInput" min="1" max="20" placeholder="Auto" style="width: 75px; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(168,85,247,0.4);">
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+            <span>⬆️ สูงสุด (max_speakers):</span>
+            <input type="number" id="maxSpeakersInput" min="1" max="20" placeholder="Auto" style="width: 75px; padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(168,85,247,0.4);">
+          </label>
+        </div>
+
+        <div style="display: flex; gap: 1rem; align-items: center; margin: 1.5rem 0; flex-wrap: wrap;">
+          <button type="submit" class="btn-primary" id="startJobBtn" disabled>
+            <span>🚀 ส่งเข้าระบบคิว (Enqueue)</span>
+          </button>
+          <button type="button" id="newJobBtn" class="btn-secondary" style="display: none;">🔄 แปลงไฟล์ใหม่</button>
+        </div>
+      </form>
+
+      <div id="statusMessage" style="margin-top: 1.5rem; font-weight: 500;"></div>
+
+      <!-- Job Progress -->
+      <div id="jobProgressSection" style="display: none; margin-top: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="font-size: 1.1rem; color: var(--accent-cyan);" id="currentStageText">⚙️ กำลังประมวลผล...</h3>
+          <span id="progressPctText" style="font-weight: bold; font-size: 1.1rem;">0%</span>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" id="progressBarFill"></div>
+        </div>
+        <div style="margin-top: 1rem; display: flex; justify-content: center;">
+          <button type="button" id="cancelJobBtn" class="btn-danger" style="display: none;">✕ ยกเลิกงานนี้</button>
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div style="margin-top: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+          <h3 style="font-size: 1.2rem;">ข้อความที่ถอดได้ (Result Text):</h3>
+          <div style="display: flex; gap: 0.5rem;">
+            <button id="copyResultBtn" class="nav-link action-btn" style="cursor: pointer; padding: 0.4rem 0.8rem; font-size: 0.9rem;">
+              📋 คัดลอกข้อความ
+            </button>
+            <button id="copyJsonBtn" class="nav-link action-btn" style="cursor: pointer; padding: 0.4rem 0.8rem; font-size: 0.9rem;">
+              📋 คัดลอก JSON
+            </button>
+          </div>
+        </div>
+        <div class="result-box" id="resultText">ผลลัพธ์ข้อความภาษาไทยจะแสดงตรงนี้...</div>
+
+        <div class="stats-bar" id="statsBar" style="display: none;">
+          <div class="stats-badge" id="statElapsed">⏱️ เวลาประมวลผล: -</div>
+          <div class="stats-badge" id="statDuration">🎵 ความยาวไฟล์เสียง: -</div>
+          <div class="stats-badge" id="statRtf">⚡ RTF Multiplier: -</div>
+        </div>
+
+        <div id="jsonBox" style="margin-top: 1.5rem; display: none;">
+          <h4 style="margin-bottom: 0.5rem; color: var(--accent-cyan);">ผลลัพธ์แบบ JSON:</h4>
+          <pre id="resultJson" style="background: rgba(0,0,0,0.5); padding: 1rem; border-radius: 8px; font-size: 0.85rem; max-height: 300px; overflow-y: auto;"></pre>
+        </div>
+
+        <div id="timestampsBox" style="margin-top: 1.5rem; display: none;">
+          <h4 style="margin-bottom: 0.5rem; color: var(--accent-cyan);">รายละเอียด Timestamps:</h4>
+          <pre id="timestampsJson" style="background: rgba(0,0,0,0.5); padding: 1rem; border-radius: 8px; font-size: 0.85rem; max-height: 200px; overflow-y: auto;"></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass-card" style="margin-top: 2rem;">
+      <h2 style="font-size: 1.4rem; margin-bottom: 1rem; color: var(--accent-cyan);">📚 API Endpoint ของหน้านี้</h2>
+      {% include 'partials/api_card_audio_jobs.html' %}
+    </div>
+  </main>
+
+  <script src="/static/js/transcribe_common.js?v=1"></script>
+  <script src="/static/js/audio_jobs.js?v=1"></script>
+</body>
+</html>

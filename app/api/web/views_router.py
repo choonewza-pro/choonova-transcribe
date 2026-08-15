@@ -93,6 +93,19 @@ async def audio_transcribe_page(request: Request):
     )
 
 
+@router.get("/audio/transcribe/jobs", response_class=HTMLResponse)
+async def audio_jobs_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="audio_jobs.html",
+        context={
+            "max_audio_upload_mb": MAX_AUDIO_UPLOAD_SIZE_MB,
+            "max_concurrent": TRANSCRIBE_MAX_CONCURRENT,
+            "max_queued": TRANSCRIBE_MAX_QUEUED,
+        },
+    )
+
+
 @router.get("/realtime/stream", response_class=HTMLResponse)
 async def realtime_stream_page(request: Request):
     return templates.TemplateResponse(request=request, name="realtime.html")

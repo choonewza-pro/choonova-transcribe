@@ -1,0 +1,215 @@
+<!-- ===== Audio Background Job API ===== -->
+      <div class="api-group-card">
+        <div class="api-group-header">
+          <span class="api-group-icon">⏳</span>
+          <div>
+            <h3 class="api-group-title">ถอดไฟล์เสียงแบบคิว (Audio Transcribe Jobs)</h3>
+            <p class="api-group-desc">ส่งไฟล์เสียงเข้าระบบคิว (สูงสุด {{ max_audio_upload_mb|default(50)|int }}MB) ประมวลผลเบื้องหลัง แบบเดียวกับหน้า
+            <code>/v1/audio/transcribe</code> (matrix โมเดลเดียวกัน) แต่ยกเลิกได้ + ดูประวัติที่หน้า "ประวัติการถอดความ"</p>
+          </div>
+        </div>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-flow">FLOW</span> <code>ลำดับการทำงาน (Sequence Diagram)</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <div class="api-flow">
+              <div class="api-flow-lane">
+                <div class="api-flow-participants">
+                  <div class="flow-participant client">🧑 Client <small>Browser / cURL</small></div>
+                  <div class="flow-participant server">🖥️ FastAPI Server <small>main.py</small></div>
+                  <div class="flow-participant worker">⚙️ Queue Dispatcher <small>transcribe_queue_dispatcher</small></div>
+                  <div class="flow-participant gpu">🎛️ GPU ASR <small>Thai Whisper / Typhoon / Whisper / WhisperX</small></div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>1</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Client ส่งไฟล์เสียงแบบ multipart ไปที่
+                      <code>POST /v1/audio/transcribe/jobs</code> — <code>file</code>, <code>language</code>, <code>task</code>, <code>model</code>, <code>with_timestamps</code>, <code>enable_diarization</code>, <code>num/min/max_speakers</code>
+                      <span class="flow-tag">upload</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>2</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Server ตรวจสอบ: ประเภทไฟล์ (magic bytes), คิวเต็ม (<span class="flow-msg">429</span>), พื้นที่ดิสก์ (<span class="flow-msg">507</span>), โมเดลตรงกับภาษา/การระบุผู้พูด (<span class="flow-msg">422</span>)
+                      แล้วบันทึกไฟล์ลง <code>TEMP_JOBS_DIR/{job_id}/</code> + สร้างงานใน SQLite (สถานะ <span class="flow-msg">queued</span>, <code>type='audio'</code>, บันทึก <code>model</code>)
+                      <span class="flow-tag">create_job</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>3</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Server ตอบกลับทันที <span class="flow-msg">202 Accepted</span> + <code>job_id</code> + <code>model</code> — งานรอในคิว (สูงสุด {{ max_queued|default(10) }} งาน)
+                      <span class="flow-tag">async</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>4</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      <code>transcribe_queue_dispatcher</code> (poll ทุก 1s) หยิบงานที่เก่าที่สุด แล้วสปอว์น subprocess
+                      <code>python -m app.run_audio_job &lt;job_id&gt; &lt;input&gt; &lt;lang&gt; &lt;task&gt; &lt;model&gt; &lt;num&gt; &lt;min&gt; &lt;max&gt; &lt;diar&gt;</code>
+                      — รันพร้อมกันได้ไม่เกิน <span class="flow-msg">{{ max_concurrent|default(1) }}</span> งาน (ยกเลิกได้ผ่าน <code>DELETE</code> → terminate + คืน GPU)
+                      <span class="flow-tag">dispatch</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>5</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Worker ตั้งสถานะ <span class="flow-msg">processing</span> แล้วเรียก <code>run_transcription()</code> — โค้ดชุดเดียวกับ endpoint
+                      <code>/v1/audio/transcribe</code> (เลือก engine ตาม <code>model</code> + diarization) อัปเดตสถานะ <span class="flow-msg">transcribing</span>
+                      <span class="flow-tag">transcribe</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>6</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Worker เขียนผลลัพธ์ลง SQLite: <code>text</code>, <code>timestamps</code>/<code>segments</code>, <code>model</code>, <code>rtf</code>, <code>duration</code>, <code>processing_time</code>
+                      แล้วตั้งสถานะ <span class="flow-msg">completed</span> 100%
+                      <span class="flow-tag">write_result</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>7</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      Worker ลบไฟล์ชั่วคราวใน <code>TEMP_JOBS_DIR/{job_id}/</code> (ผลลัพธ์เก็บใน DB แล้ว — หน้า history แสดง "🗑 ถูกลบ")
+                      <span class="flow-tag">cleanup</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>8</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↻</div>
+                    <div class="flow-step-text">
+                      Client poll <code>GET /v1/media/transcribe/jobs/{job_id}</code> ทุก 2 วินาที (สถานะ/ความคืบหน้า) จนกว่าจะจบ
+                      <span class="flow-tag">polling</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>9</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      ตัวเลือก: ยกเลิกงานได้ตลอดด้วย <code>DELETE /v1/media/transcribe/jobs/{job_id}</code> → ยุติ worker ทันที + ตั้งสถานะ <span class="flow-msg">cancelled</span>
+                      <span class="flow-tag">cancel</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="api-flow-step">
+                  <div class="flow-step-num"><span>10</span></div>
+                  <div class="flow-step-body">
+                    <div class="flow-step-arrow">↓</div>
+                    <div class="flow-step-text">
+                      เมื่อ <span class="flow-msg">completed</span> — ดาวน์โหลดผลลัพธ์ผ่าน
+                      <code>GET /v1/media/transcribe/jobs/{job_id}/export/{txt|srt|json}</code> (หรือดูจากหน้า "ประวัติการถอดความ")
+                      <span class="flow-tag">export</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-post">POST</span> <code>/v1/audio/transcribe/jobs</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.75rem;">
+              สร้างงานถอดเสียง (Multipart/form-data) — คืน <code>202 Accepted</code> พร้อม <code>id</code> ทันที
+              พารามิเตอร์เหมือน <code>/v1/audio/transcribe</code> (ดูการ์ด "ถอดไฟล์เสียง" ด้านล่าง): <code>file</code>, <code>language</code>,
+              <code>task</code>, <code>model</code>, <code>with_timestamps</code>, <code>enable_diarization</code>, <code>num_speakers</code>,
+              <code>min_speakers</code>, <code>max_speakers</code> — คิวเต็ม (≥ {{ max_queued|default(10) }}) → <code>429</code>,
+              ไฟล์เกิน {{ max_audio_upload_mb|default(50)|int }}MB → <code>413</code>, โมเดลไม่ตรงกับภาษา/การระบุผู้พูด → <code>422</code>
+            </p>
+            <div class="code-container">
+              <div class="code-header">ตัวอย่าง Response (202 Accepted)</div>
+              <pre class="code-block" style="margin: 0;">{
+  "status": "accepted",
+  "id": "8f2a9c1e-...",
+  "filename": "interview.mp3",
+  "language": "th",
+  "task": "transcribe",
+  "model": "thai-whisper",
+  "enable_diarization": false,
+  "num_speakers": null,
+  "min_speakers": null,
+  "max_speakers": null,
+  "message": "Job created and enqueued for audio transcription"
+}</pre>
+            </div>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-get">GET</span> <code>/v1/media/transcribe/jobs/{job_id}</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem;">
+              ตรวจสถานะงาน (status/stage/progress/result) — เดิมมีอยู่แล้วและใช้กับงานคิวเสียงได้เหมือนกัน
+            </p>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-delete">DELETE</span> <code>/v1/media/transcribe/jobs/{job_id}</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem;">
+              ยกเลิกงานที่กำลังทำงาน/รอคิว (ยุติ subprocess worker ทันที → คืน GPU) หรือลบงานที่เสร็จแล้ว
+            </p>
+          </div>
+        </details>
+
+        <details class="api-endpoint">
+          <summary>
+            <span class="endpoint-badge badge-get">GET</span> <code>/v1/media/transcribe/jobs/{job_id}/export/{txt|srt|json}</code>
+            <span class="api-chevron">▾</span>
+          </summary>
+          <div class="api-endpoint-body">
+            <p style="color: var(--text-muted); font-size: 0.95rem;">
+              ดาวน์โหลดผลลัพธ์เป็น .txt / .srt (ซับไตเติล) / .json
+            </p>
+          </div>
+        </details>
+      </div>

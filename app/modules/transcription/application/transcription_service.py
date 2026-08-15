@@ -41,11 +41,15 @@ class TranscriptionService:
         min_speakers: Optional[int] = None,
         max_speakers: Optional[int] = None,
         task: str = "transcribe",
+        model: Optional[str] = None,
+        type: str = "transcription",
     ) -> TranscriptionJob:
         """Create a new transcription job record (status=queued)."""
         final_job_id = job_id or str(uuid.uuid4())
         job = TranscriptionJob(
             id=final_job_id,
+            type=type,
+            model=model,
             filename=filename,
             file_size_bytes=file_size_bytes,
             language=language,

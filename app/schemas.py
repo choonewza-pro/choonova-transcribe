@@ -107,6 +107,7 @@ class JobCreateResponse(BaseModel):
     filename: str
     language: str = "th"
     task: str = "transcribe"
+    model: Optional[str] = None
     enable_diarization: bool = False
     num_speakers: Optional[int] = None
     min_speakers: Optional[int] = None

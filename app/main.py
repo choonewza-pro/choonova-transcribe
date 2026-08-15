@@ -403,11 +403,27 @@ async def transcribe_queue_dispatcher():
             save_path = input_files[0]
             lang = job.get("language") or "th"
             enable_diar = "1" if job.get("enable_diarization") else "0"
+            job_type = job.get("type") or "transcription"
 
-            cmd = [sys.executable, "-m", "app.run_job", job_id, save_path, lang, enable_diar]
+            if job_type == "audio":
+                num = job.get("num_speakers")
+                min_s = job.get("min_speakers")
+                max_s = job.get("max_speakers")
+                cmd = [
+                    sys.executable, "-m", "app.run_audio_job",
+                    job_id, save_path, lang,
+                    job.get("task") or "transcribe",
+                    job.get("model") or "thai-whisper",
+                    str(num) if num is not None else "none",
+                    str(min_s) if min_s is not None else "none",
+                    str(max_s) if max_s is not None else "none",
+                    enable_diar,
+                ]
+            else:
+                cmd = [sys.executable, "-m", "app.run_job", job_id, save_path, lang, enable_diar]
             proc = subprocess.Popen(cmd, cwd=SERVICE_DIR)
             _active_workers[job_id] = proc
-            logger.info(f"Dispatched transcription job {job_id} (pid={proc.pid}, diarization={enable_diar})")
+            logger.info(f"Dispatched transcription job {job_id} (pid={proc.pid}, type={job_type}, diarization={enable_diar})")
         except Exception as e:
             logger.error(f"Error in transcribe_queue_dispatcher: {e}")
 

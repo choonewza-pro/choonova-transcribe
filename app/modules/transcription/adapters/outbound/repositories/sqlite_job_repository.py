@@ -69,16 +69,16 @@ class SQLiteJobRepository(JobRepositoryPort):
             cursor.execute(
                 """
                 INSERT INTO jobs (
-                    id, type, filename, file_size_bytes, language, status,
+                    id, type, filename, file_size_bytes, language, model, status,
                     progress, stage, total_chunks, completed_chunks,
                     duration, processing_time, target_chunk_sec, max_chunk_sec,
                     enable_diarization, num_speakers, min_speakers, max_speakers,
                     task, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job.id, job.type, job.filename, job.file_size_bytes, job.language,
-                    job.status, job.progress, job.stage,
+                    job.model, job.status, job.progress, job.stage,
                     job.total_chunks, job.completed_chunks,
                     job.duration, job.processing_time,
                     job.target_chunk_sec, job.max_chunk_sec,

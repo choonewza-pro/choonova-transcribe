@@ -4,15 +4,17 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import os
+import sys
 import time
 import uuid
 import subprocess
+import json
 import re
 from urllib.parse import quote
 import asyncio
 
 from app.core.security import verify_api_key, verify_transcribe_history_api_key
-from app.core.state import _active_workers
+from app.core.state import _active_workers, _active_inline_workers
 from app.core.media_validator import validate_magic_bytes, validate_extension, validate_with_ffprobe, secure_filename
 from app.config import (
     MAX_AUDIO_UPLOAD_SIZE_MB, MAX_UPLOAD_SIZE_MB,
@@ -86,6 +88,7 @@ def _job_to_dict(job) -> Dict[str, Any]:
 
 @router.post("/v1/audio/transcribe", response_model=TranscribeResponse)
 async def transcribe_audio(
+    request: Request,
     file: UploadFile = File(...),
     with_timestamps: bool = Form(False),
     language: str = Form("th"),
@@ -168,132 +171,81 @@ async def transcribe_audio(
         validate_magic_bytes(content[:2048])
 
         start_t = time.time()
-        temp_audio_path = None
+        temp_dir = os.path.join(TEMP_JOBS_DIR, f"sync_{uuid.uuid4()}")
+        os.makedirs(temp_dir, exist_ok=True)
+        safe_name = secure_filename(file.filename)
+        ext = os.path.splitext(safe_name)[1] or ".wav"
+        temp_audio_path = os.path.join(temp_dir, f"input{ext}")
+        with open(temp_audio_path, "wb") as f:
+            f.write(content)
 
-        if enable_diarization:
-            # Diarization requires writing audio to a temporary file
-            temp_dir = os.path.join(TEMP_JOBS_DIR, f"sync_{uuid.uuid4()}")
-            os.makedirs(temp_dir, exist_ok=True)
-            safe_name = secure_filename(file.filename)
-            ext = os.path.splitext(safe_name)[1] or ".wav"
-            temp_audio_path = os.path.join(temp_dir, f"input{ext}")
-
-            with open(temp_audio_path, "wb") as f:
-                f.write(content)
-
-            # Convert to 16kHz mono WAV before diarization. PyAnnote's Audio.crop()
-            # re-decodes the file per segmentation chunk; feeding it the raw MP3/FLAC/OGG
-            # costs seconds per crop (~3500x slower than WAV), turning a 1-minute job
-            # into a 10+ minute grind. The media/worker path already converts first.
-            from app.audio_utils import extract_audio_ffmpeg
-            temp_wav_path = os.path.join(temp_dir, "diarization_input.wav")
-            await asyncio.to_thread(extract_audio_ffmpeg, temp_audio_path, temp_wav_path)
-
-            if task == "translate":
-                from app.engine_router import transcribe_file as router_transcribe_file
-                from app.pyannote_engine import (
-                    diarize_audio,
-                    merge_speaker_overlap,
-                    group_speaker_segments,
-                )
-
-                res = await asyncio.to_thread(
-                    router_transcribe_file,
-                    audio_path=temp_audio_path,
-                    language=lang,
-                    with_timestamps=True,
-                    task="translate",
-                )
-                text = res.get("text", "")
-                timestamps = res.get("timestamps", [])
-                turns = await asyncio.to_thread(
-                    diarize_audio,
-                    temp_wav_path,
-                    num_speakers=num_speakers,
-                    min_speakers=min_speakers,
-                    max_speakers=max_speakers,
-                )
-                timestamps = merge_speaker_overlap(timestamps, turns)
-                grouped = group_speaker_segments(timestamps)
-                if grouped:
-                    text = "\n".join(
-                        f"[{s['speaker']}]: {s['text']}" for s in grouped
+        # Run the transcription in an isolated subprocess so a client cancel can
+        # terminate it and free GPU/CPU immediately (in-process threads cannot be
+        # killed mid-inference).
+        out_json_path = os.path.join(temp_dir, "result.json")
+        inline_id = str(uuid.uuid4())
+        cmd = [
+            sys.executable, "-m", "app.run_inline_transcribe",
+            temp_audio_path,
+            lang,
+            str(with_timestamps).lower(),
+            task,
+            model,
+            str(num_speakers) if num_speakers is not None else "none",
+            str(min_speakers) if min_speakers is not None else "none",
+            str(max_speakers) if max_speakers is not None else "none",
+            str(enable_diarization).lower(),
+            out_json_path,
+        ]
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True
+        )
+        _active_inline_workers[inline_id] = proc
+        try:
+            while True:
+                if await request.is_disconnected():
+                    logger.info(
+                        f"Inline transcribe {inline_id}: client disconnected, "
+                        "terminating worker"
                     )
-            elif lang == "th" and model == "thai-whisper":
-                from app.engine_router import transcribe_file as router_transcribe_file
-                from app.pyannote_engine import (
-                    diarize_audio,
-                    group_words_by_turns,
-                    reconstruct_thai_words,
-                )
-
-                res = await asyncio.to_thread(
-                    router_transcribe_file,
-                    audio_path=temp_audio_path,
-                    language=lang,
-                    with_timestamps=True,
-                )
-                text = res.get("text", "")
-                # Thai Whisper emits REAL character-level word timestamps. Rebuild
-                # whole Thai words (PyThaiNLP newmm) so turns don't split words
-                # mid-way, then bucket each word into the turn with max time
-                # overlap, producing clean speaker-turn segments matching the
-                # Gemini reference shape.
-                segments = res.get("segments", [])
-                words = reconstruct_thai_words(segments)
-                turns = await asyncio.to_thread(
-                    diarize_audio,
-                    temp_wav_path,
-                    num_speakers=num_speakers,
-                    min_speakers=min_speakers,
-                    max_speakers=max_speakers,
-                )
-                grouped = group_words_by_turns(words, turns)
-                timestamps = grouped
-                if grouped:
-                    text = "\n".join(
-                        f"[{s['speaker']}]: {s['text']}" for s in grouped
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                    return JSONResponse(
+                        status_code=499,
+                        content={"status": "cancelled", "detail": "Request cancelled by client."},
                     )
-            else:
-                from app.whisperx_engine import transcribe_and_diarize_whisperx
-                wx_res = await asyncio.to_thread(
-                    transcribe_and_diarize_whisperx,
-                    temp_wav_path,
-                    lang,
-                    num_speakers,
-                    min_speakers,
-                    max_speakers,
-                )
-                text = wx_res.get("text", "")
-                timestamps = wx_res.get("segments", [])
+                ret = proc.poll()
+                if ret is not None:
+                    break
+                await asyncio.sleep(0.2)
 
-            elapsed = time.time() - start_t
-            from app.audio_utils import get_audio_duration_ffmpeg
-            duration = get_audio_duration_ffmpeg(temp_audio_path)
+            stderr_text = proc.stderr.read() if proc.stderr else ""
+            if ret != 0:
+                logger.error(
+                    f"Inline transcribe worker failed (exit={ret}): {stderr_text[-2000:]}"
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail="Transcription worker failed. See server logs.",
+                )
+
+            with open(out_json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        finally:
+            _active_inline_workers.pop(inline_id, None)
             svc.safe_delete_dir(temp_dir)
-        else:
-            # Inline transcription via engine port
-            from app.engine_router import transcribe_bytes as router_transcribe_bytes
-            res = await asyncio.to_thread(
-                router_transcribe_bytes,
-                audio_bytes=content,
-                filename_hint=secure_filename(file.filename),
-                language=lang,
-                with_timestamps=with_timestamps,
-                task=task,
-                model=model,
-            )
 
-            text = res.get("text", "")
-            elapsed = float(res.get("elapsed", 0.0))
-            duration = float(res.get("duration", 0.0))
-            timestamps = res.get("timestamps", [])
-
-        rtf = elapsed / duration if duration > 0 else 0.0
+        elapsed = float(data.get("elapsed_seconds", time.time() - start_t))
+        duration = float(data.get("duration_seconds", 0.0))
+        rtf = float(data.get("rtf", 0.0))
+        timestamps = data.get("timestamps") or []
 
         return TranscribeResponse(
             status="success",
-            text=text,
+            text=data.get("text", ""),
             duration_seconds=round(duration, 2),
             elapsed_seconds=round(elapsed, 3),
             rtf=round(rtf, 5),
@@ -305,6 +257,160 @@ async def transcribe_audio(
     except Exception as e:
         logger.error(f"Error during audio transcription: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================
+# Audio Background Job API (job-based audio transcription)
+# =========================================================================
+
+
+@router.post("/v1/audio/transcribe/jobs", status_code=202, response_model=JobCreateResponse)
+async def create_audio_transcription_job(
+    file: UploadFile = File(...),
+    with_timestamps: bool = Form(False),
+    language: str = Form("th"),
+    task: str = Form("transcribe"),
+    enable_diarization: bool = Form(False),
+    num_speakers: Optional[int] = Form(None),
+    min_speakers: Optional[int] = Form(None),
+    max_speakers: Optional[int] = Form(None),
+    model: str = Form(...),
+    authenticated: bool = Depends(verify_api_key),
+):
+    """
+    Queue a single audio file for background transcription. Uses the same engine
+    matrix as the synchronous /v1/audio/transcribe endpoint but runs as an
+    isolated, cancellable job (type='audio') that respects TRANSCRIBE_MAX_CONCURRENT
+    and TRANSCRIBE_MAX_QUEUED. Results are stored in the jobs table and appear in
+    the transcription history page with txt/srt/json export.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Audio file must be provided.")
+
+    validate_extension(file.filename)
+
+    lang_clean = (language or "th").strip().lower()
+    if lang_clean in ("translate_en", "translate"):
+        task_mode = "translate"
+        lang = "auto"
+    elif task == "translate":
+        task_mode = "translate"
+        lang = "auto" if lang_clean not in ("th", "en") else lang_clean
+    else:
+        task_mode = "transcribe"
+        try:
+            lang = TranscriptionService.normalize_language(language)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    if num_speakers is not None and num_speakers <= 0:
+        raise HTTPException(status_code=422, detail="num_speakers must be greater than 0.")
+    if min_speakers is not None and min_speakers <= 0:
+        raise HTTPException(status_code=422, detail="min_speakers must be greater than 0.")
+    if max_speakers is not None and max_speakers <= 0:
+        raise HTTPException(status_code=422, detail="max_speakers must be greater than 0.")
+    if min_speakers is not None and max_speakers is not None and min_speakers > max_speakers:
+        raise HTTPException(status_code=422, detail="min_speakers cannot exceed max_speakers.")
+
+    if num_speakers or min_speakers or max_speakers:
+        enable_diarization = True
+
+    from app.engine_router import resolve_transcription_model
+    try:
+        model = resolve_transcription_model(lang, enable_diarization, task_mode, model)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    if model == "whisperx" and not HF_TOKEN:
+        raise HTTPException(
+            status_code=422,
+            detail="model='whisperx' requires HF_TOKEN to be set in the server environment.",
+        )
+
+    svc = get_transcription_service()
+
+    queued = svc.count_queued()
+    if queued >= TRANSCRIBE_MAX_QUEUED:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Transcription queue is full ({TRANSCRIBE_MAX_QUEUED} jobs). "
+            "Wait for pending jobs to finish and try again.",
+        )
+
+    if not svc.check_disk_space(TEMP_JOBS_DIR, MIN_FREE_DISK_GB):
+        raise HTTPException(
+            status_code=507,
+            detail=f"Insufficient disk space. At least {MIN_FREE_DISK_GB} GB free disk space is required.",
+        )
+
+    job_id = str(uuid.uuid4())
+    job_dir = os.path.join(TEMP_JOBS_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+
+    safe_name = secure_filename(file.filename)
+    file_ext = os.path.splitext(safe_name)[1] or ".wav"
+    save_path = os.path.join(job_dir, f"input{file_ext}")
+
+    max_audio_bytes = int(MAX_AUDIO_UPLOAD_SIZE_MB * 1024 * 1024)
+    total_bytes = 0
+    try:
+        with open(save_path, "wb") as buffer:
+            while chunk := await file.read(1024 * 1024):
+                total_bytes += len(chunk)
+                if total_bytes > max_audio_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Audio file exceeds maximum size of {MAX_AUDIO_UPLOAD_SIZE_MB:.0f} MB",
+                    )
+                buffer.write(chunk)
+    except HTTPException:
+        svc.safe_delete_dir(job_dir)
+        raise
+    except Exception as e:
+        svc.safe_delete_dir(job_dir)
+        logger.error(f"Error saving upload file for audio job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save upload file: {e}")
+
+    try:
+        with open(save_path, "rb") as f:
+            header_bytes = f.read(2048)
+        validate_magic_bytes(header_bytes)
+    except HTTPException:
+        svc.safe_delete_dir(job_dir)
+        raise
+    except Exception as e:
+        svc.safe_delete_dir(job_dir)
+        logger.error(f"Validation error for audio job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to validate audio file")
+
+    # Create job record via service → repository port (queued status)
+    job = svc.create_job(
+        job_id=job_id,
+        filename=file.filename,
+        file_size_bytes=total_bytes,
+        language=lang,
+        enable_diarization=enable_diarization,
+        num_speakers=num_speakers,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
+        task=task_mode,
+        model=model,
+        type="audio",
+    )
+
+    return JobCreateResponse(
+        status="accepted",
+        id=job.id,
+        filename=file.filename,
+        language=lang,
+        task=task_mode,
+        model=model,
+        enable_diarization=enable_diarization,
+        num_speakers=num_speakers,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
+        message="Job created and enqueued for audio transcription",
+    )
 
 
 # =========================================================================
