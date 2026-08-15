@@ -1,10 +1,14 @@
 import logging
 from typing import Any, Dict, Optional
 
-from app.config import SUPPORTED_LANGUAGES
 from app.asr_engine import engine
 from app.whisper_engine import whisper_engine
 from app.whisper_thai_engine import whisper_thai_engine
+from app.model_selection import (
+    SUPPORTED_MODELS,
+    normalize_language,
+    resolve_transcription_model,
+)
 
 logger = logging.getLogger("engine-router")
 
@@ -76,20 +80,13 @@ def unload_if_idle_all(timeout_sec: float) -> bool:
         unloaded = True
     if whisper_thai_engine.unload_if_idle(timeout_sec):
         unloaded = True
+    try:
+        from app.whisperx_engine import get_whisperx_diarizer
+        if get_whisperx_diarizer().unload_if_idle(timeout_sec):
+            unloaded = True
+    except Exception as e:
+        logger.debug(f"Failed to check WhisperX idle state: {e}")
     return unloaded
-
-
-def normalize_language(language: str) -> str:
-    """
-    Validate/normalize the language parameter to one of ('th', 'en', 'auto').
-    Raises ValueError for unsupported values.
-    """
-    lang = (language or "th").strip().lower()
-    if lang not in SUPPORTED_LANGUAGES:
-        raise ValueError(
-            f"Unsupported language '{language}'. Supported: {', '.join(SUPPORTED_LANGUAGES)}"
-        )
-    return lang
 
 
 def transcribe_file(
@@ -101,17 +98,20 @@ def transcribe_file(
     temperature: Optional[float] = None,
     initial_prompt: Optional[str] = None,
     hotwords: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Route a transcription/translation request to the appropriate engine:
       - task='translate' -> Whisper (translates speech into English text)
-      - 'th' (transcribe) -> Thai-tuned Whisper (accurate Thai offline ASR + real word timestamps)
-      - 'en'/'auto' (transcribe) -> Whisper
+      - model='thai-whisper'/'typhoon'/'whisper' -> explicit engine selection
+      - 'th' (transcribe, model=None) -> Thai-tuned Whisper (accurate Thai offline ASR + real word timestamps)
+      - 'en'/'auto' (transcribe, model=None) -> Whisper
     """
     lang = normalize_language(language) if language else "th"
+    model_clean = (model or "").strip().lower() or None
 
     if task == "translate":
-        return whisper_engine.transcribe_file(
+        res = whisper_engine.transcribe_file(
             audio_path,
             language=lang,
             with_timestamps=with_timestamps,
@@ -120,15 +120,41 @@ def transcribe_file(
             initial_prompt=initial_prompt,
             hotwords=hotwords,
         )
+        res["model"] = "whisper"
+        return res
+
+    if model_clean == "typhoon":
+        res = engine.transcribe_file(
+            audio_path,
+            with_timestamps=with_timestamps,
+            is_chunk=is_chunk,
+        )
+        res["model"] = "typhoon"
+        return res
+
+    if model_clean == "whisper":
+        res = whisper_engine.transcribe_file(
+            audio_path,
+            language=lang,
+            with_timestamps=with_timestamps,
+            task="transcribe",
+            temperature=temperature,
+            initial_prompt=initial_prompt,
+            hotwords=hotwords,
+        )
+        res["model"] = "whisper"
+        return res
 
     if lang == "th":
-        return whisper_thai_engine.transcribe_file(
+        res = whisper_thai_engine.transcribe_file(
             audio_path,
             language="th",
             with_timestamps=with_timestamps,
             task="transcribe",
         )
-    return whisper_engine.transcribe_file(
+        res["model"] = model_clean or "thai-whisper"
+        return res
+    res = whisper_engine.transcribe_file(
         audio_path,
         language=lang,
         with_timestamps=with_timestamps,
@@ -137,6 +163,8 @@ def transcribe_file(
         initial_prompt=initial_prompt,
         hotwords=hotwords,
     )
+    res["model"] = model_clean or "whisper"
+    return res
 
 
 def transcribe_bytes(
@@ -148,14 +176,16 @@ def transcribe_bytes(
     temperature: Optional[float] = None,
     initial_prompt: Optional[str] = None,
     hotwords: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Route a raw-bytes transcription/translation request to the appropriate engine.
     """
     lang = normalize_language(language) if language else "th"
+    model_clean = (model or "").strip().lower() or None
 
     if task == "translate":
-        return whisper_engine.transcribe_bytes(
+        res = whisper_engine.transcribe_bytes(
             audio_bytes,
             filename_hint=filename_hint,
             language=lang,
@@ -165,16 +195,43 @@ def transcribe_bytes(
             initial_prompt=initial_prompt,
             hotwords=hotwords,
         )
+        res["model"] = "whisper"
+        return res
+
+    if model_clean == "typhoon":
+        res = engine.transcribe_bytes(
+            audio_bytes,
+            filename_hint=filename_hint,
+            with_timestamps=with_timestamps,
+        )
+        res["model"] = "typhoon"
+        return res
+
+    if model_clean == "whisper":
+        res = whisper_engine.transcribe_bytes(
+            audio_bytes,
+            filename_hint=filename_hint,
+            language=lang,
+            with_timestamps=with_timestamps,
+            task="transcribe",
+            temperature=temperature,
+            initial_prompt=initial_prompt,
+            hotwords=hotwords,
+        )
+        res["model"] = "whisper"
+        return res
 
     if lang == "th":
-        return whisper_thai_engine.transcribe_bytes(
+        res = whisper_thai_engine.transcribe_bytes(
             audio_bytes,
             filename_hint=filename_hint,
             language="th",
             with_timestamps=with_timestamps,
             task="transcribe",
         )
-    return whisper_engine.transcribe_bytes(
+        res["model"] = model_clean or "thai-whisper"
+        return res
+    res = whisper_engine.transcribe_bytes(
         audio_bytes,
         filename_hint=filename_hint,
         language=lang,
@@ -184,6 +241,8 @@ def transcribe_bytes(
         initial_prompt=initial_prompt,
         hotwords=hotwords,
     )
+    res["model"] = model_clean or "whisper"
+    return res
 
 
 def reset_all() -> None:
@@ -195,6 +254,11 @@ def reset_all() -> None:
     engine.reset()
     whisper_engine.reset()
     whisper_thai_engine.reset()
+    try:
+        from app.whisperx_engine import get_whisperx_diarizer
+        get_whisperx_diarizer().reset()
+    except Exception as e:
+        logger.debug(f"Failed to reset WhisperX engine: {e}")
 
 
 def cuda_device_reset_all() -> None:

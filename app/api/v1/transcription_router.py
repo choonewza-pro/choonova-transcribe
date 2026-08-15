@@ -19,7 +19,7 @@ from app.config import (
     TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC, TRANSCRIBE_TYPHOON_MAX_CHUNK_DURATION_SEC,
     TRANSCRIBE_WHISPER_TARGET_CHUNK_DURATION_SEC, TRANSCRIBE_WHISPER_MAX_CHUNK_DURATION_SEC,
     TRANSCRIBE_MAX_QUEUED,
-    TEMP_JOBS_DIR, MIN_FREE_DISK_GB, SERVICE_DIR
+    TEMP_JOBS_DIR, MIN_FREE_DISK_GB, SERVICE_DIR, HF_TOKEN
 )
 from app.schemas import TranscribeResponse, JobCreateResponse, JobStatusResponse
 from app.modules.transcription.adapters.outbound.repositories.sqlite_job_repository import SQLiteJobRepository
@@ -94,6 +94,7 @@ async def transcribe_audio(
     num_speakers: Optional[int] = Form(None),
     min_speakers: Optional[int] = Form(None),
     max_speakers: Optional[int] = Form(None),
+    model: str = Form(...),
     authenticated: bool = Depends(verify_api_key),
 ):
     """
@@ -102,6 +103,7 @@ async def transcribe_audio(
     language: 'th' (default, Typhoon Thai ASR), 'en' (Whisper English), or
     'auto' (Whisper auto-detect for Thai/English mixed audio).
     task: 'transcribe' (default) or 'translate' (translate to English via Whisper).
+    model: engine selection ('thai-whisper' | 'typhoon' | 'whisper' | 'whisperx').
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="Audio file must be provided.")
@@ -131,6 +133,18 @@ async def transcribe_audio(
 
     if num_speakers or min_speakers or max_speakers:
         enable_diarization = True
+
+    from app.engine_router import resolve_transcription_model
+    try:
+        model = resolve_transcription_model(lang, enable_diarization, task, model)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    if model == "whisperx" and not HF_TOKEN:
+        raise HTTPException(
+            status_code=422,
+            detail="model='whisperx' requires HF_TOKEN to be set in the server environment.",
+        )
 
     svc = get_transcription_service()
 
@@ -205,7 +219,7 @@ async def transcribe_audio(
                     text = "\n".join(
                         f"[{s['speaker']}]: {s['text']}" for s in grouped
                     )
-            elif lang == "th":
+            elif lang == "th" and model == "thai-whisper":
                 from app.engine_router import transcribe_file as router_transcribe_file
                 from app.pyannote_engine import (
                     diarize_audio,
@@ -267,6 +281,7 @@ async def transcribe_audio(
                 language=lang,
                 with_timestamps=with_timestamps,
                 task=task,
+                model=model,
             )
 
             text = res.get("text", "")
@@ -283,6 +298,7 @@ async def transcribe_audio(
             elapsed_seconds=round(elapsed, 3),
             rtf=round(rtf, 5),
             timestamps=timestamps if (with_timestamps or enable_diarization) else None,
+            model=model,
         )
     except HTTPException:
         raise

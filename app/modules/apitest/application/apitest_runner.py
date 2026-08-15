@@ -203,6 +203,7 @@ class ApiTestRunner:
             InputParam("file", f"{AUDIO_ASSET_NAME} ({len(audio_bytes):,} bytes)", "file"),
             InputParam("language", "th", "field"),
             InputParam("with_timestamps", "true", "field"),
+            InputParam("model", "typhoon", "field"),
         ]
         specs = [
             ("status", "str"), ("text", "str"), ("duration_seconds", "num"),
@@ -213,7 +214,7 @@ class ApiTestRunner:
             status, body = await self._http.post_multipart(
                 path,
                 files={"file": (AUDIO_ASSET_NAME, audio_bytes, "audio/wav")},
-                data={"language": "th", "with_timestamps": "true"},
+                data={"language": "th", "with_timestamps": "true", "model": "typhoon"},
                 headers=self._auth_headers(),
                 timeout=120,
             )
@@ -230,7 +231,8 @@ class ApiTestRunner:
             return self._error_test(method, path, name, expected, inputs, specs, e)
 
     async def _test_audio_sync_diarize(self, lang: str = "th") -> EndpointTest:
-        engine_name = "Typhoon + PyAnnote" if lang == "th" else "WhisperX"
+        diar_model = "thai-whisper" if lang == "th" else "whisperx"
+        engine_name = "Thai Whisper + PyAnnote" if lang == "th" else "WhisperX"
         method, path, expected, name = "POST", "/v1/audio/transcribe", 200, f"ถอดไฟล์เสียงพร้อมระบุผู้พูด ({engine_name})"
         with open(self._audio_path, "rb") as fh:
             audio_bytes = fh.read()
@@ -239,6 +241,7 @@ class ApiTestRunner:
             InputParam("language", lang, "field"),
             InputParam("with_timestamps", "true", "field"),
             InputParam("enable_diarization", "true", "field"),
+            InputParam("model", diar_model, "field"),
         ]
         specs = [
             ("status", "str"), ("text", "str"), ("duration_seconds", "num"),
@@ -249,7 +252,7 @@ class ApiTestRunner:
             status, body = await self._http.post_multipart(
                 path,
                 files={"file": (AUDIO_ASSET_NAME, audio_bytes, "audio/wav")},
-                data={"language": lang, "with_timestamps": "true", "enable_diarization": "true"},
+                data={"language": lang, "with_timestamps": "true", "enable_diarization": "true", "model": diar_model},
                 headers=self._auth_headers(),
                 timeout=180,
             )

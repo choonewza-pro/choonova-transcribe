@@ -19,30 +19,63 @@
               พร้อมสถิติเวลาและ Word Timestamps
             </p>
             <div class="code-container">
-              <div class="code-header">พารามิเตอร์ <code>language</code></div>
+              <div class="code-header">พารามิเตอร์ <code>model</code> (บังคับ — เลือกเอนจิน)</div>
               <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
                 <thead>
                   <tr style="color: var(--text-muted); text-align: left;">
                     <th style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--card-border);">ค่า</th>
                     <th style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--card-border);">เอนจิน</th>
-                    <th style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--card-border);">คำอธิบาย</th>
+                    <th style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--card-border);">ใช้กับภาษา</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>th</code> <span style="color: var(--text-muted);">(default)</span></td>
-                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">Typhoon ASR Realtime</td>
-                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">ภาษาไทย (เร็ว, ใช้สำหรับเสียงไทยเป็นหลัก)</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>thai-whisper</code></td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">Thai Whisper (faster-whisper CT2)</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">ไทย (แม่นยำสุด, มี word timestamps จริง)</td>
                   </tr>
                   <tr>
-                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>en</code></td>
-                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">Faster-Whisper</td>
-                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">ภาษาอังกฤษ (output เป็นตัวอักษรละติน)</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>typhoon</code></td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">Typhoon ASR (NeMo)</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">ไทย (เร็วที่สุด)</td>
                   </tr>
                   <tr>
-                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>auto</code></td>
-                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">Faster-Whisper</td>
-                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">ตรวจจับภาษาอัตโนมัติ (เหมาะกับเสียงไทย/อังกฤษผสม, code-switching)</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>whisper</code></td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">Faster-Whisper (large-v3-turbo)</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">ไทย/อังกฤษ/อัตโนมัติ + แปล</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>whisperx</code></td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">WhisperX (ASR + Diarization)</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">ระบุผู้พูดเท่านั้น (ไทย/อังกฤษ/อัตโนมัติ)</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p style="margin: 0.6rem 0 0 0; font-size: 0.8rem; color: var(--text-muted);">
+                <code>model</code> ที่เลือกต้องสอดคล้องกับ <code>language</code> และ <code>enable_diarization</code> ไม่ตรง → HTTP 422:
+              </p>
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 0.4rem;">
+                <thead>
+                  <tr style="color: var(--text-muted); text-align: left;">
+                    <th style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--card-border);">language</th>
+                    <th style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--card-border);">ไม่ระบุผู้พูด</th>
+                    <th style="padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--card-border);">ระบุผู้พูด</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>th</code></td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">thai-whisper / typhoon / whisper</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">thai-whisper / whisperx</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>en</code> / <code>auto</code></td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">whisper</td>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">whisperx</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);"><code>translate</code> (task)</td>
+                    <td colspan="2" style="padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.05);">whisper</td>
                   </tr>
                 </tbody>
               </table>
@@ -50,6 +83,7 @@
             <div class="code-container">
               <div class="code-header">พารามิเตอร์อื่นๆ</div>
               <ul style="margin:0; padding-left:1.2rem; font-size:0.85rem; color:var(--text-muted); line-height:1.6;">
+                <li><code>language</code> (str, default <code>th</code>) — <code>th</code> / <code>en</code> / <code>auto</code></li>
                 <li><code>with_timestamps</code> (bool, default <code>true</code>) — ส่งคืนตำแหน่งช่วงเวลาเริ่มต้น-สิ้นสุดระดับคำในอาร์เรย์ <code>timestamps</code></li>
                 <li><code>enable_diarization</code> (bool, default <code>false</code>) — ตรวจจับและแยกแยะผู้พูด (คืนฟิลด์ <code>speaker</code> เช่น <code>SPEAKER_00</code> ในแต่ละคำ/ช่วงเวลา)</li>
                 <li><code>num_speakers</code> (int, optional) — กำหนดจำนวนผู้พูดที่ทราบแน่นอน (เช่น <code>2</code>) เพื่อความแม่นยำสูงสุดในการแยกแยะผู้พูด</li>
@@ -62,6 +96,7 @@
   -H "x-api-key: change-me-in-production" \
   -F "file=@/path/to/sample_audio.wav" \
   -F "language=th" \
+  -F "model=thai-whisper" \
   -F "with_timestamps=true" \
   -F "enable_diarization=true" \
   -F "num_speakers=2"</pre>
@@ -77,6 +112,7 @@ with open("sample_audio.wav", "rb") as f:
     files = {"file": f}
     data = {
         "language": "th",
+        "model": "thai-whisper",
         "with_timestamps": "true",
         "enable_diarization": "true"
     }
@@ -92,6 +128,7 @@ print(response.json())</pre>
   "duration_seconds": 3.42,
   "elapsed_seconds": 0.152,
   "rtf": 0.044,
+  "model": "thai-whisper",
   "timestamps": [
     { "word": "สวัสดีครับ", "start": 0.0, "end": 0.85, "speaker": "SPEAKER_00" },
     { "word": "นี่คือการทดสอบ", "start": 0.86, "end": 1.75, "speaker": "SPEAKER_00" },

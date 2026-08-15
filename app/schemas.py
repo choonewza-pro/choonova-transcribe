@@ -75,6 +75,7 @@ class TranscribeResponse(BaseModel):
     elapsed_seconds: Optional[float] = None
     rtf: Optional[float] = None
     timestamps: Optional[List[TimestampItem]] = None
+    model: Optional[str] = None
 
 class HealthResponse(BaseModel):
     status: str = "ok"
