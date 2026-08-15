@@ -27,6 +27,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy model download helper script
 COPY scripts/download_models.py /app/scripts/download_models.py
 
+# Bake any models already present in ./models into the image (fast, offline).
+# The download steps below are skip-aware: each model found here is not re-downloaded,
+# only the missing ones are fetched. On a fresh clone with no weights this just
+# copies the tracked configs, then downloads fill the rest.
+COPY models /app/models
+
 ARG WHISPER_MODEL=large-v3-turbo
 ARG HF_TOKEN=""
 

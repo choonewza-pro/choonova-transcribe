@@ -1,0 +1,29 @@
+# Version control
+.git
+.gitignore
+
+# Environment & secrets
+.env
+
+# Runtime data & caches (keep the build context small; models/ is NOT ignored)
+data/
+**/.cache
+.cache
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtualenvs
+.venv
+venv
+
+# OS cruft
+Thumbs.db
+.DS_Store
+
+# Local logs
+logs/
+*.log

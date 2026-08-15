@@ -5,10 +5,30 @@ import logging
 import threading
 from typing import Dict, Any, Optional
 
-from app.config import DEVICE, WHISPER_MODEL, WHISPER_COMPUTE_TYPE
+from app.config import DEVICE, WHISPER_MODEL, WHISPER_COMPUTE_TYPE, SERVICE_DIR
 
 logger = logging.getLogger("whisper-engine")
 logging.basicConfig(level=logging.INFO)
+
+
+def resolve_whisper_model_name() -> str:
+    """
+    Prefer a locally-baked CT2 copy under `models/faster-whisper-<name>`
+    (same trick as `whisper_thai_engine.resolve_thai_model_name`) so no
+    HuggingFace download is needed at load time. Falls back to the bare
+    model name, which faster-whisper resolves against HF at load time.
+    """
+    base_name = WHISPER_MODEL.split("/")[-1]
+    local_candidates = [
+        os.path.join(SERVICE_DIR, "models", f"faster-whisper-{base_name}"),
+        os.path.join(SERVICE_DIR, "models", base_name),
+    ]
+    for candidate in local_candidates:
+        if os.path.isdir(candidate) and os.path.isfile(os.path.join(candidate, "model.bin")):
+            logger.info(f"Using local Whisper model at: {candidate}")
+            return candidate
+    logger.info(f"Local Whisper model not found; using HF model name: {WHISPER_MODEL}")
+    return WHISPER_MODEL
 
 
 class WhisperEngine:
@@ -261,7 +281,7 @@ class WhisperEngine:
 
 
 # Global singleton instance
-whisper_engine = WhisperEngine()
+whisper_engine = WhisperEngine(model_name=resolve_whisper_model_name())
 
 
 def get_whisper_engine() -> WhisperEngine:

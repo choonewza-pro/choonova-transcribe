@@ -9,15 +9,15 @@ import sys
 
 
 def download_typhoon(model_dir: str = "/app/models", token: str | None = None) -> None:
-    from huggingface_hub import hf_hub_download
-
-    token = token or os.getenv("HF_TOKEN", "").strip() or None
-    os.makedirs(model_dir, exist_ok=True)
     target_file = os.path.join(model_dir, "typhoon-asr-realtime.nemo")
     if os.path.exists(target_file) and os.path.getsize(target_file) > 100 * 1024 * 1024:
         print(f"  ℹ️ Typhoon ASR model already exists at {target_file}")
         return
 
+    from huggingface_hub import hf_hub_download
+
+    token = token or os.getenv("HF_TOKEN", "").strip() or None
+    os.makedirs(model_dir, exist_ok=True)
     p = hf_hub_download(
         repo_id="typhoon-ai/typhoon-asr-realtime",
         filename="typhoon-asr-realtime.nemo",
@@ -34,17 +34,21 @@ def download_typhoon(model_dir: str = "/app/models", token: str | None = None) -
     print()
 
 
-def download_whisper(model_name: str = "large-v3-turbo", token: str | None = None) -> None:
-    from huggingface_hub import snapshot_download
-
+def download_whisper(model_dir: str = "/app/models", model_name: str = "large-v3-turbo", token: str | None = None) -> None:
     token = token or os.getenv("HF_TOKEN", "").strip() or None
     m = model_name or os.getenv("WHISPER_MODEL", "large-v3-turbo")
-    repo_id = (
-        "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
-        if m in ("turbo", "large-v3-turbo")
-        else f"Systran/faster-whisper-{m}"
-    )
-    p = snapshot_download(repo_id=repo_id, token=token)
+    # Match faster-whisper's own runtime resolution so a build-time download is
+    # found in the same cache/local_dir the engine will look for at load time.
+    repo_id = m if "/" in m else f"Systran/faster-whisper-{m}"
+    local_dir = os.path.join(model_dir, f"faster-whisper-{m.split('/')[-1]}")
+    # Skip download if a local CT2 copy is already present (e.g. COPY models /app/models).
+    if os.path.isfile(os.path.join(local_dir, "model.bin")):
+        print(f"  ℹ️ Whisper model already exists locally at {local_dir}")
+        return
+
+    from huggingface_hub import snapshot_download
+
+    p = snapshot_download(repo_id=repo_id, local_dir=local_dir, token=token)
     print()
     print("=" * 70)
     print("  ✅ WHISPER MODEL DOWNLOAD COMPLETE — " + repo_id)
@@ -53,15 +57,21 @@ def download_whisper(model_name: str = "large-v3-turbo", token: str | None = Non
     print()
 
 
-def download_whisper_thai(model_name: str | None = None, token: str | None = None) -> None:
-    from huggingface_hub import snapshot_download
-
+def download_whisper_thai(model_dir: str = "/app/models", model_name: str | None = None, token: str | None = None) -> None:
     token = token or os.getenv("HF_TOKEN", "").strip() or None
     m = model_name or os.getenv("WHISPER_THAI_MODEL", "Avocaduu14/whisper-th-large-v3-ct2")
     # Full HF repo ids (contain '/') are used verbatim; bare names map to
     # Systran's faster-whisper mirror (e.g. "large-v3" -> Systran/faster-whisper-large-v3).
     repo_id = m if "/" in m else f"Systran/faster-whisper-{m}"
-    p = snapshot_download(repo_id=repo_id, token=token)
+    local_dir = os.path.join(model_dir, m.split("/")[-1])
+    # Skip download if a local CT2 copy is already present (e.g. COPY models /app/models).
+    if os.path.isfile(os.path.join(local_dir, "model.bin")):
+        print(f"  ℹ️ Thai Whisper model already exists locally at {local_dir}")
+        return
+
+    from huggingface_hub import snapshot_download
+
+    p = snapshot_download(repo_id=repo_id, local_dir=local_dir, token=token)
     print()
     print("=" * 70)
     print("  ✅ THAI WHISPER MODEL DOWNLOAD COMPLETE — " + repo_id)
@@ -71,14 +81,14 @@ def download_whisper_thai(model_name: str | None = None, token: str | None = Non
 
 
 def download_pyannote(model_dir: str = "/app/models", token: str | None = None) -> None:
-    from huggingface_hub import snapshot_download
-
     # Check if local models already exist
     seg_file = os.path.join(model_dir, "pyannote", "segmentation-3.0", "pytorch_model.bin")
     emb_file = os.path.join(model_dir, "speechbrain", "spkrec-ecapa-voxceleb", "embedding_model.ckpt")
     if os.path.exists(seg_file) and os.path.exists(emb_file):
         print("  ℹ️ Local PyAnnote & SpeechBrain models already exist in", model_dir)
         return
+
+    from huggingface_hub import snapshot_download
 
     token = token or os.getenv("HF_TOKEN", "").strip() or None
     if token:
@@ -153,10 +163,10 @@ def main() -> None:
         download_typhoon(model_dir=args.model_dir, token=token)
 
     if args.whisper or args.all:
-        download_whisper(model_name=args.whisper_model, token=token)
+        download_whisper(model_dir=args.model_dir, model_name=args.whisper_model, token=token)
 
     if args.whisper_thai or args.all:
-        download_whisper_thai(token=token)
+        download_whisper_thai(model_dir=args.model_dir, token=token)
 
     if args.pyannote or args.all:
         download_pyannote(model_dir=args.model_dir, token=token)
