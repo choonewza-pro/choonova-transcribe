@@ -284,6 +284,16 @@ class TestDiarizationHelpers(unittest.TestCase):
         self.assertEqual(result[0]["start"], 0.0)
         self.assertEqual(result[1]["speaker"], "SPEAKER_01")
         self.assertEqual(result[1]["text"], "ยินดีที่รู้จัก")
+        self.assertEqual(
+            [w["word"] for w in result[0]["words"]],
+            ["สวัสดี", "ครับ"],
+        )
+        self.assertEqual(
+            [w["word"] for w in result[1]["words"]],
+            ["ยินดี", "ที่รู้จัก"],
+        )
+        self.assertEqual(result[0]["words"][0]["start"], 0.1)
+        self.assertEqual(result[0]["words"][1]["end"], 1.8)
 
     def test_group_words_by_turns_empty(self):
         from app.pyannote_engine import group_words_by_turns

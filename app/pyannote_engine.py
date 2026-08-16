@@ -409,7 +409,10 @@ def group_words_by_turns(
     diarization turn with maximum time overlap (nearest-turn fallback for words
     in pause gaps). Returns reference-shaped segments:
 
-        {"speaker", "start", "end", "text", "word"}
+        {"speaker", "start", "end", "text", "word", "words"}
+
+    ``words`` carries the per-word timestamps bucketed into this turn, so
+    word-level granularity survives even though the segment itself is turn-level.
 
     :param words: List of {"word", "start", "end"} (real ASR word timestamps)
     :param diarization_turns: Raw PyAnnote turns (consolidated internally)
@@ -449,6 +452,14 @@ def group_words_by_turns(
                 "end": round(float(t["end"]), 3),
                 "text": text,
                 "word": text,
+                "words": [
+                    {
+                        "word": p.get("word", ""),
+                        "start": round(float(p["start"]), 3),
+                        "end": round(float(p["end"]), 3),
+                    }
+                    for p in parts
+                ],
             }
         )
     return result
