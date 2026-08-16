@@ -19,55 +19,10 @@
         <code>assets/</code> ไปยัง endpoint จริงแล้วรายงานผลแบบ field-by-field (ผ่าน/ไม่ผ่าน)
       </p>
 
-      <!-- 3-Suite Selection Cards -->
+      <!-- Suite Selection Cards -->
       <div id="suitesContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 1.75rem;">
-        <!-- Suite 1: Typhoon Baseline -->
-        <div class="suite-card active" data-suite="typhoon" style="background: rgba(255,255,255,0.03); border: 2px solid var(--accent-cyan); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">🇹🇭 Typhoon ASR</span>
-            <span style="font-size: 0.75rem; background: rgba(0,242,254,0.15); color: var(--accent-cyan); padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 600;">Baseline (เร็วสุด)</span>
-          </div>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5;">
-            ทดสอบ Thai ASR มาตรฐาน + การบีบอัดวิดีโอ (ไม่ต้องใช้ HF_TOKEN)
-          </p>
-          <div style="font-size: 0.8rem; color: #a1a1aa; display: flex; flex-direction: column; gap: 0.25rem;">
-            <div>💾 <strong>VRAM:</strong> ~1.0 GB</div>
-            <div>🔑 <strong>HF_TOKEN:</strong> ไม่จำเป็น</div>
-          </div>
-        </div>
-
-        <!-- Suite 2: Typhoon + PyAnnote -->
-        <div class="suite-card" data-suite="pyannote" style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">🎙️ Typhoon + PyAnnote</span>
-            <span style="font-size: 0.75rem; background: rgba(168,85,247,0.15); color: #c084fc; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 600;">Thai Diarization</span>
-          </div>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5;">
-            ทดสอบถอดเสียงภาษาไทย + ระบุผู้พูด PyAnnote 3.1 & ตรวจสอบ SRT Speaker Tags
-          </p>
-          <div style="font-size: 0.8rem; color: #a1a1aa; display: flex; flex-direction: column; gap: 0.25rem;">
-            <div>💾 <strong>VRAM:</strong> ~2.5 GB</div>
-            <div>🔑 <strong>HF_TOKEN:</strong> จำเป็น (Gated Model)</div>
-          </div>
-        </div>
-
-        <!-- Suite 3: WhisperX -->
-        <div class="suite-card" data-suite="whisperx" style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">⚡ WhisperX Pipeline</span>
-            <span style="font-size: 0.75rem; background: rgba(59,130,246,0.15); color: #60a5fa; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 600;">Eng/Auto Diarization</span>
-          </div>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5;">
-            ทดสอบถอดเสียงภาษาอังกฤษ/ผสม + Forced Alignment (wav2vec2) + Diarization
-          </p>
-          <div style="font-size: 0.8rem; color: #a1a1aa; display: flex; flex-direction: column; gap: 0.25rem;">
-            <div>💾 <strong>VRAM:</strong> ~3.5 GB</div>
-            <div>🔑 <strong>HF_TOKEN:</strong> จำเป็น (Gated Model)</div>
-          </div>
-        </div>
-
-        <!-- Suite 4: Word-level + Diarization (Audio Job) -->
-        <div class="suite-card" data-suite="word-diar" style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
+        <!-- Suite 1: Word-level + Diarization (Audio Job) -->
+        <div class="suite-card active" data-suite="word-diar" style="background: rgba(255,255,255,0.03); border: 2px solid var(--accent-cyan); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
             <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">📝 Word-level + ผู้พูด</span>
             <span style="font-size: 0.75rem; background: rgba(16,185,129,0.15); color: #34d399; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 600;">Audio Job</span>
@@ -82,7 +37,7 @@
           </div>
         </div>
 
-        <!-- Suite 5: Word-level only (Audio Job) -->
+        <!-- Suite 2: Word-level only (Audio Job) -->
         <div class="suite-card" data-suite="word-only" style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
             <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">🔤 Word-level เท่านั้น</span>
@@ -98,7 +53,7 @@
           </div>
         </div>
 
-        <!-- Suite 6: No word-level (Audio Job) -->
+        <!-- Suite 3: No word-level (Audio Job) -->
         <div class="suite-card" data-suite="no-word" style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
             <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">🚫 ไม่มี Word-level</span>
@@ -114,6 +69,10 @@
           </div>
         </div>
       </div>
+
+      <div id="watchBanner" style="display:none; margin-bottom:1rem; padding:0.75rem 1rem;
+           border-radius:10px; border:1px solid rgba(0,242,254,0.35); background:rgba(0,242,254,0.08);
+           font-size:0.9rem; font-weight:600;"></div>
 
       <div style="display:flex; flex-wrap:wrap; gap:1rem; align-items:center; margin-bottom:1.25rem;">
         <button type="button" class="btn-primary" id="startTestBtn" disabled>▶ เริ่มทดสอบ Suite ที่เลือก</button>
@@ -139,13 +98,15 @@
 
       <div id="resultsArea"></div>
 
+      <div id="historyPanel" style="display:none; margin-top:1.5rem; padding:1rem 1.25rem;
+           border:1px solid var(--card-border); border-radius:14px; background:rgba(0,0,0,0.2);"></div>
+
       <div id="summaryCard" style="display:none; margin-top:1.5rem; padding:1.25rem 1.5rem;
            border:1px solid var(--card-border); border-radius:14px; background:rgba(0,0,0,0.25);"></div>
     </div>
 
     <div style="margin-top:1.5rem; color:var(--text-muted); font-size:0.85rem; line-height:1.6;">
-      ⚠️ <strong>หมายเหตุ:</strong> การทดสอบนี้เรียกโปรเซสจริงบน GPU — งานบีบอัดวิดีโอ (compress) อาจใช้เวลาหลายนาที
-      โดยเฉพาะโหมด CPU (รอได้ตามค่า <code>APITEST_COMPRESS_MAX_WAIT_SEC</code>) ขณะทดสอบห้ามกดซ้ำ (รองรับครั้งละ 1 run เท่านั้น)
+      ⚠️ <strong>หมายเหตุ:</strong> การทดสอบนี้เรียกโปรเซสจริงบน GPU/CPU — ขณะทดสอบห้ามกดซ้ำ (รองรับครั้งละ 1 run เท่านั้น)
     </div>
   </main>
 
@@ -153,6 +114,6 @@
     Choonova AI Stack • ChooNova Transcribe Service running on Port 8830
   </footer>
 
-  <script src="/static/js/apitest.js?v=1"></script>
+  <script src="/static/js/apitest.js?v=3"></script>
 </body>
 </html>

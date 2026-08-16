@@ -1,31 +1,33 @@
 """
 API Endpoint Self-Test Router.
 
-POST /v1/tests/run  — runs the automated endpoint self-test and streams the
-                      results as application/x-ndjson (one JSON object per
-                      line: test results, live progress, and a final summary).
-GET  /v1/tests/info  — asset availability + current defaults (for the page).
+POST /v1/tests/run        — starts the automated endpoint self-test as a
+                            detached background task and returns 202 with a
+                            run_id immediately. Only one run may be active at
+                            a time (HTTP 409 otherwise, including the active
+                            run_id so the UI can switch to watching it).
+GET  /v1/tests/info        — asset availability + current defaults (for the page).
+GET  /v1/tests/runs        — recent self-test runs (history, newest first).
+GET  /v1/tests/runs/active — the currently running run, if any.
+GET  /v1/tests/runs/{id}   — a full snapshot of one run (live or finished).
 
-Requires a valid x-api-key (same GATEWAY_API_KEY consumers use). Only one
-self-test run may be active at a time (HTTP 409 otherwise).
+Runs are owned by the server (not by the HTTP request that started them), so a
+page refresh or browser disconnect never loses the run or its results: clients
+poll the run snapshot endpoints to watch progress and review finished results.
+
+Requires a valid x-api-key (same GATEWAY_API_KEY consumers use).
 """
 
 import asyncio
-import contextlib
-import json
 import os
+import uuid
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
 
 from app.core.config import (
-    APITEST_COMPRESS_MAX_WAIT_SEC,
     APITEST_POLL_INTERVAL_SEC,
     APITEST_TRANSCRIBE_MAX_WAIT_SEC,
-    COMPRESS_CRF,
-    COMPRESS_ENCODER,
-    COMPRESS_PRESET,
     GATEWAY_API_KEY,
     PORT,
     SERVICE_DIR,
@@ -36,12 +38,14 @@ from app.modules.apitest.application.apitest_runner import (
     ApiTestRunner,
     AssetNotFoundError,
 )
+from app.modules.apitest.application.run_registry import (
+    RunState,
+    run_registry,
+)
 
 router = APIRouter(prefix="/v1/tests", tags=["Endpoint Self-Test"])
 
 ASSETS_DIR = os.path.join(SERVICE_DIR, "assets")
-
-_run_in_progress = False
 
 
 def _build_runner() -> ApiTestRunner:
@@ -59,38 +63,13 @@ async def tests_info(authenticated: bool = Depends(verify_api_key)) -> Dict[str,
     runner = _build_runner()
     info = runner.asset_info()
     info["defaults"] = {
-        "crf": COMPRESS_CRF,
-        "preset": COMPRESS_PRESET,
-        "encoder": COMPRESS_ENCODER,
         "language": "th",
     }
     info["limits"] = {
         "transcribe_max_wait_sec": APITEST_TRANSCRIBE_MAX_WAIT_SEC,
-        "compress_max_wait_sec": APITEST_COMPRESS_MAX_WAIT_SEC,
         "poll_interval_sec": APITEST_POLL_INTERVAL_SEC,
     }
     info["suites"] = {
-        "typhoon": {
-            "name": "Typhoon ASR (มาตรฐาน)",
-            "desc": "ทดสอบ ASR ภาษาไทย + การบีบอัดวิดีโอ (Baseline ไม่ต้องใช้ HF_TOKEN)",
-            "engine": "Typhoon FastConformer 114M",
-            "hf_token_required": False,
-            "vram": "~1.0 GB",
-        },
-        "pyannote": {
-            "name": "Typhoon + PyAnnote 3.1",
-            "desc": "ทดสอบถอดเสียงภาษาไทยพร้อมระบุผู้พูด (Thai Diarization)",
-            "engine": "Typhoon ASR + PyAnnote 3.1",
-            "hf_token_required": True,
-            "vram": "~2.5 GB",
-        },
-        "whisperx": {
-            "name": "WhisperX Pipeline",
-            "desc": "ทดสอบถอดเสียงภาษาอังกฤษ/Auto พร้อมจัดเรียงระดับคำและระบุผู้พูด",
-            "engine": "Faster-Whisper + wav2vec2 Alignment + PyAnnote 3.1",
-            "hf_token_required": True,
-            "vram": "~3.5 GB",
-        },
         "word-diar": {
             "name": "Word-level + ผู้พูด (Audio Job)",
             "desc": "ทดสอบ /v1/audio/transcribe/jobs แบบ word-level + ระบุผู้พูด (test-audio-th.wav) — Thai Whisper / WhisperX",
@@ -116,18 +95,51 @@ async def tests_info(authenticated: bool = Depends(verify_api_key)) -> Dict[str,
     return info
 
 
-@router.post("/run")
+async def _run_background(run_id: str, suite: str, cleanup: bool) -> None:
+    """Execute one self-test run, recording results into the registry.
+
+    Runs detached from the request that created it; a client disconnect can
+    never cancel it. Always finishes the run (success or failure)."""
+    runner = _build_runner()
+
+    async def on_test(test) -> None:
+        run_registry.record_test(run_id, test.to_dict())
+
+    async def on_progress(p: Dict[str, Any]) -> None:
+        run_registry.record_progress(run_id, p)
+
+    async def on_start(total: int) -> None:
+        run_registry.set_expected_total(run_id, total)
+
+    try:
+        report = await runner.run(
+            suite=suite,
+            cleanup=cleanup,
+            on_test=on_test,
+            on_progress=on_progress,
+            on_start=on_start,
+        )
+        run_registry.finish(run_id, summary=report.to_dict())
+    except Exception as e:  # noqa: BLE001
+        run_registry.finish(run_id, error=str(e))
+
+
+@router.post("/run", status_code=202)
 async def run_self_test(
-    suite: str = "typhoon",
+    suite: str = "word-diar",
     cleanup: bool = True,
     authenticated: bool = Depends(verify_api_key),
-) -> StreamingResponse:
-    """Run the automated self-test and stream results as NDJSON lines."""
-    global _run_in_progress
-    if _run_in_progress:
+) -> Dict[str, Any]:
+    """Start the automated self-test in the background and return a run_id."""
+    active = run_registry.active_run()
+    if active is not None:
         raise HTTPException(
             status_code=409,
-            detail="มีงานทดสอบกำลังทำงานอยู่ กรุณารอให้เสร็จก่อน (only one test run at a time)",
+            detail={
+                "message": "มีงานทดสอบกำลังทำงานอยู่ กรุณารอให้เสร็จก่อน (only one test run at a time)",
+                "active_run_id": active.run_id,
+                "active_suite": active.suite,
+            },
         )
 
     runner = _build_runner()
@@ -136,52 +148,34 @@ async def run_self_test(
     except AssetNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    _run_in_progress = True
+    run_id = str(uuid.uuid4())
+    run_registry.start(run_id=run_id, suite=suite, cleanup=cleanup)
+    asyncio.create_task(_run_background(run_id, suite, cleanup))
 
-    run_events: "asyncio.Queue[Dict[str, Any]]" = asyncio.Queue()
+    return {"run_id": run_id, "suite": suite, "status": "running"}
 
-    async def event_generator():
-        render_task: Optional[asyncio.Task] = None
-        try:
-            async def _render() -> None:
-                try:
-                    async def on_test(test) -> None:
-                        await run_events.put({"type": "test", "data": test.to_dict()})
 
-                    async def on_progress(p: Dict[str, Any]) -> None:
-                        await run_events.put({"type": "progress", "data": p})
+@router.get("/runs")
+async def list_runs(authenticated: bool = Depends(verify_api_key)) -> Dict[str, Any]:
+    """Recent self-test runs, newest first."""
+    return {"runs": [r.to_dict() for r in run_registry.list()]}
 
-                    async def on_start(total: int) -> None:
-                        await run_events.put({"type": "start", "total": total})
 
-                    report = await runner.run(
-                        suite=suite,
-                        cleanup=cleanup,
-                        on_test=on_test,
-                        on_progress=on_progress,
-                        on_start=on_start,
-                    )
-                    await run_events.put({"type": "done", "summary": report.to_dict()})
-                except Exception as e:  # noqa: BLE001
-                    with contextlib.suppress(Exception):
-                        await run_events.put({"type": "error", "data": {"message": str(e)}})
-                    with contextlib.suppress(Exception):
-                        await run_events.put({"type": "done", "summary": {"error": str(e)}})
+@router.get("/runs/active")
+async def active_run(authenticated: bool = Depends(verify_api_key)) -> Dict[str, Any]:
+    """The currently running self-test run, if any."""
+    state: Optional[RunState] = run_registry.active_run()
+    if state is None:
+        return {"active": False, "run": None}
+    return {"active": True, "run": state.to_dict()}
 
-            render_task = asyncio.create_task(_render())
-            while True:
-                item = await run_events.get()
-                yield json.dumps(item, ensure_ascii=False) + "\n"
-                if item.get("type") == "done":
-                    break
-            if render_task is not None:
-                await render_task
-        finally:
-            if render_task is not None and not render_task.done():
-                render_task.cancel()
-                with contextlib.suppress(Exception):
-                    await render_task
-            global _run_in_progress
-            _run_in_progress = False
 
-    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+@router.get("/runs/{run_id}")
+async def get_run(
+    run_id: str, authenticated: bool = Depends(verify_api_key)
+) -> Dict[str, Any]:
+    """Full snapshot of one self-test run (live or finished)."""
+    state = run_registry.get(run_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail=f"ไม่พบงานทดสอบ: {run_id}")
+    return state.to_dict()

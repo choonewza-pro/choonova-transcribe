@@ -50,8 +50,9 @@ app/
 ├── modules/
 │   ├── settings/          # VRAM residency: domain/ -> application/ -> adapters/outbound/SQLiteSettingsRepository
 │   ├── transcription/     # ASR jobs: domain/ -> application/ -> adapters/{inbound/workers/, outbound/{repositories/, media/, engines/}}
-│   └── compression/       # Video compress: same structure
-├── api/v1/                # FastAPI routers: transcription_router, compression_router, settings_router, realtime_router
+│   ├── compression/       # Video compress: same structure
+│   └── apitest/           # Endpoint self-test (/test): runner + in-memory run registry
+├── api/v1/                # FastAPI routers: transcription_router, compression_router, settings_router, realtime_router, apitest_router
 └── api/web/               # Jinja2 dashboard (views_router.py)
 ```
 
@@ -105,11 +106,25 @@ FastAPI routers wire dependencies via factory functions — **no DI container**:
 - `settings_router.py`: uses `Depends(get_settings_service)` (the only one; inconsistent but intentional).
 - Engine/media ports are `None` in API endpoints (used only in worker subprocesses).
 
+## API Endpoint Self-Test (/test)
+
+The `/test` page exercises the real `/v1/audio/transcribe/jobs` endpoint across the available ASR models. Runs are **server-owned and polling-based** — a page refresh / browser disconnect never loses the run or its results.
+
+- **3 suites** (all audio jobs, `assets/test-audio-th.wav`):
+  - `word-diar` — word-level + speaker (thai-whisper, whisperx)
+  - `word-only` — word-level only (thai-whisper, whisper)
+  - `no-word` — no word-level / no speaker (typhoon, thai-whisper, whisper)
+- **`POST /v1/tests/run`** returns **202 + run_id** immediately and starts a detached background task (`asyncio.create_task`); the run is NOT tied to the HTTP request. **409** if a run is active (body carries `active_run_id` + `active_suite`). Only one run at a time.
+- **State lives in an in-memory `RunRegistry`** (`app/modules/apitest/application/run_registry.py`, capped at 5 runs, oldest evicted). In-memory only — lost on server restart (fine; just re-run). Event-loop safe (single uvicorn process, no locks).
+- **Polling endpoints** (all `x-api-key`): `GET /v1/tests/info` (assets + defaults), `GET /v1/tests/runs` (history), `GET /v1/tests/runs/active`, `GET /v1/tests/runs/{id}` (live or finished snapshot).
+- **Frontend** (`app/static/js/apitest.js`, `app/templates/apitest.html`): polls `/runs/{id}` every ~2s, reconnects to any active run on page load / window focus, and renders a recent-runs bar (5) to re-open past results.
+- **Module structure**: `domain/` (entities `EndpointTest`/`ApiTestReport`/`FieldCheck`, `ApiHttpPort`) → `application/` (`apitest_runner.py` orchestrator, `run_registry.py`) → `adapters/outbound/self_http_client.py` (httpx against `http://127.0.0.1:{PORT}`). Runner callbacks (`on_test`/`on_progress`/`on_start`) are **async** and mutate the run registry.
+
 ## Test Architecture & Gaps
 
 - `unittest` (stdlib) — no pytest, no mocking library.
-- One test file per module under `tests/unit/<module>/`. Inline `Fake*Repository` classes implement domain ABCs (dict-backed).
-- **Arrange-Act-Assert** with constructor injection of fake repos. No `setUp`/`tearDown`, no async tests.
+- One test file per module under `tests/unit/<module>/`. Inline `Fake*Repository`/`FakeApiHttp` classes implement domain ABCs (dict-backed).
+- **Arrange-Act-Assert** with constructor injection of fake repos. `apitest` tests use `asyncio.run` for the async runner/registry (some use `setUp`/`tearDown` temp dirs).
 - **Gaps**: No tests for: routers (no TestClient), workers, engines, or real repository implementations. `test_compression_router.py` only tests the `_is_safe_job_path()` helper.
 
 ## CUDA Resilience

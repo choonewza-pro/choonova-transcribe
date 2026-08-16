@@ -118,8 +118,9 @@ We intentionally maintain a hybrid architectural state where the API delivery la
 6. **Verify the service is working (after installation)**
    - Go to the **API Self-Test** page: [http://localhost:8830/test](http://localhost:8830/test)
    - The page is only accessible once you have set an API Key (enter it on `/setting` or use `http://localhost:8830/test?api_key=YOUR_KEY`)
-   - Press the **▶ Start Automated Test** button — the service sends sample files from the `assets/` folder to the real endpoints (Thai transcription + video compression) and reports pass/fail per test, with an `X/N` progress bar
-   - Video compression can take several minutes (especially in CPU mode) — the progress bar keeps you informed while the job is running
+   - Choose one of the 3 suites (**Word-level + ผู้พูด**, **Word-level เท่านั้น**, **ไม่มี Word-level**) and press **▶ Start Automated Test** — the service sends `assets/test-audio-th.wav` to `/v1/audio/transcribe/jobs` across the available ASR models (Thai Whisper / WhisperX / Typhoon) and reports pass/fail per test with an `X/N` progress bar
+   - Runs are **server-owned and polling-based**: refresh or disconnect the page and it automatically reconnects to the live run; only one run runs at a time (the start button is disabled while a run is active). The **recent-runs bar** (last 5) lets you re-open past results
+   - Job transcription can take minutes (model load + GPU inference) — the progress bar keeps you informed while the run is active
 
 ## Configuration
 
@@ -184,7 +185,7 @@ Navigate to `http://localhost:8830/` to access the built-in HTML dashboard where
 - Upload long videos for asynchronous transcription and monitor progress.
 - Compress videos.
 - Adjust Model VRAM Settings.
-- Run the automated API self-test (`/test`) to verify every endpoint works end-to-end.
+- Run the automated API self-test (`/test`) to verify the audio transcription job endpoints work end-to-end.
 
 ### Model VRAM Residency
 
