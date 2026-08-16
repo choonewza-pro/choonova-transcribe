@@ -53,6 +53,17 @@ def dir_has_files(dir_path: str) -> bool:
     return False
 
 
+def _resolve_job_model(job) -> Optional[str]:
+    """Return the ASR model used by a job, deriving a sensible default for
+    legacy records that predate model persistence (NULL model column)."""
+    model = getattr(job, "model", None)
+    if model:
+        return model
+    lang = (job.language or "th").lower()
+    if getattr(job, "enable_diarization", False) and lang != "th":
+        return "whisperx"
+    return "thai-whisper" if lang == "th" else "whisper"
+
 def _job_to_dict(job) -> Dict[str, Any]:
     """Convert TranscriptionJob entity to a plain dict for JSON responses."""
     from datetime import datetime
@@ -76,7 +87,7 @@ def _job_to_dict(job) -> Dict[str, Any]:
         "num_speakers": getattr(job, "num_speakers", None),
         "min_speakers": getattr(job, "min_speakers", None),
         "max_speakers": getattr(job, "max_speakers", None),
-        "model": job.model,
+        "model": _resolve_job_model(job),
         "result": job.result,
         "error": job.error,
         "created_at": job.created_at or now_iso,

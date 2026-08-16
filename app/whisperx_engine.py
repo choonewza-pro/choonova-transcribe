@@ -13,7 +13,7 @@ from typing import List, Dict, Any, Optional
 from app.core.config import (
     DEVICE,
     HF_TOKEN,
-    WHISPER_MODEL,
+    WHISPERX_MODEL,
     WHISPER_COMPUTE_TYPE,
     DIARIZATION_MODEL,
     DIARIZATION_MIN_SPEAKERS,
@@ -44,7 +44,7 @@ class WhisperXDiarizer:
         device: Optional[str] = None,
         compute_type: Optional[str] = None,
     ):
-        self.model_name = model_name or WHISPER_MODEL
+        self.model_name = model_name or WHISPERX_MODEL
         self.device = device or DEVICE
         self.compute_type = compute_type or WHISPER_COMPUTE_TYPE
         self._asr_model = None

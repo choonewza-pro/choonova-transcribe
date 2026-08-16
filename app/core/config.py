@@ -96,9 +96,16 @@ if DEVICE == "cpu":
 MODEL_LOAD_MODE_DEFAULT = os.getenv("MODEL_LOAD_MODE", "always").lower()
 MODEL_IDLE_TIMEOUT_SEC_DEFAULT = float(os.getenv("MODEL_IDLE_TIMEOUT_SEC", "900"))
 
-# Whisper secondary engine for English / Thai-English mixed audio
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "large-v3-turbo")
+# Whisper secondary engine for English / Thai-English mixed audio.
+# Systran removed faster-whisper-large-v3-turbo from the Hub (HTTP 404), so the
+# default is the community CT2 mirror. A legacy bare "large-v3-turbo" value is
+# still honored at runtime via whisper_engine.resolve_whisper_model_name().
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "deepdml/faster-whisper-large-v3-turbo-ct2")
 WHISPER_COMPUTE_TYPE = "float16" if DEVICE == "cuda" else "int8"
+# WhisperX ASR model for Path 4 (English/Auto + diarization). WhisperX expects a
+# plain Whisper size name (not a faster-whisper CT2 repo id), so it is decoupled
+# from WHISPER_MODEL.
+WHISPERX_MODEL = os.getenv("WHISPERX_MODEL", "large-v3-turbo")
 
 # Thai-tuned Whisper (CT2) for the Thai offline path — replaces Typhoon for accuracy
 WHISPER_THAI_MODEL = os.getenv("WHISPER_THAI_MODEL", "Avocaduu14/whisper-th-large-v3-ct2")

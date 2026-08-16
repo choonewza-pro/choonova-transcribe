@@ -129,7 +129,8 @@ Application behavior is controlled via environment variables. Copy `.env.example
 | ---------------------------- | ------------------------- | -------- | --------------------------------------------------------------------------- |
 | `GATEWAY_API_KEY`            | `change-me-in-production` | Yes      | Secret key for API authentication.                                          |
 | `DEVICE`                     | `cuda`                    | No       | Target device (`cuda` or `cpu`). Auto-detects if CUDA is missing.           |
-| `WHISPER_MODEL`              | `large-v3-turbo`          | No       | faster-whisper model size (`large-v3-turbo`, `large-v3`, `medium`, `small`, etc.). |
+| `WHISPER_MODEL`              | `deepdml/faster-whisper-large-v3-turbo-ct2` | No | faster-whisper model. Systran removed `faster-whisper-large-v3-turbo`, so the default is the community CT2 mirror; legacy bare `large-v3-turbo` still resolves at runtime. |
+| `WHISPERX_MODEL`             | `large-v3-turbo`          | No       | WhisperX ASR model for English/Auto + diarization (Path 4). Expects a plain Whisper size name, not a faster-whisper CT2 repo id. |
 | `HF_TOKEN`                   | *(Empty)*                 | No       | Hugging Face Hub token. Required for PyAnnote 3.1 & WhisperX gated models (`pyannote/speaker-diarization-3.1`, `pyannote/segmentation-3.0`). |
 | `DIARIZATION_ENABLED`        | `true`                    | No       | Master toggle for speaker diarization feature (`true` or `false`).          |
 | `DIARIZATION_MODEL`          | `pyannote/speaker-diarization-3.1` | No | Hugging Face model ID for PyAnnote diarization pipeline.                     |

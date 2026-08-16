@@ -33,7 +33,7 @@ COPY scripts/download_models.py /app/scripts/download_models.py
 # copies the tracked configs, then downloads fill the rest.
 # COPY models /app/models  # DEV: use volume mount in docker-compose instead
 
-ARG WHISPER_MODEL=large-v3-turbo
+ARG WHISPER_MODEL=deepdml/faster-whisper-large-v3-turbo-ct2
 ARG HF_TOKEN=""
 
 # Download Typhoon ASR model weights into Docker image layer (Option 1: Docker Build-time Caching)

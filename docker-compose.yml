@@ -14,7 +14,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        - WHISPER_MODEL=${WHISPER_MODEL:-large-v3-turbo}
+        - WHISPER_MODEL=${WHISPER_MODEL:-deepdml/faster-whisper-large-v3-turbo-ct2}
         - HF_TOKEN=${HF_TOKEN:-}
     image: choonova-transcribe:latest
     container_name: choonova-transcribe

@@ -17,8 +17,14 @@ def resolve_whisper_model_name() -> str:
     (same trick as `whisper_thai_engine.resolve_thai_model_name`) so no
     HuggingFace download is needed at load time. Falls back to the bare
     model name, which faster-whisper resolves against HF at load time.
+
+    Systran removed `faster-whisper-large-v3-turbo` from the Hub (HTTP 404),
+    so a legacy `WHISPER_MODEL=large-v3-turbo` is routed to the community
+    CT2 mirror `deepdml/faster-whisper-large-v3-turbo-ct2`.
     """
     base_name = WHISPER_MODEL.split("/")[-1]
+    if WHISPER_MODEL == "large-v3-turbo":
+        base_name = "faster-whisper-large-v3-turbo-ct2"
     local_candidates = [
         os.path.join(SERVICE_DIR, "models", f"faster-whisper-{base_name}"),
         os.path.join(SERVICE_DIR, "models", base_name),
@@ -27,6 +33,12 @@ def resolve_whisper_model_name() -> str:
         if os.path.isdir(candidate) and os.path.isfile(os.path.join(candidate, "model.bin")):
             logger.info(f"Using local Whisper model at: {candidate}")
             return candidate
+    if WHISPER_MODEL == "large-v3-turbo":
+        logger.info(
+            "Systran removed faster-whisper-large-v3-turbo; falling back to HF mirror: "
+            "deepdml/faster-whisper-large-v3-turbo-ct2"
+        )
+        return "deepdml/faster-whisper-large-v3-turbo-ct2"
     logger.info(f"Local Whisper model not found; using HF model name: {WHISPER_MODEL}")
     return WHISPER_MODEL
 

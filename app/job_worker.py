@@ -313,15 +313,18 @@ async def process_transcription_job(
                     min_speakers,
                     max_speakers,
                 )
+                used_model = "whisperx"
                 result_obj = {
                     "text": wx_res.get("text", ""),
                     "segments": wx_res.get("segments", []),
+                    "model": used_model,
                 }
 
         # -----------------------------------------------------------------
         # Path 1, 2, 3: Standard Chunking (Typhoon / Faster-Whisper)
         # -----------------------------------------------------------------
         else:
+            used_model = "thai-whisper" if language == "th" else "whisper"
             # Step 2: Silence-Aware Audio Chunking
             update_job_status(
                 id=job_id, status="processing", progress=20.0, stage="chunking"
@@ -484,6 +487,7 @@ async def process_transcription_job(
                     result_obj = {
                         "text": full_text,
                         "segments": grouped_segments,
+                        "model": used_model,
                     }
                 else:
                     full_text = " ".join(combined_text_parts)
@@ -494,6 +498,7 @@ async def process_transcription_job(
                     result_obj = {
                         "text": full_text,
                         "segments": segments,
+                        "model": used_model,
                     }
 
             safe_delete_dir(chunks_dir)
@@ -512,6 +517,7 @@ async def process_transcription_job(
             stage="completed",
             result_json=json.dumps(result_obj),
             processing_time=elapsed,
+            model=used_model,
         )
         logger.info(
             f"Job {job_id} completed successfully in {elapsed:.2f}s (Duration: {total_duration:.2f}s)"

@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnDownloadJson = document.getElementById('btnDownloadJson');
   const statJobId = document.getElementById('statJobId');
   const statStatus = document.getElementById('statStatus');
+  const statModel = document.getElementById('statModel');
   const statDuration = document.getElementById('statDuration');
   const statElapsed = document.getElementById('statElapsed');
 
@@ -65,6 +66,19 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       return dateStr;
     }
+  }
+
+  const MODEL_MAP = {
+    'thai-whisper': { label: 'Thai Whisper' },
+    typhoon: { label: 'Typhoon ASR' },
+    whisper: { label: 'Whisper' },
+    whisperx: { label: 'WhisperX' }
+  };
+
+  function modelLabel(modelId) {
+    const m = (modelId || '').trim().toLowerCase();
+    if (!m) return '';
+    return (MODEL_MAP[m] || { label: m }).label;
   }
 
   const STATUS_MAP = {
@@ -194,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const fileName = escapeHtml(job.filename || '-');
       const langMap = { th: '🇹🇭 ไทย', en: '🇬🇧 EN', auto: 'อัตโนมัติ' };
       const langBadge = langMap[job.language] || '🇹🇭 ไทย';
+      const modelName = modelLabel(job.model);
 
       let extra = '';
       if (processing) {
@@ -219,6 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${extra}
         <div class="job-card-meta">
           <span class="job-card-meta-item">🌐 ${langBadge}</span>
+          ${modelName ? `<span class="job-card-meta-item" style="color: #79c0ff; font-weight: 600;">🤖 ${escapeHtml(modelName)}</span>` : ''}
           ${job.enable_diarization ? `<span class="job-card-meta-item" style="color: #c084fc; font-weight: 600;">👥 Diarized${job.num_speakers ? ` (${job.num_speakers} spk)` : ''}</span>` : ''}
           <span class="job-card-meta-item">⏱️ ${formatSeconds(job.duration)}</span>
           <span class="job-card-meta-item">📦 ${formatBytes(job.file_size_bytes)}</span>
@@ -371,6 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modalErrorBox.style.display = 'none';
     statJobId.textContent = `🆔 Job ID: -`;
     statStatus.textContent = `📌 สถานะ: -`;
+    if (statModel) statModel.textContent = `🤖 โมเดล: -`;
     statDuration.textContent = `⏱️ ความยาว: -`;
     statElapsed.textContent = `⚡ เวลาประมวลผลรวม: -`;
     viewModal.classList.add('open');
@@ -396,6 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
       modalResultText.textContent = job.result ? job.result.text : '(ไม่มีข้อความที่ถอดได้)';
       statJobId.textContent = `🆔 Job ID: ${job.id.substring(0, 8)}...`;
       statStatus.textContent = `📌 สถานะ: ${(STATUS_MAP[job.status] || {}).label || job.status}`;
+      if (statModel) statModel.textContent = `🤖 โมเดล: ${modelLabel(job.model) || job.model || '-'}`;
       statDuration.textContent = `⏱️ ความยาว: ${formatSeconds(job.duration)}`;
       statElapsed.textContent = `⚡ เวลาประมวลผลรวม: ${formatSeconds(job.processing_time)}`;
     } catch (err) {

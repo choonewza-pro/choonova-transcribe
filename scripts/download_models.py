@@ -34,13 +34,25 @@ def download_typhoon(model_dir: str = "/app/models", token: str | None = None) -
     print()
 
 
+def _faster_whisper_repo_id(model_name: str) -> str:
+    """Resolve a faster-whisper size name to an HF repo id for download.
+
+    Systran removed `faster-whisper-large-v3-turbo` from the Hub (HTTP 404), so
+    bare 'large-v3-turbo' resolves to the community CT2 mirror. Other bare sizes
+    use Systran's mirror; full repo ids (containing '/') pass through verbatim.
+    """
+    if model_name == "large-v3-turbo":
+        return "deepdml/faster-whisper-large-v3-turbo-ct2"
+    return model_name if "/" in model_name else f"Systran/faster-whisper-{model_name}"
+
+
 def download_whisper(model_dir: str = "/app/models", model_name: str = "large-v3-turbo", token: str | None = None) -> None:
     token = token or os.getenv("HF_TOKEN", "").strip() or None
     m = model_name or os.getenv("WHISPER_MODEL", "large-v3-turbo")
     # Match faster-whisper's own runtime resolution so a build-time download is
     # found in the same cache/local_dir the engine will look for at load time.
-    repo_id = m if "/" in m else f"Systran/faster-whisper-{m}"
-    local_dir = os.path.join(model_dir, f"faster-whisper-{m.split('/')[-1]}")
+    repo_id = _faster_whisper_repo_id(m)
+    local_dir = os.path.join(model_dir, repo_id.split("/")[-1])
     # Skip download if a local CT2 copy is already present (e.g. COPY models /app/models).
     if os.path.isfile(os.path.join(local_dir, "model.bin")):
         print(f"  ℹ️ Whisper model already exists locally at {local_dir}")
