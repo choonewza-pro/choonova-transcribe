@@ -253,6 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dialogShown = true;
         window.ModelLoadingDialog.show({
           engine: targetEngine,
+          worker: true,
           title: `กำลังโหลดโมเดล ${modelLabels[targetEngine] || 'Whisper'} และประมวลผลเสียง...`,
           subtitle: 'ครั้งแรกจะโหลดโมเดลเข้าหน่วยความจำ (VRAM/RAM) ก่อน แล้วจึงถอดความเสียงตามความยาวไฟล์ หน้าจอนี้จะปิดอัตโนมัติเมื่อเสร็จสิ้น (ปุ่มยกเลิกจะหยุดงานจริง)',
           onCancel: () => {

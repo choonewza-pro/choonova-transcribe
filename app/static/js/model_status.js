@@ -125,6 +125,7 @@
     startTime: 0,
     onCancel: null,
     targetEngine: 'auto',
+    isWorker: false,
   };
 
   const BADGE_CLASS = {
@@ -139,28 +140,49 @@
     idle: '⚪ Idle (รอการโหลด)',
   };
 
+  const ENGINE_META = {
+    whisper_thai: { label: '🇹🇭 Thai Whisper', stateKey: 'whisper_thai_model_state' },
+    typhoon: { label: '🌀 Typhoon ASR', stateKey: 'typhoon_model_state' },
+    whisper: { label: '🕊️ Whisper', stateKey: 'whisper_model_state' },
+    all: { label: '🤖 โมเดลทั้งหมด', stateKey: null },
+    auto: { label: '🤖 โมเดล AI', stateKey: null },
+  };
+
+  function resolveModelState(data) {
+    const meta = ENGINE_META[dialogState.targetEngine];
+    if (!meta) return null;
+    if (meta.stateKey) return data[meta.stateKey];
+    const states = [
+      data.typhoon_model_state,
+      data.whisper_model_state,
+      data.whisper_thai_model_state,
+    ];
+    if (states.every((s) => s === 'loaded')) return 'loaded';
+    if (states.some((s) => s === 'loading')) return 'loading';
+    return 'idle';
+  }
+
   function updateModalBadges(data) {
-    const typhoonBadge = document.getElementById('modelLoadingTyphoonBadge');
-    const thaiWhisperBadge = document.getElementById('modelLoadingThaiWhisperBadge');
-    const whisperBadge = document.getElementById('modelLoadingWhisperBadge');
+    const labelEl = document.getElementById('modelLoadingEngineLabel');
+    const badgeEl = document.getElementById('modelLoadingEngineBadge');
+    if (!badgeEl) return;
 
-    if (typhoonBadge && data.typhoon_model_state) {
-      const state = data.typhoon_model_state;
-      typhoonBadge.className = `status-badge ${BADGE_CLASS[state] || 'badge-idle'}`;
-      typhoonBadge.textContent = BADGE_LABEL[state] || state;
+    const meta = ENGINE_META[dialogState.targetEngine];
+    if (meta && labelEl) labelEl.textContent = meta.label + ':';
+
+    // Subprocess path (inline transcription): the model loads inside the
+    // isolated worker, so /healthz never reflects it. Show a processing
+    // indicator instead of a misleading Idle state.
+    if (dialogState.isWorker) {
+      badgeEl.className = 'status-badge badge-loading';
+      badgeEl.textContent = '🟡 กำลังประมวลผล...';
+      return;
     }
 
-    if (thaiWhisperBadge && data.whisper_thai_model_state) {
-      const state = data.whisper_thai_model_state;
-      thaiWhisperBadge.className = `status-badge ${BADGE_CLASS[state] || 'badge-idle'}`;
-      thaiWhisperBadge.textContent = BADGE_LABEL[state] || state;
-    }
-
-    if (whisperBadge && data.whisper_model_state) {
-      const state = data.whisper_model_state;
-      whisperBadge.className = `status-badge ${BADGE_CLASS[state] || 'badge-idle'}`;
-      whisperBadge.textContent = BADGE_LABEL[state] || state;
-    }
+    const state = resolveModelState(data);
+    if (!state) return;
+    badgeEl.className = `status-badge ${BADGE_CLASS[state] || 'badge-idle'}`;
+    badgeEl.textContent = BADGE_LABEL[state] || state;
   }
 
   function formatTimer(seconds) {
@@ -178,6 +200,7 @@
     dialogState.active = true;
     dialogState.onCancel = typeof opts.onCancel === 'function' ? opts.onCancel : null;
     dialogState.targetEngine = opts.engine || 'auto';
+    dialogState.isWorker = !!opts.worker;
     dialogState.startTime = Date.now();
 
     const titleEl = document.getElementById('modelLoadingTitle');
@@ -214,13 +237,23 @@
       render(data);
       updateModalBadges(data);
 
+      // Worker path: model state is invisible to /healthz, so the caller
+      // (upload.js) hides the dialog when the request completes.
+      if (dialogState.isWorker) return;
+
       // Check if target engine is loaded
       const target = dialogState.targetEngine;
       let ready = false;
       if (target === 'whisper_thai' && data.whisper_thai_model_state === 'loaded') ready = true;
       else if (target === 'typhoon' && data.typhoon_model_state === 'loaded') ready = true;
       else if (target === 'whisper' && data.whisper_model_state === 'loaded') ready = true;
-      else if (target === 'auto' || target === 'all') {
+      else if (target === 'all') {
+        ready = (
+          data.typhoon_model_state === 'loaded' &&
+          data.whisper_model_state === 'loaded' &&
+          data.whisper_thai_model_state === 'loaded'
+        );
+      } else if (target === 'auto') {
         ready = (
           data.typhoon_model_state === 'loaded' ||
           data.whisper_model_state === 'loaded' ||
