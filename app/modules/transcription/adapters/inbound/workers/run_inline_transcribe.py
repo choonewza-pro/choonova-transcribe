@@ -40,6 +40,20 @@ def _parse_bool(value: str) -> bool:
     return value.strip().lower() in ("1", "true", "yes")
 
 
+def _strip_word_level(segments: list) -> list:
+    """Drop per-word fields from speaker-grouped segments.
+
+    Diarization internally requires word timestamps to attribute words to
+    speakers, but when the caller asked for no word-level output
+    (with_timestamps=false) the response must not carry that data.
+    Speaker turn boundaries and text survive.
+    """
+    return [
+        {k: v for k, v in seg.items() if k not in ("word", "words")}
+        for seg in segments
+    ]
+
+
 def run_transcription(
     input_path: str,
     language: str,
@@ -113,6 +127,9 @@ def run_transcription(
         elapsed = float(res.get("elapsed", 0.0))
         duration = float(res.get("duration", 0.0))
         timestamps = res.get("timestamps", [])
+
+    if enable_diarization and not with_timestamps:
+        timestamps = _strip_word_level(timestamps)
 
     rtf = elapsed / duration if duration > 0 else 0.0
     return {
