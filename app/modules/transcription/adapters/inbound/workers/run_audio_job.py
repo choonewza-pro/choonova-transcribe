@@ -7,9 +7,7 @@ the result into the shared jobs table so the job shows up in the transcription
 history page and supports txt/srt/json export.
 
 Result shape stored in result_json:
-    { text, timestamps, segments, elapsed_seconds, duration_seconds, rtf, model }
-`segments` mirrors `timestamps` so the existing export endpoints (which read
-result["segments"]) keep working for audio jobs.
+    { text, segments, elapsed_seconds, duration_seconds, rtf, model }
 """
 
 import sys
@@ -75,12 +73,11 @@ def main():
             enable_diarization,
         )
 
-        timestamps = result.get("timestamps") or []
+        segments = result.get("timestamps") or []
         result_model = result.get("model") or model
         result_json = {
             "text": result.get("text", ""),
-            "timestamps": timestamps,
-            "segments": timestamps,
+            "segments": segments,
             "elapsed_seconds": result.get("elapsed_seconds", 0.0),
             "duration_seconds": result.get("duration_seconds", 0.0),
             "rtf": result.get("rtf", 0.0),

@@ -253,7 +253,7 @@ async def transcribe_audio(
         elapsed = float(data.get("elapsed_seconds", time.time() - start_t))
         duration = float(data.get("duration_seconds", 0.0))
         rtf = float(data.get("rtf", 0.0))
-        timestamps = data.get("timestamps") or []
+        segments = data.get("segments") or data.get("timestamps") or []
 
         return TranscribeResponse(
             status="success",
@@ -261,7 +261,7 @@ async def transcribe_audio(
             duration_seconds=round(duration, 2),
             elapsed_seconds=round(elapsed, 3),
             rtf=round(rtf, 5),
-            timestamps=timestamps if (req.with_timestamps or req.enable_diarization) else None,
+            segments=segments if (req.with_timestamps or req.enable_diarization) else None,
             model=req.model,
         )
     except HTTPException:

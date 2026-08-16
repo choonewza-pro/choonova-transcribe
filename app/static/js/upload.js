@@ -306,9 +306,9 @@ document.addEventListener('DOMContentLoaded', () => {
           statRtf.textContent = `⚡ ความเร็ว RTF: ${speedFactor}x (${data.rtf.toFixed(4)} RTF)`;
         }
 
-        if (data.timestamps && data.timestamps.length > 0) {
+        if (data.segments && data.segments.length > 0) {
           timestampsBox.style.display = 'block';
-          timestampsJson.textContent = JSON.stringify(data.timestamps, null, 2);
+          timestampsJson.textContent = JSON.stringify(data.segments, null, 2);
         }
 
         jsonBox.style.display = 'block';

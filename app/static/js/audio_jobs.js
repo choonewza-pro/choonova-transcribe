@@ -369,7 +369,7 @@ if (diarizationCheck && diarizationCheck.checked) {
     const duration = job.duration || 0;
     const elapsed = job.processing_time || 0;
     const rtf = duration > 0 ? elapsed / duration : 0;
-    const timestamps = result.segments || result.timestamps || [];
+    const timestamps = result.segments || [];
 
     statusMessage.textContent = '✅ แปลงไฟล์เสียงสำเร็จ!';
     statusMessage.style.color = 'var(--success)';

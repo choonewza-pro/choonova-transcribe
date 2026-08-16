@@ -80,7 +80,7 @@
               <div class="code-header">พารามิเตอร์อื่นๆ</div>
               <ul style="margin:0; padding-left:1.2rem; font-size:0.85rem; color:var(--text-muted); line-height:1.6;">
                 <li><code>language</code> (str, default <code>th</code>) — <code>th</code> / <code>en</code> / <code>auto</code></li>
-                <li><code>with_timestamps</code> (bool, default <code>true</code>) — ส่งคืนตำแหน่งช่วงเวลาเริ่มต้น-สิ้นสุดระดับคำในอาร์เรย์ <code>timestamps</code></li>
+                <li><code>with_timestamps</code> (bool, default <code>true</code>) — ส่งคืนตำแหน่งช่วงเวลาเริ่มต้น-สิ้นสุดระดับคำในอาร์เรย์ <code>segments</code></li>
                 <li><code>enable_diarization</code> (bool, default <code>false</code>) — ตรวจจับและแยกแยะผู้พูด (คืนฟิลด์ <code>speaker</code> เช่น <code>SPEAKER_00</code> ในแต่ละคำ/ช่วงเวลา)</li>
                 <li><code>num_speakers</code> (int, optional) — กำหนดจำนวนผู้พูดที่ทราบแน่นอน (เช่น <code>2</code>) เพื่อความแม่นยำสูงสุดในการแยกแยะผู้พูด</li>
                 <li><code>min_speakers</code> / <code>max_speakers</code> (int, optional) — กำหนดช่วงจำนวนผู้พูดต่ำสุด/สูงสุด</li>
@@ -125,7 +125,7 @@ print(response.json())</pre>
   "elapsed_seconds": 0.152,
   "rtf": 0.044,
   "model": "thai-whisper",
-  "timestamps": [
+  "segments": [
     { "word": "สวัสดีครับ", "start": 0.0, "end": 0.85, "speaker": "SPEAKER_00" },
     { "word": "นี่คือการทดสอบ", "start": 0.86, "end": 1.75, "speaker": "SPEAKER_00" },
     { "word": "แปลงเสียงพูดเป็นข้อความ", "start": 1.76, "end": 2.8, "speaker": "SPEAKER_00" },

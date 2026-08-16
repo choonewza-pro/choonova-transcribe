@@ -32,6 +32,7 @@ class TranscriptionSegment(BaseModel):
     start: float
     end: float
     speaker: Optional[str] = None
+    words: Optional[List[Dict[str, Any]]] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -49,33 +50,13 @@ class TranscriptionResult(BaseModel):
     text: str
     segments: Optional[List[TranscriptionSegment]] = None
 
-class TimestampItem(BaseModel):
-    word: Optional[str] = None
-    text: Optional[str] = None
-    start: float
-    end: float
-    speaker: Optional[str] = None
-    words: Optional[List[Dict[str, Any]]] = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def sync_word_and_text(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            word_val = data.get("word")
-            text_val = data.get("text")
-            if word_val is not None and text_val is None:
-                data["text"] = str(word_val)
-            elif text_val is not None and word_val is None:
-                data["word"] = str(text_val)
-        return data
-
 class TranscribeResponse(BaseModel):
     status: str = "success"
     text: str
     duration_seconds: float
     elapsed_seconds: Optional[float] = None
     rtf: Optional[float] = None
-    timestamps: Optional[List[TimestampItem]] = None
+    segments: Optional[List[TranscriptionSegment]] = None
     model: Optional[str] = None
 
 class HealthResponse(BaseModel):
