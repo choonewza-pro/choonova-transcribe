@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 
 from app.db import update_job_status
 from app.audio_utils import safe_delete_dir
+from app.text_utils import strip_redundant_segment_fields
 from app.modules.transcription.adapters.inbound.workers.run_inline_transcribe import (
     run_transcription,
     _parse_bool,
@@ -73,7 +74,7 @@ def main():
             enable_diarization,
         )
 
-        segments = result.get("timestamps") or []
+        segments = strip_redundant_segment_fields(result.get("timestamps"))
         result_model = result.get("model") or model
         result_json = {
             "text": result.get("text", ""),

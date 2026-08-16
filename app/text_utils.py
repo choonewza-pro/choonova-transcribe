@@ -94,3 +94,27 @@ def clean_text(text: str) -> str:
     if any(ord(ch) >= 0x0E00 and ord(ch) <= 0x0E7F for ch in "".join(words)):
         return "".join(words)
     return " ".join(words)
+
+
+def strip_redundant_segment_fields(segments: list) -> list:
+    """
+    Normalize ASR output segments for response / SQLite storage.
+
+    The legacy ``word`` key duplicates ``text`` (word-only items are
+    backfilled into ``text`` first), and a null/empty nested ``words`` array
+    is serialization noise. Word-level data survives via ``text`` (per-word
+    segments) or the nested ``words`` list (word-level mode).
+    """
+    cleaned = []
+    for seg in segments or []:
+        if not isinstance(seg, dict):
+            cleaned.append(seg)
+            continue
+        out = dict(seg)
+        if out.get("word") and not out.get("text"):
+            out["text"] = out["word"]
+        out.pop("word", None)
+        if not out.get("words"):
+            out.pop("words", None)
+        cleaned.append(out)
+    return cleaned

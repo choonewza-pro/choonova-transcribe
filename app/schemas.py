@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_serializer, model_validator
 from typing import List, Optional, Any, Dict, Literal
 from enum import Enum
 
@@ -28,7 +28,6 @@ class JobError(BaseModel):
 
 class TranscriptionSegment(BaseModel):
     text: Optional[str] = None
-    word: Optional[str] = None
     start: float
     end: float
     speaker: Optional[str] = None
@@ -38,12 +37,18 @@ class TranscriptionSegment(BaseModel):
     @classmethod
     def sync_text_and_word(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            text_val = data.get("text")
             word_val = data.get("word")
-            if text_val is not None and word_val is None:
-                data["word"] = str(text_val)
-            elif word_val is not None and text_val is None:
+            if word_val is not None and data.get("text") is None:
                 data["text"] = str(word_val)
+        return data
+
+    @model_serializer(mode="wrap")
+    def _omit_null_words(self, handler) -> Any:
+        """Drop `words: null` from the serialized payload (noise for
+        segments without word-level data)."""
+        data = handler(self)
+        if data.get("words") is None:
+            data.pop("words", None)
         return data
 
 class TranscriptionResult(BaseModel):

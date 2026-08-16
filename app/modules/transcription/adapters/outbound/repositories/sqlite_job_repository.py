@@ -9,6 +9,7 @@ from typing import Optional, List, Dict, Any
 from app.core.db import get_db_connection
 from app.modules.transcription.domain.entities import TranscriptionJob
 from app.modules.transcription.domain.ports import JobRepositoryPort
+from app.text_utils import strip_redundant_segment_fields
 
 
 def _row_to_job(r) -> TranscriptionJob:
@@ -133,7 +134,9 @@ class SQLiteJobRepository(JobRepositoryPort):
     ) -> None:
         result_payload = json.dumps({
             "text": result_text,
-            "segments": json.loads(timestamps_json) if timestamps_json else [],
+            "segments": strip_redundant_segment_fields(
+                json.loads(timestamps_json) if timestamps_json else []
+            ),
             "srt": srt_text,
         })
         with get_db_connection() as conn:

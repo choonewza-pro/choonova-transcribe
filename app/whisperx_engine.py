@@ -262,7 +262,6 @@ class WhisperXDiarizer:
                     "start": round(seg_start, 3),
                     "end": round(seg_end, 3),
                     "text": seg_text,
-                    "word": seg_text,
                     "speaker": seg_speaker,
                     "words": seg_words,
                 }

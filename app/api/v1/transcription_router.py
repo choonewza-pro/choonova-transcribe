@@ -25,6 +25,7 @@ from app.config import (
     TEMP_JOBS_DIR, MIN_FREE_DISK_GB, SERVICE_DIR
 )
 from app.schemas import TranscribeResponse, JobCreateResponse, JobStatusResponse
+from app.text_utils import strip_redundant_segment_fields
 from app.modules.transcription.adapters.outbound.repositories.sqlite_job_repository import SQLiteJobRepository
 from app.modules.transcription.adapters.outbound.media.ffmpeg_audio_adapter import FFmpegAudioAdapter
 from app.modules.transcription.adapters.outbound.engines.engine_router import EngineRouterAdapter
@@ -670,7 +671,7 @@ async def export_job_result(
             "filename": job.filename,
             "duration": job.duration,
             "text": result.get("text"),
-            "segments": result.get("segments"),
+            "segments": strip_redundant_segment_fields(result.get("segments")),
         }
         return JSONResponse(
             content=data,

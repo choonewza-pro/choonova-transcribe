@@ -409,7 +409,7 @@ def group_words_by_turns(
     diarization turn with maximum time overlap (nearest-turn fallback for words
     in pause gaps). Returns reference-shaped segments:
 
-        {"speaker", "start", "end", "text", "word", "words"}
+        {"speaker", "start", "end", "text", "words"}
 
     ``words`` carries the per-word timestamps bucketed into this turn, so
     word-level granularity survives even though the segment itself is turn-level.
@@ -451,7 +451,6 @@ def group_words_by_turns(
                 "start": round(float(t["start"]), 3),
                 "end": round(float(t["end"]), 3),
                 "text": text,
-                "word": text,
                 "words": [
                     {
                         "word": p.get("word", ""),
@@ -504,7 +503,6 @@ def group_speaker_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, Any
                     "start": round(current_start, 3),
                     "end": round(current_end, 3),
                     "text": _join_words(current_text_parts),
-                    "word": _join_words(current_text_parts),
                 }
             )
             current_speaker = speaker
@@ -519,7 +517,6 @@ def group_speaker_segments(segments: List[Dict[str, Any]]) -> List[Dict[str, Any
                 "start": round(current_start, 3),
                 "end": round(current_end, 3),
                 "text": _join_words(current_text_parts),
-                "word": _join_words(current_text_parts),
             }
         )
 
