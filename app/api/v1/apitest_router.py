@@ -34,6 +34,9 @@ from app.core.config import (
 )
 from app.core.security import verify_api_key
 from app.modules.apitest.adapters.outbound.self_http_client import HttpxSelfClient
+from app.modules.apitest.adapters.outbound.sqlite_self_test_status_repository import (
+    SQLiteSelfTestStatusRepository,
+)
 from app.modules.apitest.application.apitest_runner import (
     ApiTestRunner,
     AssetNotFoundError,
@@ -42,10 +45,28 @@ from app.modules.apitest.application.run_registry import (
     RunState,
     run_registry,
 )
+from app.modules.apitest.domain.ports import SelfTestStatusRepository
 
 router = APIRouter(prefix="/v1/tests", tags=["Endpoint Self-Test"])
 
 ASSETS_DIR = os.path.join(SERVICE_DIR, "assets")
+
+
+def _status_repo() -> SelfTestStatusRepository:
+    return SQLiteSelfTestStatusRepository()
+
+
+def _persist_suite_status(suite: str, report) -> None:
+    """Persist pass/fail for the suite and every finished test card."""
+    repo = _status_repo()
+    repo.upsert_suite(suite, "passed" if report.overall_passed else "failed")
+    for t in report.tests:
+        repo.upsert_test(suite, t.order, t.name_th,
+                         "passed" if t.passed else "failed")
+
+
+def _persist_suite_failure(suite: str) -> None:
+    _status_repo().upsert_suite(suite, "failed")
 
 
 def _build_runner() -> ApiTestRunner:
@@ -92,6 +113,19 @@ async def tests_info(authenticated: bool = Depends(verify_api_key)) -> Dict[str,
             "vram": "~1.0-2.0 GB",
         },
     }
+    repo = _status_repo()
+    info["status"] = repo.get_suite_statuses()
+    info["test_status"] = {
+        suite: {
+            str(t.test_order): {
+                "status": t.status,
+                "label": t.test_label,
+                "updated_at": t.updated_at,
+            }
+            for t in repo.get_tests(suite).values()
+        }
+        for suite in info["suites"]
+    }
     return info
 
 
@@ -120,13 +154,15 @@ async def _run_background(run_id: str, suite: str, cleanup: bool) -> None:
             on_start=on_start,
         )
         run_registry.finish(run_id, summary=report.to_dict())
+        _persist_suite_status(suite, report)
     except Exception as e:  # noqa: BLE001
         run_registry.finish(run_id, error=str(e))
+        _persist_suite_failure(suite)
 
 
 @router.post("/run", status_code=202)
 async def run_self_test(
-    suite: str = "word-diar",
+    suite: str = "no-word",
     cleanup: bool = True,
     authenticated: bool = Depends(verify_api_key),
 ) -> Dict[str, Any]:

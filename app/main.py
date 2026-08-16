@@ -534,6 +534,20 @@ async def startup_event():
     # Initialize SQLite database and recover zombie jobs (also seeds the
     # settings table with MODEL_LOAD_MODE / MODEL_IDLE_TIMEOUT_SEC from env).
     init_db()
+    # Reset persisted self-test pass/fail status when the deployed code changed
+    # (a new build must be re-tested, even though the SQLite data dir is mounted).
+    try:
+        from app.modules.apitest.adapters.outbound.sqlite_self_test_status_repository import (
+            SQLiteSelfTestStatusRepository,
+        )
+        from app.modules.apitest.application.build_stamp import (
+            reset_self_test_status_on_new_build,
+        )
+
+        if reset_self_test_status_on_new_build(SQLiteSelfTestStatusRepository()):
+            logger.info("New build detected — self-test pass/fail status reset to 'not tested'")
+    except Exception as e:
+        logger.warning(f"Self-test build stamp check skipped: {e}")
     recover_zombie_jobs()
     # Recover video compressor jobs interrupted by a previous shutdown/crash and
     # delete their leftover job directories (they can still hold a large input).

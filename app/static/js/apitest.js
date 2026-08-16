@@ -6,7 +6,7 @@
 // and lets you re-open past results from the recent-history bar.
 document.addEventListener('DOMContentLoaded', () => {
   const API_KEY_STORAGE = 'typhoon_asr_api_key';
-  const POLL_MS = 2000;
+  const POLL_MS = 5000;
   const startBtn = document.getElementById('startTestBtn');
   const cleanupToggle = document.getElementById('cleanupToggle');
   const testStatus = document.getElementById('testStatus');
@@ -30,17 +30,18 @@ document.addEventListener('DOMContentLoaded', () => {
   let running = false;
   let totalTests = null;
   let completedTests = 0;
-  let selectedSuite = 'word-diar';
+  let selectedSuite = 'no-word';
   let activeRunId = null;
   let watchTimer = null;
   let renderedOrders = new Set();
+  let suiteTestStatus = {};
 
   // Suite Card Click Handling
   const suiteCards = document.querySelectorAll('.suite-card');
   suiteCards.forEach(card => {
     card.addEventListener('click', () => {
       if (running) return;
-      selectedSuite = card.dataset.suite || 'word-diar';
+      selectedSuite = card.dataset.suite || 'no-word';
       suiteCards.forEach(c => {
         c.classList.remove('active');
         c.style.borderColor = 'var(--card-border)';
@@ -147,6 +148,35 @@ document.addEventListener('DOMContentLoaded', () => {
     limitPanel.innerHTML =
       `⚙️ ภาษาที่ทดสอบ: <code>${escapeText(d.language || 'th')}</code>`
       + ` · ขีดจำกัด: transcribe <code>${l.transcribe_max_wait_sec}s</code>`;
+    renderSuiteStatuses(info);
+  }
+
+  function renderSuiteStatuses(info) {
+    suiteTestStatus = info.test_status || {};
+    const statusMap = info.status || {};
+    document.querySelectorAll('.suite-status').forEach(el => {
+      const suite = el.dataset.suite;
+      const st = statusMap[suite] || 'not_tested';
+      const rows = Object.values(suiteTestStatus[suite] || {});
+      const passed = rows.filter(r => r.status === 'passed').length;
+      const total = rows.length;
+      const times = rows.map(r => r.updated_at).filter(Boolean).sort();
+      const lastTime = times[times.length - 1] || '';
+      let txt, color;
+      if (st === 'passed') {
+        txt = `✅ ผ่านการตรวจสอบแล้ว (${passed}/${total})`;
+        color = '#34d399';
+      } else if (st === 'failed') {
+        txt = `❌ ยังไม่ผ่าน (${passed}/${total})`;
+        color = '#ff6b6b';
+      } else {
+        txt = '⚪ ยังไม่ได้ทดสอบ';
+        color = 'var(--text-muted)';
+      }
+      el.textContent = txt;
+      el.style.color = color;
+      el.title = lastTime ? `ทดสอบล่าสุด: ${lastTime}` : '';
+    });
   }
 
   // ---------------------------------------------------------------- rendering
@@ -173,6 +203,10 @@ document.addEventListener('DOMContentLoaded', () => {
             ${test.error_msg ? ' <span style="color:#ff6b6b;">· ' + escapeText(test.error_msg) + '</span>' : ''}
           </p>
           <div class="prog" style="display:none; margin-top:0.4rem;">
+            <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.25rem; color:var(--accent-cyan); font-size:0.78rem; font-weight:600;">
+              <span class="prog-label">⏳ กำลังประมวลผลอยู่...</span>
+              <span class="prog-stage" style="color:var(--text-muted); font-weight:400;"></span>
+            </div>
             <div style="height:6px; border-radius:3px; background:rgba(255,255,255,0.08); overflow:hidden;">
               <div class="prog-fill" style="width:0%; height:100%; background:#00f2fe; transition:width .4s;"></div>
             </div>
@@ -242,12 +276,64 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!card) return;
     const progWrap = card.querySelector('.prog');
     const fill = card.querySelector('.prog-fill');
-    if (progWrap) progWrap.style.display = 'block';
+    const label = card.querySelector('.prog-label');
+    const stage = card.querySelector('.prog-stage');
+    if (progWrap) {
+      progWrap.style.display = 'block';
+      progWrap.classList.add('processing');
+    }
     const pct = Number.isFinite(Number(prog.progress)) ? Math.round(Number(prog.progress)) : 0;
-    if (fill) fill.style.width = pct + '%';
-    const stage = (prog.status || '') + (prog.stage ? ' — ' + prog.stage : '');
-    setStatus(`⏳ poll: ${path.replace(/^.*\/(jobs)/, '/$1')} (${escapeText(stage)} ${pct}%)`);
-    renderProgress(`⏳ กำลังประมวลผล... (${fractionText()}) · ${escapeText(stage)}`, completedTests);
+    if (fill) fill.style.width = (pct > 0 ? pct : 6) + '%';
+    if (label) label.textContent = '⏳ กำลังประมวลผลอยู่...';
+    if (stage) {
+      const s = prog.stage || prog.status || '';
+      stage.textContent = s ? `(${escapeText(s)})` : '';
+    }
+    const stageTxt = (prog.status || '') + (prog.stage ? ' — ' + prog.stage : '');
+    setStatus(`⏳ poll: ${path.replace(/^.*\/(jobs)/, '/$1')} (${escapeText(stageTxt)} ${pct}%)`);
+    renderProgress(`⏳ กำลังประมวลผล... (${fractionText()}) · ${escapeText(stageTxt)}`, completedTests);
+  }
+
+  function addPriorPassedTag(card) {
+    // Small persistent marker: this card's test passed in a previous run
+    // (status persisted in SQLite, survives server restart).
+    if (!card) return;
+    const title = card.querySelector('.api-group-desc');
+    if (!title || title.querySelector('.prior-passed')) return;
+    const tag = document.createElement('span');
+    tag.className = 'prior-passed';
+    tag.textContent = '✅ เคยผ่านการตรวจสอบแล้ว';
+    tag.style.cssText = 'font-size:0.72rem; color:#34d399; border:1px solid rgba(52,211,153,0.4);'
+      + ' border-radius:6px; padding:0.05rem 0.4rem; margin-left:0.5rem; white-space:nowrap;';
+    title.appendChild(tag);
+  }
+
+  function setProcessingIndicator(snapshot) {
+    // Show/hide an animated "กำลังประมวลผลอยู่" bar under the last completed
+    // test card while the run is actively polling a job.
+    const cards = resultsArea.querySelectorAll('.api-group-card');
+    const last = cards[cards.length - 1];
+    if (!last) return;
+    const progWrap = last.querySelector('.prog');
+    if (!progWrap) return;
+    if (snapshot.status === 'running') {
+      const p = snapshot.latest_progress || {};
+      const pct = Number.isFinite(Number(p.progress)) ? Math.round(Number(p.progress)) : 0;
+      progWrap.style.display = 'block';
+      progWrap.classList.add('processing');
+      const fill = last.querySelector('.prog-fill');
+      if (fill) fill.style.width = (pct > 0 ? pct : 6) + '%';
+      const label = last.querySelector('.prog-label');
+      if (label) label.textContent = '⏳ กำลังประมวลผลอยู่...';
+      const stage = last.querySelector('.prog-stage');
+      if (stage) {
+        const s = p.stage || p.status || '';
+        stage.textContent = s ? `(${escapeText(s)})` : '';
+      }
+    } else {
+      progWrap.style.display = 'none';
+      progWrap.classList.remove('processing');
+    }
   }
 
   function renderSummary(summary) {
@@ -286,9 +372,12 @@ document.addEventListener('DOMContentLoaded', () => {
       renderedOrders.add(t.order);
       completedTests = Math.max(completedTests, t.order || 0);
       appendTest(t);
+      const prior = (suiteTestStatus[snapshot.suite] || {})[String(t.order)];
+      if (prior && prior.status === 'passed') addPriorPassedTag(resultsArea.lastElementChild);
       setStatus(`✔ รายการ ${t.order} เสร็จ (${t.passed ? 'ผ่าน' : 'ไม่ผ่าน'})`);
       renderProgress(`✔ เสร็จแล้ว ${fractionText()} — ${t.passed ? 'ผ่าน' : 'ไม่ผ่าน'}`, completedTests);
     });
+    setProcessingIndicator(snapshot);
     if (snapshot.status === 'running') return;
     if (snapshot.summary) {
       if (typeof snapshot.summary.total === 'number') {
@@ -312,6 +401,16 @@ document.addEventListener('DOMContentLoaded', () => {
     activeRunId = null;
   }
 
+  function highlightSuite(suiteKey) {
+    if (!suiteKey) return;
+    selectedSuite = suiteKey;
+    suiteCards.forEach(c => {
+      const on = c.dataset.suite === suiteKey;
+      c.classList.toggle('active', on);
+      c.style.borderColor = on ? 'var(--accent-cyan)' : 'var(--card-border)';
+    });
+  }
+
   function startWatch(runId, opts) {
     opts = opts || {};
     stopWatch();
@@ -323,8 +422,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setRunning(true);
     setStatus('กำลังเชื่อมต่อกับงานทดสอบ...');
     renderProgress('⏳ กำลังเริ่มทดสอบ...', 0);
-    const suiteName = opts.suite || '';
+    const suiteName = SUITE_NAMES[opts.suiteKey] || opts.suiteKey || '';
     showBanner(`⏳ กำลังทดสอบอยู่${suiteName ? ' (' + escapeText(suiteName) + ')' : ''} — ระบบแสดงผลแบบสด (poll ทุก ${Math.round(POLL_MS / 1000)} วิ) จนเสร็จ`);
+    highlightSuite(opts.suiteKey);
     pollRun();
   }
 
@@ -348,6 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
         stopWatch();
         setRunning(false);
         loadHistory();
+        loadInfo();
       }
     } catch (e) {
       // transient network error → keep retrying
@@ -362,7 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) return;
       const data = await res.json();
       if (data.active && data.run) {
-        startWatch(data.run.run_id, { suite: SUITE_NAMES[data.run.suite] || data.run.suite || '' });
+        startWatch(data.run.run_id, { suiteKey: data.run.suite });
       } else {
         loadHistory();
       }
@@ -390,7 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const det = (body.detail && typeof body.detail === 'object') ? body.detail : {};
         const rid = det.active_run_id;
         if (rid) {
-          startWatch(rid, { suite: SUITE_NAMES[det.active_suite] || det.active_suite || '' });
+          startWatch(rid, { suiteKey: det.active_suite });
         } else {
           summaryCard.style.display = 'block';
           summaryCard.innerHTML = '<h3 style="color:#ff9d2e;">⚠️ มีงานทดสอบกำลังทำงานอยู่</h3>'
@@ -402,7 +503,7 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(typeof body.detail === 'string' ? body.detail : ('HTTP ' + res.status));
       }
       if (body.run_id) {
-        startWatch(body.run_id, { suite: SUITE_NAMES[body.suite] || body.suite || '' });
+        startWatch(body.run_id, { suiteKey: body.suite });
       }
     } catch (e) {
       summaryCard.style.display = 'block';
@@ -474,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const snapshot = await res.json();
       if (snapshot.status === 'running') {
-        startWatch(runId, { suite: SUITE_NAMES[snapshot.suite] || snapshot.suite || '' });
+        startWatch(runId, { suiteKey: snapshot.suite });
         return;
       }
       renderRunSnapshot(snapshot);

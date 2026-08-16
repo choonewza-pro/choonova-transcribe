@@ -6,7 +6,7 @@ reporting surface (FastAPI router) and the unit tests alike.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -74,6 +74,21 @@ class EndpointTest:
             ],
             "error_msg": self.error_msg,
         }
+
+
+@dataclass
+class SelfTestStatus:
+    """Persisted pass/fail verdict for one self-test card.
+
+    Stored in SQLite so the verification state survives a plain server
+    restart (only pass/fail + timestamp — no detailed results).
+    """
+
+    suite: str
+    status: str  # 'passed' | 'failed' | 'not_tested'
+    test_order: Optional[int] = None
+    test_label: str = ""
+    updated_at: str = ""
 
 
 @dataclass

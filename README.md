@@ -119,7 +119,8 @@ We intentionally maintain a hybrid architectural state where the API delivery la
    - Go to the **API Self-Test** page: [http://localhost:8830/test](http://localhost:8830/test)
    - The page is only accessible once you have set an API Key (enter it on `/setting` or use `http://localhost:8830/test?api_key=YOUR_KEY`)
    - Choose one of the 3 suites (**Word-level + ผู้พูด**, **Word-level เท่านั้น**, **ไม่มี Word-level**) and press **▶ Start Automated Test** — the service sends `assets/test-audio-th.wav` to `/v1/audio/transcribe/jobs` across the available ASR models (Thai Whisper / WhisperX / Typhoon) and reports pass/fail per test with an `X/N` progress bar
-   - Runs are **server-owned and polling-based**: refresh or disconnect the page and it automatically reconnects to the live run; only one run runs at a time (the start button is disabled while a run is active). The **recent-runs bar** (last 5) lets you re-open past results
+   - Runs are **server-owned and polling-based** (status refreshed every 5s): refresh or disconnect the page and it automatically reconnects to the live run; only one run runs at a time (the start button is disabled while a run is active). The **recent-runs bar** (last 5) lets you re-open past results
+   - Each suite card shows a **persistent verification badge** (✅ ผ่านการตรวจสอบแล้ว / ❌ ยังไม่ผ่าน / ⚪ ยังไม่ได้ทดสอบ) stored in SQLite — it survives a plain server restart, and is automatically reset to ⚪ when a **new build** is deployed (the deployed app source is fingerprinted at startup, so the status survives `./data:/app/data` mounts but not new code)
    - Job transcription can take minutes (model load + GPU inference) — the progress bar keeps you informed while the run is active
 
 ## Configuration

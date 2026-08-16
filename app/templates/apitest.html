@@ -5,6 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ทดสอบ API อัตโนมัติ - ChooNova Transcribe</title>
   <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    @keyframes progress-stripes {
+      0% { background-position: 0 0; }
+      100% { background-position: 24px 0; }
+    }
+    .prog.processing .prog-fill {
+      background-image: linear-gradient(
+        45deg,
+        rgba(255,255,255,0.28) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255,255,255,0.28) 50%,
+        rgba(255,255,255,0.28) 75%,
+        transparent 75%,
+        transparent
+      );
+      background-size: 24px 24px;
+      animation: progress-stripes 0.8s linear infinite;
+    }
+  </style>
 </head>
 <body>
   {% set active_page = 'apitest' %}
@@ -21,20 +41,21 @@
 
       <!-- Suite Selection Cards -->
       <div id="suitesContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 1.75rem;">
-        <!-- Suite 1: Word-level + Diarization (Audio Job) -->
-        <div class="suite-card active" data-suite="word-diar" style="background: rgba(255,255,255,0.03); border: 2px solid var(--accent-cyan); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
+        <!-- Suite 1: No word-level (Audio Job) -->
+        <div class="suite-card active" data-suite="no-word" style="background: rgba(255,255,255,0.03); border: 2px solid var(--accent-cyan); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">📝 Word-level + ผู้พูด</span>
-            <span style="font-size: 0.75rem; background: rgba(16,185,129,0.15); color: #34d399; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 600;">Audio Job</span>
+            <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">🚫 ไม่มี Word-level</span>
+            <span style="font-size: 0.75rem; background: rgba(251,146,60,0.15); color: #fb923c; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 600;">Audio Job</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5;">
-            ทดสอบ <code>/v1/audio/transcribe/jobs</code> กับ <code>test-audio-th.wav</code> แบบ word-level + ระบุผู้พูด
-            — ตรวจผลว่ามีข้อมูลคำ (word/text) และ speaker (Thai Whisper / WhisperX ทีละ model)
+            ทดสอบ <code>/v1/audio/transcribe/jobs</code> กับ <code>test-audio-th.wav</code> แบบไม่ทำ word-level และไม่ระบุผู้พูด
+            — ตรวจผลว่าไม่มีข้อมูลคำ (Typhoon / Thai Whisper / Faster Whisper ทีละ model)
           </p>
           <div style="font-size: 0.8rem; color: #a1a1aa; display: flex; flex-direction: column; gap: 0.25rem;">
-            <div>🤖 <strong>Models:</strong> thai-whisper · whisperx</div>
-            <div>🔑 <strong>HF_TOKEN:</strong> จำเป็น (WhisperX)</div>
+            <div>🤖 <strong>Models:</strong> typhoon · thai-whisper · whisper</div>
+            <div>🔑 <strong>HF_TOKEN:</strong> ไม่จำเป็น</div>
           </div>
+          <div class="suite-status" data-suite="no-word" title="" style="font-size:0.8rem; font-weight:600; margin-top:0.6rem; color:var(--text-muted);">⚪ ยังไม่ได้ทดสอบ</div>
         </div>
 
         <!-- Suite 2: Word-level only (Audio Job) -->
@@ -51,22 +72,24 @@
             <div>🤖 <strong>Models:</strong> thai-whisper · whisper</div>
             <div>🔑 <strong>HF_TOKEN:</strong> ไม่จำเป็น</div>
           </div>
+          <div class="suite-status" data-suite="word-only" title="" style="font-size:0.8rem; font-weight:600; margin-top:0.6rem; color:var(--text-muted);">⚪ ยังไม่ได้ทดสอบ</div>
         </div>
 
-        <!-- Suite 3: No word-level (Audio Job) -->
-        <div class="suite-card" data-suite="no-word" style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
+        <!-- Suite 3: Word-level + Diarization (Audio Job) -->
+        <div class="suite-card" data-suite="word-diar" style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">🚫 ไม่มี Word-level</span>
-            <span style="font-size: 0.75rem; background: rgba(251,146,60,0.15); color: #fb923c; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 600;">Audio Job</span>
+            <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">📝 Word-level + ผู้พูด</span>
+            <span style="font-size: 0.75rem; background: rgba(16,185,129,0.15); color: #34d399; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 600;">Audio Job</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5;">
-            ทดสอบ <code>/v1/audio/transcribe/jobs</code> กับ <code>test-audio-th.wav</code> แบบไม่ทำ word-level และไม่ระบุผู้พูด
-            — ตรวจผลว่าไม่มีข้อมูลคำ (Typhoon / Thai Whisper / Faster Whisper ทีละ model)
+            ทดสอบ <code>/v1/audio/transcribe/jobs</code> กับ <code>test-audio-th.wav</code> แบบ word-level + ระบุผู้พูด
+            — ตรวจผลว่ามีข้อมูลคำ (word/text) และ speaker (Thai Whisper / WhisperX ทีละ model)
           </p>
           <div style="font-size: 0.8rem; color: #a1a1aa; display: flex; flex-direction: column; gap: 0.25rem;">
-            <div>🤖 <strong>Models:</strong> typhoon · thai-whisper · whisper</div>
-            <div>🔑 <strong>HF_TOKEN:</strong> ไม่จำเป็น</div>
+            <div>🤖 <strong>Models:</strong> thai-whisper · whisperx</div>
+            <div>🔑 <strong>HF_TOKEN:</strong> จำเป็น (WhisperX)</div>
           </div>
+          <div class="suite-status" data-suite="word-diar" title="" style="font-size:0.8rem; font-weight:600; margin-top:0.6rem; color:var(--text-muted);">⚪ ยังไม่ได้ทดสอบ</div>
         </div>
       </div>
 
@@ -114,6 +137,6 @@
     Choonova AI Stack • ChooNova Transcribe Service running on Port 8830
   </footer>
 
-  <script src="/static/js/apitest.js?v=3"></script>
+  <script src="/static/js/apitest.js?v=7"></script>
 </body>
 </html>
