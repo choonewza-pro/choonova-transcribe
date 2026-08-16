@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, model_validator
-from typing import List, Optional, Any, Literal
+from typing import List, Optional, Any, Dict, Literal
 from enum import Enum
 
 class JobStatus(str, Enum):
@@ -55,6 +55,7 @@ class TimestampItem(BaseModel):
     start: float
     end: float
     speaker: Optional[str] = None
+    words: Optional[List[Dict[str, Any]]] = None
 
     @model_validator(mode="before")
     @classmethod

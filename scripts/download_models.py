@@ -148,6 +148,26 @@ def download_whisperx_align(lang: str = "en") -> None:
         print(f"  ⚠️ Could not pre-download WhisperX alignment model: {e}")
 
 
+def download_whisperx_align_th() -> None:
+    """Pre-download the Thai wav2vec2 alignment model used by WhisperX for Thai
+    word-level timestamps (no default align model exists for 'th')."""
+    model_name = "airesearch/wav2vec2-large-xlsr-53-th"
+
+    try:
+        import whisperx
+
+        whisperx.load_align_model(
+            language_code="th", device="cpu", model_name=model_name
+        )
+        print()
+        print("=" * 70)
+        print(f"  ✅ WHISPERX THAI ALIGNMENT MODEL DOWNLOAD COMPLETE — {model_name}")
+        print("=" * 70)
+        print()
+    except Exception as e:
+        print(f"  ⚠️ Could not pre-download WhisperX Thai alignment model: {e}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="ChooNova Transcribe model downloader")
     parser.add_argument("--all", action="store_true", help="Download all models")
@@ -158,6 +178,11 @@ def main() -> None:
     parser.add_argument(
         "--whisperx-align", action="store_true", help="Download WhisperX alignment model"
     )
+    parser.add_argument(
+        "--whisperx-align-th",
+        action="store_true",
+        help="Download WhisperX Thai alignment model",
+    )
     parser.add_argument("--model-dir", default="/app/models", help="Target dir for Typhoon model")
     parser.add_argument(
         "--whisper-model", default="large-v3-turbo", help="Whisper model name/variant"
@@ -166,7 +191,7 @@ def main() -> None:
     args = parser.parse_args()
 
     # If no specific flags given, default to all
-    if not any([args.typhoon, args.whisper, args.whisper_thai, args.pyannote, args.whisperx_align, args.all]):
+    if not any([args.typhoon, args.whisper, args.whisper_thai, args.pyannote, args.whisperx_align, args.whisperx_align_th, args.all]):
         args.all = True
 
     token = args.hf_token or os.getenv("HF_TOKEN", "").strip() or None
@@ -185,6 +210,9 @@ def main() -> None:
 
     if args.whisperx_align or args.all:
         download_whisperx_align(lang="en")
+
+    if args.whisperx_align_th or args.all:
+        download_whisperx_align_th()
 
 
 if __name__ == "__main__":

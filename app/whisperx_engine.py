@@ -22,6 +22,10 @@ from app.core.config import (
 
 logger = logging.getLogger("whisperx-engine")
 
+# WhisperX has no default alignment model for Thai; wav2vec2 char alignment is
+# used with PyThaiNLP word reconstruction (see _segment_words).
+WHISPERX_THAI_ALIGN_MODEL = "airesearch/wav2vec2-large-xlsr-53-th"
+
 
 def clear_cuda_cache() -> None:
     try:
@@ -31,6 +35,44 @@ def clear_cuda_cache() -> None:
             torch.cuda.synchronize()
     except Exception:
         pass
+
+
+def _segment_words(seg: Dict[str, Any], lang: str) -> List[Dict[str, Any]]:
+    """Extract per-word timestamps for a WhisperX segment.
+
+    Thai has no inter-word spaces, so wav2vec2 alignment yields character-level
+    timestamps (``chars``) that merge into one giant "word". Re-tokenize the
+    segment text with PyThaiNLP (newmm) and walk the char tokens to rebuild
+    whole words with real timestamps — the same approach as the Thai Whisper
+    path. Other languages keep WhisperX's aligned ``words`` as-is.
+    """
+    if lang == "th":
+        char_tokens = [
+            {
+                "word": (c.get("char") or "").strip(),
+                "start": float(c.get("start", 0.0)),
+                "end": float(c.get("end", 0.0)),
+            }
+            for c in (seg.get("chars") or [])
+            if (c.get("char") or "").strip()
+        ]
+        if not char_tokens:
+            return []
+        try:
+            from app.pyannote_engine import reconstruct_thai_words
+
+            return reconstruct_thai_words([{**seg, "words": char_tokens}])
+        except Exception:
+            return char_tokens
+    return [
+        {
+            "word": w.get("word", ""),
+            "start": round(float(w.get("start", 0.0)), 3),
+            "end": round(float(w.get("end", 0.0)), 3),
+        }
+        for w in (seg.get("words") or [])
+        if (w.get("word") or "").strip()
+    ]
 
 
 class WhisperXDiarizer:
@@ -150,17 +192,25 @@ class WhisperXDiarizer:
         # 2. Forced Alignment (with Graceful Fallback)
         start_t = time.time()
         try:
+            use_char_align = detected_lang == "th"
             logger.info(f"Step 2: WhisperX Alignment for language '{detected_lang}'")
-            model_a, metadata = whisperx.load_align_model(
-                language_code=detected_lang, device=self.device
-            )
+            if use_char_align:
+                model_a, metadata = whisperx.load_align_model(
+                    language_code="th",
+                    device=self.device,
+                    model_name=WHISPERX_THAI_ALIGN_MODEL,
+                )
+            else:
+                model_a, metadata = whisperx.load_align_model(
+                    language_code=detected_lang, device=self.device
+                )
             result = whisperx.align(
                 result["segments"],
                 model_a,
                 metadata,
                 audio,
                 self.device,
-                return_char_alignments=False,
+                return_char_alignments=use_char_align,
             )
             logger.info(f"Alignment step finished in {time.time() - start_t:.2f}s")
         except Exception as e:
@@ -205,6 +255,8 @@ class WhisperXDiarizer:
             if not seg_text:
                 continue
 
+            seg_words = _segment_words(seg, detected_lang)
+
             formatted_segments.append(
                 {
                     "start": round(seg_start, 3),
@@ -212,6 +264,7 @@ class WhisperXDiarizer:
                     "text": seg_text,
                     "word": seg_text,
                     "speaker": seg_speaker,
+                    "words": seg_words,
                 }
             )
 

@@ -52,6 +52,9 @@ RUN python3 /app/scripts/download_models.py --pyannote --hf-token "${HF_TOKEN}"
 # Pre-download WhisperX Forced Alignment model for English ('en')
 RUN python3 /app/scripts/download_models.py --whisperx-align
 
+# Pre-download WhisperX Forced Alignment model for Thai ('th', no default align model)
+RUN python3 /app/scripts/download_models.py --whisperx-align-th
+
 COPY app /app/app
 
 # Copy sample assets used by the API Endpoint Self-Test page (/test → /v1/tests/*)
