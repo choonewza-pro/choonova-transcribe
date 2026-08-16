@@ -16,3 +16,15 @@
 คุณว่าแบบนี้ดีใหม เราจะได้ทดสอบได้ว่าอะไรแม่นสุดแล้วเลือกใช้ได้ จะแก้ก็ค่อยแก้เป็นอันๆ ไปเลย
 
 ---
+
+คุณช่วยทดสอบการทำ word-level + การตรวจจับผู้พูด กับ api endpoint ของ /audio/transcribe/jobs กับไฟล์ test-audio-th.wav ว่าได้ผลลัพแบบที่ควรเป็นใหม มีข้อมูล words ด้วย โดยตรวจสอบที่โมเดล Thai whisper และ whisperx โดยทดสอบทีละ model
+
+---
+
+คุณช่วยทดสอบการทำ word-level + ไม่มีการตรวจจับผู้พูด กับ api endpoint ของ /audio/transcribe/jobs กับไฟล์ test-audio-th.wav ว่าได้ผลลัพแบบที่ควรเป็นใหม มีข้อมูล words ด้วย โดยตรวจสอบที่โมเดล Thai Whisper และ Faster Whisper (large-v3-turbo) โดยทดสอบทีละ model
+
+---
+
+คุณช่วยทดสอบ ไม่ทำ word-level + ไม่มีการตรวจจับผู้พูด กับ api endpoint ของ /audio/transcribe/jobs กับไฟล์ test-audio-th.wav ว่าได้ผลลัพแบบที่ควรเป็นใหม ไม่ควรมีข้อมูล words โดยตรวจสอบที่โมเดล Typhoon ASR, Thai Whisper และ Faster Whisper (large-v3-turbo) โดยทดสอบทีละ model
+
+---
