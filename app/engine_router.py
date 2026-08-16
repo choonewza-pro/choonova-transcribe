@@ -141,6 +141,8 @@ def transcribe_file(
             initial_prompt=initial_prompt,
             hotwords=hotwords,
         )
+        if lang == "th" and with_timestamps:
+            res["timestamps"] = _rebuild_thai_word_timestamps(res.get("segments", []))
         res["model"] = "whisper"
         return res
 
@@ -201,6 +203,8 @@ def transcribe_bytes(
             initial_prompt=initial_prompt,
             hotwords=hotwords,
         )
+        if lang == "th" and with_timestamps:
+            res["timestamps"] = _rebuild_thai_word_timestamps(res.get("segments", []))
         res["model"] = "whisper"
         return res
 
