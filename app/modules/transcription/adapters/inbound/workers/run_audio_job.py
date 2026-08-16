@@ -36,11 +36,11 @@ logger = logging.getLogger("choonova-audio-job-worker")
 
 
 def main():
-    if len(sys.argv) < 9:
+    if len(sys.argv) < 10:
         logger.error(
             "Usage: python -m app.run_audio_job <job_id> <input_path> <language> "
             "<model> <num_speakers> <min_speakers> <max_speakers> "
-            "<enable_diarization>"
+            "<enable_diarization> <with_timestamps>"
         )
         sys.exit(1)
 
@@ -52,22 +52,22 @@ def main():
     min_speakers = _parse_int(sys.argv[6])
     max_speakers = _parse_int(sys.argv[7])
     enable_diarization = _parse_bool(sys.argv[8])
+    with_timestamps = _parse_bool(sys.argv[9])
 
     job_dir = os.path.dirname(input_path)
 
     logger.info(
         f"🚀 Audio job worker starting: job_id={job_id} lang={language} "
-        f"model={model} diar={enable_diarization}"
+        f"model={model} diar={enable_diarization} ts={with_timestamps}"
     )
 
     try:
         update_job_status(job_id, status="processing", progress=5.0, stage="transcribing")
 
-        # with_timestamps=True so timestamps are always available for export/JSON.
         result = run_transcription(
             input_path,
             language,
-            True,
+            with_timestamps,
             model,
             num_speakers,
             min_speakers,

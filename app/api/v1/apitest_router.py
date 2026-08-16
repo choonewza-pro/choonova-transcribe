@@ -91,6 +91,27 @@ async def tests_info(authenticated: bool = Depends(verify_api_key)) -> Dict[str,
             "hf_token_required": True,
             "vram": "~3.5 GB",
         },
+        "word-diar": {
+            "name": "Word-level + ผู้พูด (Audio Job)",
+            "desc": "ทดสอบ /v1/audio/transcribe/jobs แบบ word-level + ระบุผู้พูด (test-audio-th.wav) — Thai Whisper / WhisperX",
+            "engine": "Thai Whisper / WhisperX + Diarization",
+            "hf_token_required": True,
+            "vram": "~2.5-3.5 GB",
+        },
+        "word-only": {
+            "name": "Word-level เท่านั้น (Audio Job)",
+            "desc": "ทดสอบ /v1/audio/transcribe/jobs แบบ word-level ไม่ระบุผู้พูด (test-audio-th.wav) — Thai Whisper / Faster Whisper",
+            "engine": "Thai Whisper / Faster-Whisper large-v3-turbo",
+            "hf_token_required": False,
+            "vram": "~1.0-2.0 GB",
+        },
+        "no-word": {
+            "name": "ไม่มี Word-level (Audio Job)",
+            "desc": "ทดสอบ /v1/audio/transcribe/jobs แบบไม่มี word-level / ไม่ระบุผู้พูด (test-audio-th.wav) — Typhoon / Thai Whisper / Faster Whisper",
+            "engine": "Typhoon / Thai Whisper / Faster-Whisper large-v3-turbo",
+            "hf_token_required": False,
+            "vram": "~1.0-2.0 GB",
+        },
     }
     return info
 

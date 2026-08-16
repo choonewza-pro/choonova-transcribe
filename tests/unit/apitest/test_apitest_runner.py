@@ -26,6 +26,7 @@ class FakeApiHttp(ApiHttpPort):
     def __init__(self):
         self.responses = {}
         self.poll_sequences = {}
+        self.post_sequences = {}
         self.calls = []
 
     def set(self, method, path, status, body):
@@ -34,8 +35,14 @@ class FakeApiHttp(ApiHttpPort):
     def set_poll(self, path, interim_bodies, terminal_body):
         self.poll_sequences[path] = list(interim_bodies) + [terminal_body]
 
+    def set_post_seq(self, path, bodies):
+        self.post_sequences[path] = list(bodies)
+
     async def post_multipart(self, path, files=None, data=None, headers=None, timeout=60.0):
         self.calls.append(("POST", path))
+        seq = self.post_sequences.get(path)
+        if seq:
+            return (202, seq.pop(0))
         return self.responses.get(("POST", path), (200, {}))
 
     async def get(self, path, headers=None, timeout=60.0):
@@ -334,6 +341,153 @@ class ApiTestRunnerTest(unittest.TestCase):
         self.assertTrue(assets["test-audio-th.wav"]["exists"])
         self.assertTrue(assets["The-Frog-and-The-Ox.mp4"]["exists"])
         self.assertEqual(assets["test-audio-th.wav"]["size_bytes"], 256)
+
+    # -------------------------------------------------------- audio word-level suites
+
+    @staticmethod
+    def _audio_create_body(job_id, model, lang, enable_diar):
+        return {
+            "status": "accepted", "id": job_id, "filename": "test-audio-th.wav",
+            "language": lang, "model": model, "enable_diarization": enable_diar,
+            "message": "Job created",
+        }
+
+    @staticmethod
+    def _audio_terminal(job_id, model, lang, segments):
+        return {
+            "id": job_id, "type": "audio", "filename": "test-audio-th.wav",
+            "file_size_bytes": 1000, "language": lang, "model": model,
+            "status": "completed", "stage": "completed", "progress": 100.0,
+            "total_chunks": 1, "completed_chunks": 1, "duration": 8.0,
+            "processing_time": 1.0, "target_chunk_sec": 30.0, "max_chunk_sec": 60.0,
+            "result": {"text": "สวัสดีครับ", "segments": segments},
+            "error": None, "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:01Z", "started_at": "2026-01-01T00:00:00Z",
+            "completed_at": "2026-01-01T00:00:01Z",
+        }
+
+    def _configure_audio_word_suite(self, fake, creates, terminals, model_ids):
+        """Wire create responses + per-job poll terminals + DELETE cleanup."""
+        fake.set_post_seq("/v1/audio/transcribe/jobs", creates)
+        for job_id, terminal in zip(model_ids, terminals):
+            fake.set_poll(f"/v1/media/transcribe/jobs/{job_id}", [], terminal)
+            fake.set("DELETE", f"/v1/media/transcribe/jobs/{job_id}", 200,
+                     {"status": "success", "message": "deleted"})
+
+    def test_word_diar_suite_passes_and_cleans_up(self):
+        fake = FakeApiHttp()
+        segments = [
+            {"speaker": "SPEAKER_00", "start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
+            {"speaker": "SPEAKER_01", "start": 3.0, "end": 6.0, "word": "ครับ", "text": "ครับ"},
+        ]
+        creates = [
+            self._audio_create_body("wa1", "thai-whisper", "th", True),
+            self._audio_create_body("wa2", "whisperx", "auto", True),
+        ]
+        terminals = [
+            self._audio_terminal("wa1", "thai-whisper", "th", segments),
+            self._audio_terminal("wa2", "whisperx", "auto", segments),
+        ]
+        self._configure_audio_word_suite(fake, creates, terminals, ["wa1", "wa2"])
+
+        runner = self._runner(fake)
+        report = asyncio.run(runner.run(suite="word-diar", cleanup=True))
+        self.assertTrue(report.overall_passed)
+        self.assertEqual(report.total, 6)
+        self.assertIn(("DELETE", "/v1/media/transcribe/jobs/wa1"), fake.calls)
+        self.assertIn(("DELETE", "/v1/media/transcribe/jobs/wa2"), fake.calls)
+
+    def test_word_only_suite_passes_and_cleans_up(self):
+        fake = FakeApiHttp()
+        segments = [
+            {"start": 0.0, "end": 1.0, "word": "สวัสดี", "text": "สวัสดี"},
+            {"start": 1.0, "end": 2.0, "word": "ครับ", "text": "ครับ"},
+        ]
+        creates = [
+            self._audio_create_body("wo1", "thai-whisper", "th", False),
+            self._audio_create_body("wo2", "whisper", "th", False),
+        ]
+        terminals = [
+            self._audio_terminal("wo1", "thai-whisper", "th", segments),
+            self._audio_terminal("wo2", "whisper", "th", segments),
+        ]
+        self._configure_audio_word_suite(fake, creates, terminals, ["wo1", "wo2"])
+
+        runner = self._runner(fake)
+        report = asyncio.run(runner.run(suite="word-only", cleanup=True))
+        self.assertTrue(report.overall_passed)
+        self.assertEqual(report.total, 6)
+        self.assertIn(("DELETE", "/v1/media/transcribe/jobs/wo1"), fake.calls)
+        self.assertIn(("DELETE", "/v1/media/transcribe/jobs/wo2"), fake.calls)
+
+    def test_no_word_suite_passes_when_segments_empty(self):
+        fake = FakeApiHttp()
+        creates = [
+            self._audio_create_body("nw1", "typhoon", "th", False),
+            self._audio_create_body("nw2", "thai-whisper", "th", False),
+            self._audio_create_body("nw3", "whisper", "th", False),
+        ]
+        terminals = [
+            self._audio_terminal("nw1", "typhoon", "th", []),
+            self._audio_terminal("nw2", "thai-whisper", "th", []),
+            self._audio_terminal("nw3", "whisper", "th", []),
+        ]
+        self._configure_audio_word_suite(fake, creates, terminals, ["nw1", "nw2", "nw3"])
+
+        runner = self._runner(fake)
+        report = asyncio.run(runner.run(suite="no-word", cleanup=True))
+        self.assertTrue(report.overall_passed)
+        self.assertEqual(report.total, 9)
+        for jid in ("nw1", "nw2", "nw3"):
+            self.assertIn(("DELETE", f"/v1/media/transcribe/jobs/{jid}"), fake.calls)
+
+    def test_word_diar_suite_fails_when_speaker_missing(self):
+        fake = FakeApiHttp()
+        # word-diar expects speaker labels; diarized job without speaker → fail
+        segments = [
+            {"start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
+            {"start": 3.0, "end": 6.0, "word": "ครับ", "text": "ครับ"},
+        ]
+        creates = [
+            self._audio_create_body("wf1", "thai-whisper", "th", True),
+            self._audio_create_body("wf2", "whisperx", "auto", True),
+        ]
+        terminals = [
+            self._audio_terminal("wf1", "thai-whisper", "th", segments),
+            self._audio_terminal("wf2", "whisperx", "auto", segments),
+        ]
+        self._configure_audio_word_suite(fake, creates, terminals, ["wf1", "wf2"])
+
+        runner = self._runner(fake)
+        report = asyncio.run(runner.run(suite="word-diar", cleanup=True))
+        self.assertFalse(report.overall_passed)
+        self.assertEqual(report.passed_count, 4)
+        self.assertEqual(report.failed_count, 2)
+        # cleanup still runs for both jobs
+        self.assertIn(("DELETE", "/v1/media/transcribe/jobs/wf1"), fake.calls)
+        self.assertIn(("DELETE", "/v1/media/transcribe/jobs/wf2"), fake.calls)
+
+    def test_no_word_suite_fails_when_words_present(self):
+        fake = FakeApiHttp()
+        # whisper model unexpectedly returns word-level segments → should fail
+        segments = [{"start": 0.0, "end": 1.0, "word": "สวัสดี", "text": "สวัสดี"}]
+        creates = [
+            self._audio_create_body("nf1", "typhoon", "th", False),
+            self._audio_create_body("nf2", "thai-whisper", "th", False),
+            self._audio_create_body("nf3", "whisper", "th", False),
+        ]
+        terminals = [
+            self._audio_terminal("nf1", "typhoon", "th", []),
+            self._audio_terminal("nf2", "thai-whisper", "th", []),
+            self._audio_terminal("nf3", "whisper", "th", segments),
+        ]
+        self._configure_audio_word_suite(fake, creates, terminals, ["nf1", "nf2", "nf3"])
+
+        runner = self._runner(fake)
+        report = asyncio.run(runner.run(suite="no-word", cleanup=True))
+        self.assertFalse(report.overall_passed)
+        self.assertEqual(report.passed_count, 8)
+        self.assertEqual(report.failed_count, 1)
 
 
 if __name__ == "__main__":

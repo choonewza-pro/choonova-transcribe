@@ -72,6 +72,7 @@ def init_db() -> None:
                 result_json TEXT,
                 error_json TEXT,
                 enable_diarization INTEGER DEFAULT 0,
+                with_timestamps INTEGER DEFAULT 0,
                 num_speakers INTEGER DEFAULT NULL,
                 min_speakers INTEGER DEFAULT NULL,
                 max_speakers INTEGER DEFAULT NULL,
@@ -88,6 +89,8 @@ def init_db() -> None:
         ]
         if "enable_diarization" not in jobs_columns:
             cursor.execute("ALTER TABLE jobs ADD COLUMN enable_diarization INTEGER DEFAULT 0")
+        if "with_timestamps" not in jobs_columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN with_timestamps INTEGER DEFAULT 0")
         if "num_speakers" not in jobs_columns:
             cursor.execute("ALTER TABLE jobs ADD COLUMN num_speakers INTEGER DEFAULT NULL")
         if "min_speakers" not in jobs_columns:

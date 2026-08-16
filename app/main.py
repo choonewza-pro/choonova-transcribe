@@ -416,6 +416,7 @@ async def transcribe_queue_dispatcher():
                 num = job.get("num_speakers")
                 min_s = job.get("min_speakers")
                 max_s = job.get("max_speakers")
+                with_ts = "1" if job.get("with_timestamps") else "0"
                 cmd = [
                     sys.executable, "-m", "app.run_audio_job",
                     job_id, save_path, lang,
@@ -424,6 +425,7 @@ async def transcribe_queue_dispatcher():
                     str(min_s) if min_s is not None else "none",
                     str(max_s) if max_s is not None else "none",
                     enable_diar,
+                    with_ts,
                 ]
             else:
                 cmd = [sys.executable, "-m", "app.run_job", job_id, save_path, lang, enable_diar]

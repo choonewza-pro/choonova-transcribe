@@ -309,6 +309,7 @@ async def create_audio_transcription_job(
         num_speakers=num_speakers,
         min_speakers=min_speakers,
         max_speakers=max_speakers,
+        with_timestamps=with_timestamps,
     )
 
     svc.ensure_capacity(TEMP_JOBS_DIR, MIN_FREE_DISK_GB, TRANSCRIBE_MAX_QUEUED)
@@ -340,6 +341,7 @@ async def create_audio_transcription_job(
         file_size_bytes=total_bytes,
         language=req.language,
         enable_diarization=req.enable_diarization,
+        with_timestamps=req.with_timestamps,
         num_speakers=req.num_speakers,
         min_speakers=req.min_speakers,
         max_speakers=req.max_speakers,

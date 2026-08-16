@@ -65,6 +65,54 @@
             <div>🔑 <strong>HF_TOKEN:</strong> จำเป็น (Gated Model)</div>
           </div>
         </div>
+
+        <!-- Suite 4: Word-level + Diarization (Audio Job) -->
+        <div class="suite-card" data-suite="word-diar" style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">📝 Word-level + ผู้พูด</span>
+            <span style="font-size: 0.75rem; background: rgba(16,185,129,0.15); color: #34d399; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 600;">Audio Job</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5;">
+            ทดสอบ <code>/v1/audio/transcribe/jobs</code> กับ <code>test-audio-th.wav</code> แบบ word-level + ระบุผู้พูด
+            — ตรวจผลว่ามีข้อมูลคำ (word/text) และ speaker (Thai Whisper / WhisperX ทีละ model)
+          </p>
+          <div style="font-size: 0.8rem; color: #a1a1aa; display: flex; flex-direction: column; gap: 0.25rem;">
+            <div>🤖 <strong>Models:</strong> thai-whisper · whisperx</div>
+            <div>🔑 <strong>HF_TOKEN:</strong> จำเป็น (WhisperX)</div>
+          </div>
+        </div>
+
+        <!-- Suite 5: Word-level only (Audio Job) -->
+        <div class="suite-card" data-suite="word-only" style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">🔤 Word-level เท่านั้น</span>
+            <span style="font-size: 0.75rem; background: rgba(16,185,129,0.15); color: #34d399; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 600;">Audio Job</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5;">
+            ทดสอบ <code>/v1/audio/transcribe/jobs</code> กับ <code>test-audio-th.wav</code> แบบ word-level แต่ไม่ระบุผู้พูด
+            — ตรวจผลว่ามีข้อมูลคำ (word/text) (Thai Whisper / Faster Whisper ทีละ model)
+          </p>
+          <div style="font-size: 0.8rem; color: #a1a1aa; display: flex; flex-direction: column; gap: 0.25rem;">
+            <div>🤖 <strong>Models:</strong> thai-whisper · whisper</div>
+            <div>🔑 <strong>HF_TOKEN:</strong> ไม่จำเป็น</div>
+          </div>
+        </div>
+
+        <!-- Suite 6: No word-level (Audio Job) -->
+        <div class="suite-card" data-suite="no-word" style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">🚫 ไม่มี Word-level</span>
+            <span style="font-size: 0.75rem; background: rgba(251,146,60,0.15); color: #fb923c; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 600;">Audio Job</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5;">
+            ทดสอบ <code>/v1/audio/transcribe/jobs</code> กับ <code>test-audio-th.wav</code> แบบไม่ทำ word-level และไม่ระบุผู้พูด
+            — ตรวจผลว่าไม่มีข้อมูลคำ (Typhoon / Thai Whisper / Faster Whisper ทีละ model)
+          </p>
+          <div style="font-size: 0.8rem; color: #a1a1aa; display: flex; flex-direction: column; gap: 0.25rem;">
+            <div>🤖 <strong>Models:</strong> typhoon · thai-whisper · whisper</div>
+            <div>🔑 <strong>HF_TOKEN:</strong> ไม่จำเป็น</div>
+          </div>
+        </div>
       </div>
 
       <div style="display:flex; flex-wrap:wrap; gap:1rem; align-items:center; margin-bottom:1.25rem;">
