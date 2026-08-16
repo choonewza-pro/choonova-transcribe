@@ -89,6 +89,21 @@ def unload_if_idle_all(timeout_sec: float) -> bool:
     return unloaded
 
 
+def _rebuild_thai_word_timestamps(segments) -> list:
+    """
+    Merge faster-whisper character-level Thai tokens back into whole words.
+
+    The Thai-tuned Whisper tokenizer emits one token per Thai character
+    (including tone marks) because Thai has no inter-word spaces, so raw
+    `timestamps` are character-level. `reconstruct_thai_words` re-tokenizes
+    each segment's full text with PyThaiNLP ``newmm`` and walks the character
+    tokens (which carry real timestamps) to give each word a real start/end.
+    """
+    from app.pyannote_engine import reconstruct_thai_words
+
+    return reconstruct_thai_words(segments)
+
+
 def transcribe_file(
     audio_path: str,
     language: str = "th",
@@ -135,6 +150,8 @@ def transcribe_file(
             language="th",
             with_timestamps=with_timestamps,
         )
+        if with_timestamps:
+            res["timestamps"] = _rebuild_thai_word_timestamps(res.get("segments", []))
         res["model"] = model_clean or "thai-whisper"
         return res
     res = whisper_engine.transcribe_file(
@@ -194,6 +211,8 @@ def transcribe_bytes(
             language="th",
             with_timestamps=with_timestamps,
         )
+        if with_timestamps:
+            res["timestamps"] = _rebuild_thai_word_timestamps(res.get("segments", []))
         res["model"] = model_clean or "thai-whisper"
         return res
     res = whisper_engine.transcribe_bytes(
