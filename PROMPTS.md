@@ -17,14 +17,16 @@
 
 ---
 
-คุณช่วยทดสอบการทำ word-level + การตรวจจับผู้พูด กับ api endpoint ของ /audio/transcribe/jobs กับไฟล์ test-audio-th.wav ว่าได้ผลลัพแบบที่ควรเป็นใหม มีข้อมูล words ด้วย โดยตรวจสอบที่โมเดล Thai whisper และ whisperx โดยทดสอบทีละ model
+ทดสอบการทำ word-level + การตรวจจับผู้พูด กับ api endpoint ของ /audio/transcribe/jobs กับไฟล์ test-audio-th.wav ว่าได้ผลลัพแบบที่ควรเป็นใหม มีข้อมูล words ด้วย โดยตรวจสอบที่โมเดล Thai whisper และ whisperx โดยทดสอบทีละ model
 
 ---
 
-คุณช่วยทดสอบการทำ word-level + ไม่มีการตรวจจับผู้พูด กับ api endpoint ของ /audio/transcribe/jobs กับไฟล์ test-audio-th.wav ว่าได้ผลลัพแบบที่ควรเป็นใหม มีข้อมูล words ด้วย โดยตรวจสอบที่โมเดล Thai Whisper และ Faster Whisper (large-v3-turbo) โดยทดสอบทีละ model
+ทดสอบการทำ word-level + ไม่มีการตรวจจับผู้พูด กับ api endpoint ของ /audio/transcribe/jobs กับไฟล์ test-audio-th.wav ว่าได้ผลลัพแบบที่ควรเป็นใหม มีข้อมูล words ด้วย โดยตรวจสอบที่โมเดล Thai Whisper และ Faster Whisper (large-v3-turbo) โดยทดสอบทีละ model
 
 ---
 
-คุณช่วยทดสอบ ไม่ทำ word-level + ไม่มีการตรวจจับผู้พูด กับ api endpoint ของ /audio/transcribe/jobs กับไฟล์ test-audio-th.wav ว่าได้ผลลัพแบบที่ควรเป็นใหม ไม่ควรมีข้อมูล words โดยตรวจสอบที่โมเดล Typhoon ASR, Thai Whisper และ Faster Whisper (large-v3-turbo) โดยทดสอบทีละ model
+ทดสอบ ไม่ทำ word-level + ไม่มีการตรวจจับผู้พูด กับ api endpoint ของ /audio/transcribe/jobs กับไฟล์ test-audio-th.wav ว่าได้ผลลัพแบบที่ควรเป็นใหม ไม่ควรมีข้อมูล words โดยตรวจสอบที่โมเดล Typhoon ASR, Thai Whisper และ Faster Whisper (large-v3-turbo) โดยทดสอบทีละ model
 
 ---
+
+หมายเหตุ เมื่อทำเสร็จลบข้อมูลที่ทำทิ้งเลย
