@@ -349,21 +349,34 @@ def reconstruct_thai_words(
     tokens (which carry real timestamps) in order, consuming as many as each
     word spans. Each newmm word therefore keeps a real start/end.
 
+    Each word also carries the source ASR segment index under ``seg`` (used by
+    callers for diagnostics / contiguity checks).
+
     :param segments: Engine segments, each with {"text": str, "words": [...]}
-    :return: List of {"word", "start", "end"} with whole words and real times.
+        and optional "start"/"end"
+    :return: List of {"word", "start", "end", "seg"} with whole words and real
+        times.
     """
     try:
         from pythainlp.tokenize import word_tokenize
     except Exception:
-        return [
-            {"word": (w.get("word") or "").strip(), "start": float(w.get("start", 0)), "end": float(w.get("end", 0))}
-            for seg in segments
-            for w in (seg.get("words") or [])
-            if (w.get("word") or "").strip()
-        ]
+        result = []
+        for seg_idx, seg in enumerate(segments):
+            for w in (seg.get("words") or []):
+                if not (w.get("word") or "").strip():
+                    continue
+                result.append(
+                    {
+                        "word": (w.get("word") or "").strip(),
+                        "start": float(w.get("start", 0)),
+                        "end": float(w.get("end", 0)),
+                        "seg": seg_idx,
+                    }
+                )
+        return result
 
     result = []
-    for seg in segments:
+    for seg_idx, seg in enumerate(segments):
         text = seg.get("text") or ""
         char_tokens = [
             ((w.get("word") or "").strip(), float(w.get("start", 0)), float(w.get("end", 0)))
@@ -394,8 +407,84 @@ def reconstruct_thai_words(
                     "word": nw,
                     "start": round(c_start, 3) if c_start is not None else 0.0,
                     "end": round(c_end, 3),
+                    "seg": seg_idx,
                 })
     return result
+
+
+def cap_word_durations(
+    words: List[Dict[str, Any]],
+    max_word_duration: float = 1.2,
+) -> List[Dict[str, Any]]:
+    """
+    Cap stretched word durations at ``max_word_duration`` seconds.
+
+    faster-whisper's attention-based word timestamps (no alignment head) run
+    systematically late for Thai — utterance-tail words can land seconds past
+    their true position (measured +1s to +4s on the test corpus). A tail word's
+    *end* stretches out over the VAD-kept silence (e.g. "วันนี้" 3.32s -> 8.08s),
+    bleeding into the next speaker turn where max-overlap bucketing would
+    mis-attribute it. Real spoken words are almost never longer than ~1.2s, so
+    clipping the end back to ``start + max_word_duration`` removes the stretch
+    while leaving genuine words untouched.
+
+    Only the ``end`` is modified (the start is preserved); the input list is
+    left untouched.
+
+    :param words: List of {"word", "start", "end"}
+    :param max_word_duration: Max allowed word length in seconds
+    :return: New list with capped ends
+    """
+    result = []
+    for w in words:
+        start = float(w.get("start", 0.0))
+        end = float(w.get("end", start))
+        new_w = dict(w)
+        new_w["start"] = round(start, 3)
+        new_w["end"] = round(min(end, start + max_word_duration), 3)
+        result.append(new_w)
+    return result
+
+
+def _overlap(start: float, end: float, turn: Dict[str, Any]) -> float:
+    return max(0.0, min(end, float(turn["end"])) - max(start, float(turn["start"])))
+
+
+def _max_overlap_turn_and_overlap(
+    start: float, end: float, turns: List[Dict[str, Any]]
+):
+    best_idx: Optional[int] = None
+    best_ov = 0.0
+    for i, t in enumerate(turns):
+        ov = _overlap(start, end, t)
+        if ov > best_ov:
+            best_ov = ov
+            best_idx = i
+    return best_idx, best_ov
+
+
+def _attach_nearest(
+    word: Dict[str, Any],
+    turns: List[Dict[str, Any]],
+    buckets: Dict[int, List[Dict[str, Any]]],
+    gap_tolerance_sec: float,
+) -> None:
+    """Attach a word that overlaps no turn to the nearest turn within tolerance."""
+    w_start = float(word["start"])
+    w_end = float(word["end"])
+    closest_idx = min(
+        range(len(turns)),
+        key=lambda i: min(
+            abs(float(turns[i]["start"]) - w_end),
+            abs(float(turns[i]["end"]) - w_start),
+        ),
+    )
+    dist = min(
+        abs(float(turns[closest_idx]["start"]) - w_end),
+        abs(float(turns[closest_idx]["end"]) - w_start),
+    )
+    if dist <= gap_tolerance_sec:
+        buckets[closest_idx].append(word)
 
 
 def group_words_by_turns(
@@ -403,18 +492,34 @@ def group_words_by_turns(
     diarization_turns: List[Dict[str, Any]],
     gap_sec: float = 0.6,
     min_dur_sec: float = 0.5,
+    gap_tolerance_sec: float = 1.5,
+    max_word_duration: float = 1.2,
 ) -> List[Dict[str, Any]]:
     """
-    Group ASR words into speaker-turn segments by assigning each word to the
-    diarization turn with maximum time overlap (nearest-turn fallback for words
-    in pause gaps). Returns reference-shaped segments:
+    Group ASR words into speaker-turn segments. Returns reference-shaped segments:
 
         {"speaker", "start", "end", "text", "words"}
 
-    ``words`` carries the per-word timestamps bucketed into this turn, so
-    word-level granularity survives even though the segment itself is turn-level.
+    Attribution is word-level max-overlap against the consolidated speaker
+    turns, with two guards for the measured faster-whisper misalignment:
 
-    :param words: List of {"word", "start", "end"} (real ASR word timestamps)
+    1. Word-duration cap (``max_word_duration``): faster-whisper's attention
+       timestamps run late for Thai — utterance-tail words stretch their *end*
+       over the VAD-kept silence (measured +1s to +4s late, e.g. "วันนี้" 3.32s
+       -> 8.08s) and would otherwise be handed to the *next* turn. Capping each
+       end at ``start + max_word_duration`` keeps such words with the sentence
+       that spoke them.
+    2. Nearest-turn fallback (``gap_tolerance_sec``): words that overlap no
+       turn (pause-gap words) are attached to the nearest turn instead of being
+       silently dropped.
+
+    Note: a *segment-anchored* variant (bucketing each word by its source ASR
+    segment's span) was measured to be a regression on real data — ASR segments
+    span 20-30s across multiple speaker turns, so anchoring to the segment
+    mis-assigns whole chunks (88.4% vs 93.5% speaker agreement on the test
+    corpus). Word-level bucketing stays.
+
+    :param words: List of {"word", "start", "end"}
     :param diarization_turns: Raw PyAnnote turns (consolidated internally)
     """
     if not words:
@@ -423,33 +528,34 @@ def group_words_by_turns(
     if not turns:
         return []
 
+    words = cap_word_durations(words, max_word_duration)
+
     buckets = {i: [] for i in range(len(turns))}
     for w in words:
         w_start = float(w["start"])
         w_end = float(w["end"])
-        best_idx = None
-        best_overlap = 0.0
-        for i, t in enumerate(turns):
-            overlap = max(0.0, min(w_end, t["end"]) - max(w_start, t["start"]))
-            if overlap > best_overlap:
-                best_overlap = overlap
-                best_idx = i
-        if best_idx is not None and best_overlap > 0:
-            buckets[best_idx].append(w)
+        w_winner, w_ov = _max_overlap_turn_and_overlap(w_start, w_end, turns)
+        if w_winner is None or w_ov <= 0:
+            _attach_nearest(w, turns, buckets, gap_tolerance_sec)
+        else:
+            buckets[w_winner].append(w)
 
     result = []
     for i, t in enumerate(turns):
         parts = buckets[i]
         if not parts:
             continue
+        parts.sort(key=lambda p: (float(p.get("start", 0.0)), float(p.get("end", 0.0))))
         text = _join_words([p.get("word", "") for p in parts])
         if not text.strip():
             continue
+        seg_start = min(float(p.get("start", 0.0)) for p in parts)
+        seg_end = max(float(p.get("end", 0.0)) for p in parts)
         result.append(
             {
                 "speaker": t["speaker"],
-                "start": round(float(t["start"]), 3),
-                "end": round(float(t["end"]), 3),
+                "start": round(seg_start, 3),
+                "end": round(seg_end, 3),
                 "text": text,
                 "words": [
                     {

@@ -281,7 +281,7 @@ class TestDiarizationHelpers(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["speaker"], "SPEAKER_00")
         self.assertEqual(result[0]["text"], "สวัสดีครับ")
-        self.assertEqual(result[0]["start"], 0.0)
+        self.assertEqual(result[0]["start"], 0.1)  # word bounds, not turn bounds
         self.assertEqual(result[1]["speaker"], "SPEAKER_01")
         self.assertEqual(result[1]["text"], "ยินดีที่รู้จัก")
         self.assertEqual(
@@ -340,6 +340,159 @@ class TestDiarizationHelpers(unittest.TestCase):
         # segments without words fall back to char tokens
         result = reconstruct_thai_words([{"text": "สวัสดี", "words": []}])
         self.assertEqual(result, [])
+
+    def test_reconstruct_thai_words_threads_segment_id(self):
+        from app.pyannote_engine import reconstruct_thai_words
+
+        segments = [
+            {
+                "text": "สวัสดี",
+                "words": [
+                    {"word": "ส", "start": 0.0, "end": 0.1},
+                    {"word": "วัสดี", "start": 0.1, "end": 0.5},
+                ],
+            },
+            {
+                "text": "ครับ",
+                "words": [{"word": "ครับ", "start": 0.6, "end": 0.9}],
+            },
+        ]
+        result = reconstruct_thai_words(segments)
+        self.assertEqual([w.get("seg") for w in result], [0, 1])
+
+    def test_group_words_by_turns_nearest_turn_fallback(self):
+        from app.pyannote_engine import group_words_by_turns
+
+        # Word lands in the pause gap between turns: must be attached to the
+        # nearest turn instead of being silently dropped.
+        words = [
+            {"word": "เอ่อ", "start": 2.05, "end": 2.15, "seg": 0},
+        ]
+        turns = [
+            {"start": 0.0, "end": 2.0, "speaker": "SPEAKER_00"},
+            {"start": 2.5, "end": 4.0, "speaker": "SPEAKER_01"},
+        ]
+        result = group_words_by_turns(words, turns)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["speaker"], "SPEAKER_00")
+        self.assertEqual(result[0]["text"], "เอ่อ")
+
+    def test_group_words_by_turns_fallback_out_of_tolerance_dropped(self):
+        from app.pyannote_engine import group_words_by_turns
+
+        # Word far from every turn stays dropped (fallback tolerance exceeded).
+        words = [{"word": "เอ่อ", "start": 30.0, "end": 30.2, "seg": 0}]
+        turns = [
+            {"start": 0.0, "end": 2.0, "speaker": "SPEAKER_00"},
+            {"start": 2.5, "end": 4.0, "speaker": "SPEAKER_01"},
+        ]
+        result = group_words_by_turns(words, turns)
+        self.assertEqual(result, [])
+
+    def test_group_words_by_turns_caps_stretched_tail_word(self):
+        from app.pyannote_engine import group_words_by_turns
+
+        # Real measured case: "วันนี้" starts at 3.32s (correct) but its end is
+        # stretched to 8.08s by faster-whisper's attention timestamps. Uncapped,
+        # max-overlap would hand it to turn 2. The duration cap clips it to
+        # 3.32 + 1.2 = 4.52s, so it stays with turn 1 where it is spoken.
+        words = [
+            {"word": "หลายคน", "start": 0.1, "end": 0.6, "seg": 0},
+            {"word": "บอกว่า", "start": 0.6, "end": 1.0, "seg": 0},
+            {"word": "ปัจจุบัน", "start": 1.0, "end": 1.5, "seg": 0},
+            {"word": "เนี่ยคือ", "start": 1.5, "end": 2.0, "seg": 0},
+            {"word": "AI", "start": 2.0, "end": 2.3, "seg": 0},
+            {"word": "ที่โง่ที่สุด", "start": 2.3, "end": 3.0, "seg": 0},
+            {"word": "และแพงที่สุด", "start": 3.0, "end": 3.14, "seg": 0},
+            {"word": "คือ", "start": 3.14, "end": 3.32, "seg": 0},
+            {"word": "วันนี้", "start": 3.32, "end": 8.08, "seg": 0},
+            {"word": "พรุ่งนี้", "start": 8.08, "end": 8.5, "seg": 1},
+        ]
+        turns = [
+            {"start": 0.0, "end": 3.49, "speaker": "SPEAKER_00"},
+            {"start": 7.878, "end": 10.257, "speaker": "SPEAKER_00"},
+        ]
+        result = group_words_by_turns(words, turns)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(
+            result[0]["text"], "หลายคนบอกว่าปัจจุบันเนี่ยคือAIที่โง่ที่สุดและแพงที่สุดคือวันนี้"
+        )
+        self.assertEqual(result[1]["text"], "พรุ่งนี้")
+        # The capped word end, not the 8.08s stretch, drives the segment end.
+        self.assertEqual(result[0]["end"], 4.52)  # 3.32 + 1.2
+
+    def test_group_words_by_turns_cap_preserves_genuine_pauses(self):
+        from app.pyannote_engine import group_words_by_turns
+
+        # A pause smaller than the cap threshold is a normal pause and the word
+        # durations (already short) are untouched.
+        words = [
+            {"word": "ครับ", "start": 1.0, "end": 1.8, "seg": 0},
+            {"word": "ยินดี", "start": 2.2, "end": 2.9, "seg": 0},
+        ]
+        turns = [{"start": 0.0, "end": 4.0, "speaker": "SPEAKER_00"}]
+        result = group_words_by_turns(words, turns)
+        self.assertEqual(result[0]["text"], "ครับยินดี")
+        self.assertEqual(result[0]["start"], 1.0)
+        self.assertEqual(result[0]["end"], 2.9)
+
+    def test_group_words_by_turns_keeps_fast_speaker_alternation(self):
+        from app.pyannote_engine import group_words_by_turns
+
+        # Genuine rapid A->B turn taking must never be flattened: words of the
+        # next turn are correctly bucketed there.
+        words = [
+            {"word": "สวัสดี", "start": 0.1, "end": 0.9, "seg": 0},
+            {"word": "ครับ", "start": 1.0, "end": 1.8, "seg": 0},
+            {"word": "ยินดี", "start": 2.2, "end": 2.9, "seg": 0},
+            {"word": "ที่รู้จัก", "start": 3.0, "end": 3.9, "seg": 0},
+        ]
+        turns = [
+            {"start": 0.0, "end": 2.0, "speaker": "SPEAKER_00"},
+            {"start": 2.1, "end": 4.0, "speaker": "SPEAKER_01"},
+        ]
+        result = group_words_by_turns(words, turns)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["speaker"], "SPEAKER_00")
+        self.assertEqual(result[1]["speaker"], "SPEAKER_01")
+        self.assertEqual(result[1]["text"], "ยินดีที่รู้จัก")
+
+    def test_cap_word_durations_limits_stretched_ends(self):
+        from app.pyannote_engine import cap_word_durations
+
+        words = [
+            {"word": "วันนี้", "start": 3.32, "end": 8.08},  # stretched +4.7s
+            {"word": "ปกติ", "start": 1.0, "end": 1.3},      # genuine, short
+        ]
+        result = cap_word_durations(words, max_word_duration=1.2)
+        self.assertEqual(result[0]["start"], 3.32)
+        self.assertEqual(result[0]["end"], 4.52)  # 3.32 + 1.2
+        self.assertEqual(result[1]["end"], 1.3)   # untouched
+        self.assertEqual(words[0]["end"], 8.08)   # input list not mutated
+
+    def test_reconstruct_thai_words_threads_segment_id(self):
+        from app.pyannote_engine import reconstruct_thai_words
+
+        segments = [
+            {
+                "text": "สวัสดี",
+                "start": 0.0,
+                "end": 2.0,
+                "words": [
+                    {"word": "ส", "start": 0.0, "end": 0.1},
+                    {"word": "วัสดี", "start": 0.1, "end": 0.5},
+                ],
+            },
+            {
+                "text": "ครับ",
+                "start": 2.5,
+                "end": 4.0,
+                "words": [{"word": "ครับ", "start": 0.6, "end": 0.9}],
+            },
+        ]
+        result = reconstruct_thai_words(segments)
+        self.assertEqual(result[0]["seg"], 0)
+        self.assertEqual(result[1]["seg"], 1)
 
 
 if __name__ == "__main__":
