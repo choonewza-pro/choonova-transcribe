@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'word-diar': 'Word-level + ผู้พูด',
     'word-only': 'Word-level เท่านั้น',
     'no-word': 'ไม่มี Word-level',
+    'sync': 'Sync /v1/audio/transcribe',
   };
 
   let running = false;

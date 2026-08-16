@@ -6,10 +6,13 @@ word-level and/or speaker detection) using the sample audio asset shipped in
 `assets/`, and produce a field-by-field pass/fail report.
 
 Design notes:
-- Three suites are supported, all exercising /v1/audio/transcribe/jobs:
-    'word-diar' (word-level + speaker, thai-whisper / whisperx),
-    'word-only' (word-level only, thai-whisper / whisper),
-    'no-word'   (no word-level / no speaker, typhoon / thai-whisper / whisper).
+- Four suites are supported:
+    'word-diar' (audio job, word-level + speaker, thai-whisper / whisperx),
+    'word-only' (audio job, word-level only, thai-whisper / whisper),
+    'no-word'   (audio job, no word-level / no speaker, typhoon / thai-whisper / whisper),
+    'sync'      (synchronous /v1/audio/transcribe, word-level + speaker across
+                 thai-whisper / whisper / typhoon — verifies the response
+                 `segments` field).
 - Async jobs are polled via GET status until a terminal status; the wait is
   bounded by configurable max-wait seconds. Cleanup DELETE always runs so a
   failed or timed-out job leaves no residue.
@@ -123,12 +126,13 @@ class ApiTestRunner:
           - 'word-diar': audio-job word-level + speaker detection (thai-whisper, whisperx)
           - 'word-only': audio-job word-level, no diarization (thai-whisper, whisper)
           - 'no-word': audio-job no word-level, no diarization (typhoon, thai-whisper, whisper)
+          - 'sync': synchronous /v1/audio/transcribe word-level + speaker (thai-whisper, whisper, typhoon)
         """
         self.check_assets()
         report = ApiTestReport(started_at=_now_iso())
 
         suite = (suite or "word-diar").lower().strip()
-        if suite not in ("word-diar", "word-only", "no-word"):
+        if suite not in ("word-diar", "word-only", "no-word", "sync"):
             suite = "word-diar"
 
         if on_start is not None:
@@ -161,6 +165,16 @@ class ApiTestRunner:
                     with_timestamps=False, enable_diarization=False, expect_words=False,
                     expect_speaker=False,
                     cleanup=cleanup, push=push, on_progress=on_progress,
+                )
+            elif suite == "sync":
+                await self._sync_family(
+                    models=(
+                        ("thai-whisper", "th", True, True, True, True),
+                        ("thai-whisper", "th", True, False, True, False),
+                        ("whisper", "th", True, False, True, False),
+                        ("typhoon", "th", False, False, False, False),
+                    ),
+                    push=push,
                 )
         finally:
             report.finished_at = _now_iso()
@@ -340,10 +354,89 @@ class ApiTestRunner:
         except Exception as e:  # noqa: BLE001
             return self._error_test(method, path, name, expected, [], specs, e)
 
+    # ------------------------------------------------------------- sync /v1/audio/transcribe family
+
+    async def _sync_family(
+        self,
+        models,
+        push: Callable[[EndpointTest], Any],
+    ) -> None:
+        """POST /v1/audio/transcribe synchronously per model and verify the
+        response `segments` field (word-level data / speaker labels)."""
+        for model, lang, with_timestamps, enable_diarization, expect_words, expect_speaker in models:
+            await push(await self._sync_transcribe(
+                model, lang, with_timestamps, enable_diarization,
+                expect_words, expect_speaker,
+            ))
+
+    async def _sync_transcribe(
+        self,
+        model: str,
+        lang: str,
+        with_timestamps: bool,
+        enable_diarization: bool,
+        expect_words: bool,
+        expect_speaker: bool,
+    ) -> EndpointTest:
+        method, path, expected, name = "POST", "/v1/audio/transcribe", 200, \
+            f"ถอดเสียงทันที word-level (model={model})"
+        with open(self._audio_path, "rb") as fh:
+            audio_bytes = fh.read()
+        inputs = [
+            InputParam("file", f"{AUDIO_ASSET_NAME} ({len(audio_bytes):,} bytes)", "file"),
+            InputParam("language", lang, "field"),
+            InputParam("model", model, "field"),
+            InputParam("with_timestamps", str(with_timestamps).lower(), "field"),
+            InputParam("enable_diarization", str(enable_diarization).lower(), "field"),
+        ]
+        specs = [
+            ("status", "str"), ("text", "str"), ("duration_seconds", "num"),
+            ("elapsed_seconds", "num"), ("rtf", "num"), ("segments", "any"),
+            ("model", "any"),
+        ]
+        # Diarization runs a full ASR + PyAnnote pass synchronously in the
+        # worker subprocess — allow generous room beyond the default 60s.
+        request_timeout = 180.0 if enable_diarization else 90.0
+        start = time.monotonic()
+        try:
+            status, body = await self._http.post_multipart(
+                path,
+                files={"file": (AUDIO_ASSET_NAME, audio_bytes, "audio/wav")},
+                data={
+                    "language": lang,
+                    "model": model,
+                    "with_timestamps": str(with_timestamps).lower(),
+                    "enable_diarization": str(enable_diarization).lower(),
+                },
+                headers=self._auth_headers(),
+                timeout=request_timeout,
+            )
+            checks = self._check_fields(body, specs)
+            if isinstance(body, dict):
+                checks.append(_value_check(
+                    "status==success", body.get("status") == "success", body.get("status")))
+                segments = body.get("segments")
+                has_words = self._segments_have_words(segments)
+                has_speaker = self._segments_have_speaker(segments)
+                if expect_words:
+                    checks.append(_value_check("segments มี word-level data", has_words, segments))
+                    if expect_speaker:
+                        checks.append(_value_check("มี speaker ใน segments", has_speaker, segments))
+                else:
+                    checks.append(_value_check("ไม่มี word-level data", not has_words, segments))
+            passed = status == expected and all(c.passed for c in checks)
+            return EndpointTest(method, path, name, status, passed,
+                                time.monotonic() - start, inputs, checks)
+        except Exception as e:  # noqa: BLE001
+            return self._error_test(method, path, name, expected, inputs, specs, e)
+
     # ------------------------------------------------------------- shared helpers
 
     def _expected_total(self, cleanup: bool, suite: str = "word-diar") -> int:
         """Predicted test count assuming the async job creates succeed."""
+        if suite == "sync":
+            # 4 models × sync transcribe request (no cleanup)
+            return 4
         if suite == "no-word":
             # 3 models × (create + status + cleanup)
             return 9 if cleanup else 6

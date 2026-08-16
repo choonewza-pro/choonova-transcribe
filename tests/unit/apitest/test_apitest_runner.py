@@ -1,4 +1,4 @@
-"""
+﻿"""
 Unit tests for ApiTestRunner using an in-memory FakeApiHttp.
 
 Follows the repo convention: stdlib unittest, no mocking library, simple
@@ -28,6 +28,7 @@ class FakeApiHttp(ApiHttpPort):
         self.responses = {}
         self.poll_sequences = {}
         self.post_sequences = {}
+        self.post_seq_status = {}
         self.calls = []
 
     def set(self, method, path, status, body):
@@ -36,14 +37,15 @@ class FakeApiHttp(ApiHttpPort):
     def set_poll(self, path, interim_bodies, terminal_body):
         self.poll_sequences[path] = list(interim_bodies) + [terminal_body]
 
-    def set_post_seq(self, path, bodies):
+    def set_post_seq(self, path, bodies, status=202):
         self.post_sequences[path] = list(bodies)
+        self.post_seq_status[path] = status
 
     async def post_multipart(self, path, files=None, data=None, headers=None, timeout=60.0):
         self.calls.append(("POST", path))
         seq = self.post_sequences.get(path)
         if seq:
-            return (202, seq.pop(0))
+            return (self.post_seq_status.get(path, 202), seq.pop(0))
         return self.responses.get(("POST", path), (200, {}))
 
     async def get(self, path, headers=None, timeout=60.0):
@@ -95,7 +97,7 @@ class ApiTestRunnerTest(unittest.TestCase):
             "status": "completed", "stage": "completed", "progress": 100.0,
             "total_chunks": 1, "completed_chunks": 1, "duration": 8.0,
             "processing_time": 1.0, "target_chunk_sec": 30.0, "max_chunk_sec": 60.0,
-            "result": {"text": "สวัสดีครับ", "segments": segments},
+            "result": {"text": "à¸ªà¸§à¸±à¸ªà¸”à¸µà¸„à¸£à¸±à¸š", "segments": segments},
             "error": None, "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:01Z", "started_at": "2026-01-01T00:00:00Z",
             "completed_at": "2026-01-01T00:00:01Z",
@@ -112,8 +114,8 @@ class ApiTestRunnerTest(unittest.TestCase):
     def test_word_diar_suite_passes_and_cleans_up(self):
         fake = FakeApiHttp()
         segments = [
-            {"speaker": "SPEAKER_00", "start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
-            {"speaker": "SPEAKER_01", "start": 3.0, "end": 6.0, "word": "ครับ", "text": "ครับ"},
+            {"speaker": "SPEAKER_00", "start": 0.0, "end": 3.0, "word": "à¸ªà¸§à¸±à¸ªà¸”à¸µ", "text": "à¸ªà¸§à¸±à¸ªà¸”à¸µ"},
+            {"speaker": "SPEAKER_01", "start": 3.0, "end": 6.0, "word": "à¸„à¸£à¸±à¸š", "text": "à¸„à¸£à¸±à¸š"},
         ]
         creates = [
             self._audio_create_body("wa1", "thai-whisper", "th", True),
@@ -135,8 +137,8 @@ class ApiTestRunnerTest(unittest.TestCase):
     def test_word_only_suite_passes_and_cleans_up(self):
         fake = FakeApiHttp()
         segments = [
-            {"start": 0.0, "end": 1.0, "word": "สวัสดี", "text": "สวัสดี"},
-            {"start": 1.0, "end": 2.0, "word": "ครับ", "text": "ครับ"},
+            {"start": 0.0, "end": 1.0, "word": "à¸ªà¸§à¸±à¸ªà¸”à¸µ", "text": "à¸ªà¸§à¸±à¸ªà¸”à¸µ"},
+            {"start": 1.0, "end": 2.0, "word": "à¸„à¸£à¸±à¸š", "text": "à¸„à¸£à¸±à¸š"},
         ]
         creates = [
             self._audio_create_body("wo1", "thai-whisper", "th", False),
@@ -178,10 +180,10 @@ class ApiTestRunnerTest(unittest.TestCase):
 
     def test_word_diar_suite_fails_when_speaker_missing(self):
         fake = FakeApiHttp()
-        # word-diar expects speaker labels; diarized job without speaker → fail
+        # word-diar expects speaker labels; diarized job without speaker â†’ fail
         segments = [
-            {"start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
-            {"start": 3.0, "end": 6.0, "word": "ครับ", "text": "ครับ"},
+            {"start": 0.0, "end": 3.0, "word": "à¸ªà¸§à¸±à¸ªà¸”à¸µ", "text": "à¸ªà¸§à¸±à¸ªà¸”à¸µ"},
+            {"start": 3.0, "end": 6.0, "word": "à¸„à¸£à¸±à¸š", "text": "à¸„à¸£à¸±à¸š"},
         ]
         creates = [
             self._audio_create_body("wf1", "thai-whisper", "th", True),
@@ -204,8 +206,8 @@ class ApiTestRunnerTest(unittest.TestCase):
 
     def test_no_word_suite_fails_when_words_present(self):
         fake = FakeApiHttp()
-        # whisper model unexpectedly returns word-level segments → should fail
-        segments = [{"start": 0.0, "end": 1.0, "word": "สวัสดี", "text": "สวัสดี"}]
+        # whisper model unexpectedly returns word-level segments â†’ should fail
+        segments = [{"start": 0.0, "end": 1.0, "word": "à¸ªà¸§à¸±à¸ªà¸”à¸µ", "text": "à¸ªà¸§à¸±à¸ªà¸”à¸µ"}]
         creates = [
             self._audio_create_body("nf1", "typhoon", "th", False),
             self._audio_create_body("nf2", "thai-whisper", "th", False),
@@ -224,10 +226,90 @@ class ApiTestRunnerTest(unittest.TestCase):
         self.assertEqual(report.passed_count, 8)
         self.assertEqual(report.failed_count, 1)
 
+    # -------------------------------------------------------- sync /v1/audio/transcribe suite
+
+    @staticmethod
+    def _sync_body(model, segments):
+        return {
+            "status": "success",
+            "text": "à¸ªà¸§à¸±à¸ªà¸”à¸µà¸„à¸£à¸±à¸š",
+            "duration_seconds": 8.0,
+            "elapsed_seconds": 1.2,
+            "rtf": 0.15,
+            "segments": segments,
+            "model": model,
+        }
+
+    def test_sync_suite_passes_with_segments(self):
+        fake = FakeApiHttp()
+        # POST /v1/audio/transcribe responses, in the runner's model order:
+        # thai-whisper+diar (word+speaker), thai-whisper (word), whisper (word), typhoon (no word)
+        fake.set_post_seq("/v1/audio/transcribe", [
+            self._sync_body("thai-whisper", [
+                {"speaker": "SPEAKER_00", "start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
+                {"speaker": "SPEAKER_01", "start": 3.0, "end": 6.0, "word": "ครับ", "text": "ครับ"},
+            ]),
+            self._sync_body("thai-whisper", [
+                {"start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
+            ]),
+            self._sync_body("whisper", [
+                {"start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
+            ]),
+            self._sync_body("typhoon", None),
+        ], status=200)
+
+        runner = self._runner(fake)
+        report = asyncio.run(runner.run(suite="sync", cleanup=True))
+        self.assertTrue(report.overall_passed)
+        self.assertEqual(report.total, 4)
+        self.assertEqual(report.passed_count, 4)
+
+    def test_sync_suite_fails_when_word_data_missing(self):
+        fake = FakeApiHttp()
+        # thai-whisper+diar returns segments WITHOUT word/text â†’ the
+        # expect_words checks must fail (segments field carries no word data).
+        fake.set_post_seq("/v1/audio/transcribe", [
+            self._sync_body("thai-whisper", [
+                {"speaker": "SPEAKER_00", "start": 0.0, "end": 3.0},
+            ]),
+            self._sync_body("thai-whisper", [
+                {"start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
+            ]),
+            self._sync_body("whisper", [
+                {"start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
+            ]),
+            self._sync_body("typhoon", None),
+        ], status=200)
+
+        runner = self._runner(fake)
+        report = asyncio.run(runner.run(suite="sync", cleanup=True))
+        self.assertFalse(report.overall_passed)
+        self.assertEqual(report.passed_count, 3)
+        self.assertEqual(report.failed_count, 1)
+
+    def test_sync_suite_expected_total(self):
+        fake = FakeApiHttp()
+        fake.set_post_seq("/v1/audio/transcribe", [
+            self._sync_body("thai-whisper", [
+                {"speaker": "SPEAKER_00", "start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
+            ]),
+            self._sync_body("thai-whisper", []),
+            self._sync_body("whisper", []),
+            self._sync_body("typhoon", None),
+        ], status=200)
+        runner = self._runner(fake)
+        totals = []
+
+        async def on_start(total):
+            totals.append(total)
+
+        asyncio.run(runner.run(suite="sync", cleanup=True, on_start=on_start))
+        self.assertEqual(totals, [4])
+
     def test_on_start_reports_predicted_total(self):
         fake = FakeApiHttp()
         segments = [
-            {"speaker": "SPEAKER_00", "start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
+            {"speaker": "SPEAKER_00", "start": 0.0, "end": 3.0, "word": "à¸ªà¸§à¸±à¸ªà¸”à¸µ", "text": "à¸ªà¸§à¸±à¸ªà¸”à¸µ"},
         ]
         creates = [
             self._audio_create_body("os1", "thai-whisper", "th", True),
@@ -253,7 +335,7 @@ class ApiTestRunnerTest(unittest.TestCase):
     def test_invalid_suite_falls_back_to_word_diar(self):
         fake = FakeApiHttp()
         segments = [
-            {"speaker": "SPEAKER_00", "start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
+            {"speaker": "SPEAKER_00", "start": 0.0, "end": 3.0, "word": "à¸ªà¸§à¸±à¸ªà¸”à¸µ", "text": "à¸ªà¸§à¸±à¸ªà¸”à¸µ"},
         ]
         creates = [
             self._audio_create_body("fb1", "thai-whisper", "th", True),
@@ -281,7 +363,7 @@ class ApiTestRunnerTest(unittest.TestCase):
     def test_run_records_into_registry(self):
         fake = FakeApiHttp()
         segments = [
-            {"speaker": "SPEAKER_00", "start": 0.0, "end": 3.0, "word": "สวัสดี", "text": "สวัสดี"},
+            {"speaker": "SPEAKER_00", "start": 0.0, "end": 3.0, "word": "à¸ªà¸§à¸±à¸ªà¸”à¸µ", "text": "à¸ªà¸§à¸±à¸ªà¸”à¸µ"},
         ]
         creates = [
             self._audio_create_body("ir1", "thai-whisper", "th", True),

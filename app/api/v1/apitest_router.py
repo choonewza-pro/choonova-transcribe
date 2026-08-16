@@ -112,6 +112,13 @@ async def tests_info(authenticated: bool = Depends(verify_api_key)) -> Dict[str,
             "hf_token_required": False,
             "vram": "~1.0-2.0 GB",
         },
+        "sync": {
+            "name": "Sync /v1/audio/transcribe (Word-level)",
+            "desc": "ทดสอบ /v1/audio/transcribe แบบรอผลทันที (test-audio-th.wav) — ตรวจฟิลด์ segments: word-level + ผู้พูด (Thai Whisper / Faster Whisper / Typhoon)",
+            "engine": "Thai Whisper / Faster-Whisper large-v3-turbo / Typhoon",
+            "hf_token_required": True,
+            "vram": "~1.0-2.5 GB",
+        },
     }
     repo = _status_repo()
     info["status"] = repo.get_suite_statuses()

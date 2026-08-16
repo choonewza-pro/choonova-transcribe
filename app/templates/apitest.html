@@ -91,6 +91,23 @@
           </div>
           <div class="suite-status" data-suite="word-diar" title="" style="font-size:0.8rem; font-weight:600; margin-top:0.6rem; color:var(--text-muted);">⚪ ยังไม่ได้ทดสอบ</div>
         </div>
+
+        <!-- Suite 4: Sync /v1/audio/transcribe -->
+        <div class="suite-card" data-suite="sync" style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem; cursor: pointer; transition: all 0.2s;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 1.1rem; font-weight: 700; color: #fff;">⚡ Sync /v1/audio/transcribe</span>
+            <span style="font-size: 0.75rem; background: rgba(0,242,254,0.15); color: #00f2fe; padding: 0.2rem 0.5rem; border-radius: 6px; font-weight: 600;">Sync</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5;">
+            ทดสอบ <code>/v1/audio/transcribe</code> แบบรอผลทันที กับ <code>test-audio-th.wav</code>
+            — ตรวจฟิลด์ <code>segments</code>: มี word-level (word/text) และ speaker ตามที่ร้องขอ (Thai Whisper / Faster Whisper / Typhoon ทีละ model)
+          </p>
+          <div style="font-size: 0.8rem; color: #a1a1aa; display: flex; flex-direction: column; gap: 0.25rem;">
+            <div>🤖 <strong>Models:</strong> thai-whisper (word + ผู้พูด) · thai-whisper · whisper · typhoon</div>
+            <div>🔑 <strong>HF_TOKEN:</strong> จำเป็น (กรณี diarization)</div>
+          </div>
+          <div class="suite-status" data-suite="sync" title="" style="font-size:0.8rem; font-weight:600; margin-top:0.6rem; color:var(--text-muted);">⚪ ยังไม่ได้ทดสอบ</div>
+        </div>
       </div>
 
       <div id="watchBanner" style="display:none; margin-bottom:1rem; padding:0.75rem 1rem;
