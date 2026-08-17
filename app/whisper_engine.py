@@ -23,12 +23,18 @@ def resolve_whisper_model_name() -> str:
     CT2 mirror `deepdml/faster-whisper-large-v3-turbo-ct2`.
     """
     base_name = WHISPER_MODEL.split("/")[-1]
-    if WHISPER_MODEL == "large-v3-turbo":
-        base_name = "faster-whisper-large-v3-turbo-ct2"
     local_candidates = [
         os.path.join(SERVICE_DIR, "models", f"faster-whisper-{base_name}"),
         os.path.join(SERVICE_DIR, "models", base_name),
     ]
+    if WHISPER_MODEL == "large-v3-turbo":
+        # Canonical folder name used by scripts/download_models.py for the CT2
+        # mirror (deepdml/faster-whisper-large-v3-turbo-ct2). Kept as an extra
+        # candidate so both the legacy unprefixed host folder and the canonical
+        # `-ct2` name resolve locally.
+        local_candidates.append(
+            os.path.join(SERVICE_DIR, "models", "faster-whisper-large-v3-turbo-ct2")
+        )
     for candidate in local_candidates:
         if os.path.isdir(candidate) and os.path.isfile(os.path.join(candidate, "model.bin")):
             logger.info(f"Using local Whisper model at: {candidate}")
