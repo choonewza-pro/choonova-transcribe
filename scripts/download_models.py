@@ -6,6 +6,19 @@ Used during Docker build and available for local offline preparation.
 import argparse
 import os
 import sys
+import time
+
+
+def _download_with_retry(func, *args, max_retries: int = 5, backoff: float = 5.0, **kwargs):
+    """Wrap a download function in a retry loop to handle transient network interruptions."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if attempt == max_retries:
+                raise
+            print(f"  ⚠️ Download attempt {attempt}/{max_retries} failed ({e}). Retrying in {backoff}s...")
+            time.sleep(backoff)
 
 
 def download_typhoon(model_dir: str = "/app/models", token: str | None = None) -> None:
@@ -18,7 +31,8 @@ def download_typhoon(model_dir: str = "/app/models", token: str | None = None) -
 
     token = token or os.getenv("HF_TOKEN", "").strip() or None
     os.makedirs(model_dir, exist_ok=True)
-    p = hf_hub_download(
+    p = _download_with_retry(
+        hf_hub_download,
         repo_id="typhoon-ai/typhoon-asr-realtime",
         filename="typhoon-asr-realtime.nemo",
         local_dir=model_dir,
@@ -60,7 +74,7 @@ def download_whisper(model_dir: str = "/app/models", model_name: str = "large-v3
 
     from huggingface_hub import snapshot_download
 
-    p = snapshot_download(repo_id=repo_id, local_dir=local_dir, token=token)
+    p = _download_with_retry(snapshot_download, repo_id=repo_id, local_dir=local_dir, token=token)
     print()
     print("=" * 70)
     print("  ✅ WHISPER MODEL DOWNLOAD COMPLETE — " + repo_id)
@@ -83,7 +97,7 @@ def download_whisper_thai(model_dir: str = "/app/models", model_name: str | None
 
     from huggingface_hub import snapshot_download
 
-    p = snapshot_download(repo_id=repo_id, local_dir=local_dir, token=token)
+    p = _download_with_retry(snapshot_download, repo_id=repo_id, local_dir=local_dir, token=token)
     print()
     print("=" * 70)
     print("  ✅ THAI WHISPER MODEL DOWNLOAD COMPLETE — " + repo_id)
@@ -105,9 +119,9 @@ def download_pyannote(model_dir: str = "/app/models", token: str | None = None) 
     token = token or os.getenv("HF_TOKEN", "").strip() or None
     if token:
         try:
-            p1 = snapshot_download(repo_id="pyannote/speaker-diarization-3.1", token=token)
-            p2 = snapshot_download(repo_id="pyannote/segmentation-3.0", token=token)
-            p3 = snapshot_download(repo_id="speechbrain/spkrec-ecapa-voxceleb", token=token)
+            p1 = _download_with_retry(snapshot_download, repo_id="pyannote/speaker-diarization-3.1", token=token)
+            p2 = _download_with_retry(snapshot_download, repo_id="pyannote/segmentation-3.0", token=token)
+            p3 = _download_with_retry(snapshot_download, repo_id="speechbrain/spkrec-ecapa-voxceleb", token=token)
             print()
             print("=" * 70)
             print("  ✅ PYANNOTE DIARIZATION MODELS DOWNLOAD COMPLETE")
