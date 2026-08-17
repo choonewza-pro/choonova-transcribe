@@ -13,6 +13,23 @@ ALLOWED_EXTENSIONS = {
     "wav", "mp3", "m4a", "ogg", "flac", "mp4", "mkv", "mov", "webm", "aac"
 }
 
+def _is_isobmff_container(header_bytes: bytes) -> bool:
+    """
+    Detect an ISO-BMFF (MP4/M4A family) container by scanning for a `ftyp` box.
+
+    `filetype` only recognizes a few `ftyp` brands (M4A / isom / mp42), so
+    real-world m4a files from phone recorders / audio tools that use other
+    brands (M4B, M4P, M4V, 3gp4, qt, ...) or carry a leading `free`/`wide` box
+    before the `ftyp` box would otherwise be rejected at the magic-byte layer
+    even though ffprobe (the deep validation layer that runs next) accepts them.
+    """
+    scan_limit = min(len(header_bytes), 64)
+    for offset in range(0, scan_limit - 4, 4):
+        if header_bytes[offset:offset + 4] == b"ftyp":
+            return True
+    return False
+
+
 def validate_magic_bytes(header_bytes: bytes) -> str:
     """
     Check the magic bytes of the file to ensure it's an audio or video file.
@@ -20,6 +37,10 @@ def validate_magic_bytes(header_bytes: bytes) -> str:
     """
     kind = filetype.guess(header_bytes)
     if kind is None:
+        # Fallback for ISO-BMFF (MP4/M4A) containers that filetype's brand list misses.
+        if _is_isobmff_container(header_bytes):
+            return "audio/mp4"
+
         # Fallback for raw MP3 (MPEG Audio Layer I/II/III) or ADTS AAC frame sync headers
         # Frame sync is 11 or 12 set bits: 0xFF followed by top 3 bits set (0xE0)
         if len(header_bytes) >= 2 and header_bytes[0] == 0xFF and (header_bytes[1] & 0xE0) == 0xE0:

@@ -190,7 +190,23 @@ class TyphoonASREngine:
         try:
             y, sr = sf.read(input_path, dtype="float32")
         except Exception:
-            y, sr = librosa.load(input_path, sr=None)
+            try:
+                y, sr = librosa.load(input_path, sr=None)
+            except Exception:
+                # libsndfile (the backend of soundfile/librosa) does not support
+                # the MP4/AAC container family (m4a, mp4, ...). Transcode to a
+                # 16kHz mono WAV via ffmpeg and read that instead.
+                converted_fd, converted_path = tempfile.mkstemp(
+                    suffix=".wav", prefix="converted_"
+                )
+                os.close(converted_fd)
+                try:
+                    from app.audio_utils import extract_audio_ffmpeg
+                    extract_audio_ffmpeg(input_path, converted_path)
+                    y, sr = sf.read(converted_path, dtype="float32")
+                finally:
+                    if os.path.exists(converted_path):
+                        os.remove(converted_path)
 
         if y is None or len(y) == 0:
             raise ValueError("Failed to load audio file or file is empty.")
