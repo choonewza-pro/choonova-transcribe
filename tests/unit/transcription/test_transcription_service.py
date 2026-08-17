@@ -275,11 +275,44 @@ class TestTranscriptionService(unittest.TestCase):
         self.assertFalse(req.with_timestamps)
 
     def test_prepare_request_auto_enables_diarization_when_speakers_set(self):
-        req = TranscriptionService.prepare_request(
-            language="th", model="thai-whisper", num_speakers=2
-        )
-        self.assertTrue(req.enable_diarization)
-        self.assertEqual(req.num_speakers, 2)
+        import app.config as config_module
+        original = config_module.DIARIZATION_ENABLED
+        config_module.DIARIZATION_ENABLED = True
+        try:
+            req = TranscriptionService.prepare_request(
+                language="th", model="thai-whisper", num_speakers=2
+            )
+            self.assertTrue(req.enable_diarization)
+            self.assertEqual(req.num_speakers, 2)
+        finally:
+            config_module.DIARIZATION_ENABLED = original
+
+    def test_prepare_request_rejects_diarization_when_disabled(self):
+        import app.config as config_module
+        original = config_module.DIARIZATION_ENABLED
+        config_module.DIARIZATION_ENABLED = False
+        try:
+            with self.assertRaises(ValidationException) as ctx:
+                TranscriptionService.prepare_request(
+                    language="th", model="thai-whisper",
+                    enable_diarization=True,
+                )
+            self.assertIn("disabled", ctx.exception.message)
+        finally:
+            config_module.DIARIZATION_ENABLED = original
+
+    def test_prepare_request_rejects_diarization_when_auto_enabled_but_switch_off(self):
+        import app.config as config_module
+        original = config_module.DIARIZATION_ENABLED
+        config_module.DIARIZATION_ENABLED = False
+        try:
+            with self.assertRaises(ValidationException) as ctx:
+                TranscriptionService.prepare_request(
+                    language="th", model="thai-whisper", num_speakers=2
+                )
+            self.assertIn("disabled", ctx.exception.message)
+        finally:
+            config_module.DIARIZATION_ENABLED = original
 
     def test_prepare_request_rejects_model_not_in_matrix(self):
         with self.assertRaises(ValidationException) as ctx:
@@ -290,8 +323,10 @@ class TestTranscriptionService(unittest.TestCase):
 
     def test_prepare_request_whisperx_requires_hf_token(self):
         import app.config as config_module
-        original = config_module.HF_TOKEN
+        original_token = config_module.HF_TOKEN
+        original_diar = config_module.DIARIZATION_ENABLED
         config_module.HF_TOKEN = ""
+        config_module.DIARIZATION_ENABLED = True
         try:
             with self.assertRaises(ValidationException) as ctx:
                 TranscriptionService.prepare_request(
@@ -300,7 +335,8 @@ class TestTranscriptionService(unittest.TestCase):
                 )
             self.assertIn("HF_TOKEN", ctx.exception.message)
         finally:
-            config_module.HF_TOKEN = original
+            config_module.HF_TOKEN = original_token
+            config_module.DIARIZATION_ENABLED = original_diar
 
     # ------------------------------------------------------------------
     # ensure_capacity — queue/disk guards before persisting uploads

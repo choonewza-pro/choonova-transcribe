@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const modelSelect = document.getElementById('modelSelect');
 
   if (window.TranscribeCommon) {
+    window.TranscribeCommon.applyDiarizationAvailability(diarizationCheck);
     window.TranscribeCommon.bindModelSelect(modelSelect, languageSelect, diarizationCheck);
   }
 

@@ -1,7 +1,14 @@
 // Shared helpers for the audio transcription pages (upload page + audio jobs page).
 // Load this BEFORE the page-specific script.
 window.TranscribeCommon = (function () {
+  function isDiarizationAvailable() {
+    return !document.body || document.body.dataset.diarizationEnabled !== 'false';
+  }
+
   function modelOptionsFor(lang, diarization) {
+    if (diarization && !isDiarizationAvailable()) {
+      diarization = false;
+    }
     if (lang === 'th') {
       if (diarization) {
         return [
@@ -40,6 +47,7 @@ window.TranscribeCommon = (function () {
   }
 
   function bindModelSelect(modelSelect, languageSelect, diarizationCheck) {
+    applyDiarizationAvailability(diarizationCheck);
     if (!modelSelect) return;
     if (languageSelect) {
       languageSelect.addEventListener('change', () => populateModelOptions(modelSelect, languageSelect, diarizationCheck));
@@ -48,6 +56,22 @@ window.TranscribeCommon = (function () {
       diarizationCheck.addEventListener('change', () => populateModelOptions(modelSelect, languageSelect, diarizationCheck));
     }
     populateModelOptions(modelSelect, languageSelect, diarizationCheck);
+  }
+
+  function applyDiarizationAvailability(diarizationCheck) {
+    const available = isDiarizationAvailable();
+    if (diarizationCheck) {
+      if (!available) {
+        diarizationCheck.checked = false;
+        diarizationCheck.disabled = true;
+      } else {
+        diarizationCheck.disabled = false;
+      }
+    }
+    const options = document.getElementById('diarizationOptions');
+    if (options && !available) {
+      options.style.display = 'none';
+    }
   }
 
   async function copyText(text, btn, opts) {
@@ -143,6 +167,8 @@ window.TranscribeCommon = (function () {
   }
 
   return {
+    isDiarizationAvailable: isDiarizationAvailable,
+    applyDiarizationAvailability: applyDiarizationAvailability,
     modelOptionsFor: modelOptionsFor,
     populateModelOptions: populateModelOptions,
     bindModelSelect: bindModelSelect,

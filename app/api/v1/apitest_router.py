@@ -28,7 +28,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.config import (
     APITEST_POLL_INTERVAL_SEC,
     APITEST_TRANSCRIBE_MAX_WAIT_SEC,
+    DIARIZATION_ENABLED,
     GATEWAY_API_KEY,
+    HF_TOKEN,
     PORT,
     SERVICE_DIR,
 )
@@ -90,6 +92,8 @@ async def tests_info(authenticated: bool = Depends(verify_api_key)) -> Dict[str,
         "transcribe_max_wait_sec": APITEST_TRANSCRIBE_MAX_WAIT_SEC,
         "poll_interval_sec": APITEST_POLL_INTERVAL_SEC,
     }
+    info["diarization_enabled"] = DIARIZATION_ENABLED
+    info["hf_token_configured"] = bool(HF_TOKEN)
     info["suites"] = {
         "word-diar": {
             "name": "Word-level + ผู้พูด (Audio Job)",
@@ -190,6 +194,16 @@ async def run_self_test(
         runner.check_assets()
     except AssetNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    if suite == "word-diar" and not DIARIZATION_ENABLED:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Speaker Diarization is disabled on this server. "
+                "Set DIARIZATION_ENABLED=true and configure HF_TOKEN "
+                "(or place local PyAnnote models in models/) to run the 'word-diar' suite."
+            ),
+        )
 
     run_id = str(uuid.uuid4())
     run_registry.start(run_id=run_id, suite=suite, cleanup=cleanup)

@@ -63,11 +63,16 @@ class FakeApiHttp(ApiHttpPort):
 class ApiTestRunnerTest(unittest.TestCase):
 
     def setUp(self):
+        import app.config as config_module
+        self._original_diar = config_module.DIARIZATION_ENABLED
+        config_module.DIARIZATION_ENABLED = True
         self._tmp = tempfile.mkdtemp()
         with open(os.path.join(self._tmp, "test-audio-th.wav"), "wb") as f:
             f.write(b"\x00" * 256)
 
     def tearDown(self):
+        import app.config as config_module
+        config_module.DIARIZATION_ENABLED = self._original_diar
         shutil.rmtree(self._tmp, ignore_errors=True)
 
     def _runner(self, fake, **kw):
@@ -414,8 +419,36 @@ class ApiTestRunnerTest(unittest.TestCase):
         assets = info["assets"]
         self.assertTrue(assets["test-audio-th.wav"]["exists"])
         self.assertEqual(assets["test-audio-th.wav"]["size_bytes"], 256)
-        # The video asset is no longer used by any suite.
+# The video asset is no longer used by any suite.
         self.assertNotIn("The-Frog-and-The-Ox.mp4", assets)
+
+    def test_sync_models_drop_diar_cards_when_disabled(self):
+        import app.config as config_module
+        original = config_module.DIARIZATION_ENABLED
+        config_module.DIARIZATION_ENABLED = False
+        try:
+            runner = self._runner(FakeApiHttp())
+            models = runner._sync_models()
+            self.assertEqual(len(models), 3)
+            self.assertTrue(all(not m[3] for m in models))
+            self.assertEqual(runner._expected_total(cleanup=True, suite="sync"), 3)
+        finally:
+            config_module.DIARIZATION_ENABLED = original
+
+    def test_sync_models_keep_diar_cards_when_enabled(self):
+        runner = self._runner(FakeApiHttp())
+        self.assertEqual(len(runner._sync_models()), 4)
+
+    def test_word_diar_suite_raises_when_diarization_disabled(self):
+        import app.config as config_module
+        original = config_module.DIARIZATION_ENABLED
+        config_module.DIARIZATION_ENABLED = False
+        try:
+            runner = self._runner(FakeApiHttp())
+            with self.assertRaises(ValueError):
+                asyncio.run(runner.run(suite="word-diar", cleanup=True))
+        finally:
+            config_module.DIARIZATION_ENABLED = original
 
 
 if __name__ == "__main__":

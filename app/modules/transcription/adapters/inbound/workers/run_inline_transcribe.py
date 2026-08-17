@@ -71,6 +71,12 @@ def run_transcription(
     duration = 0.0
 
     if enable_diarization:
+        from app.config import DIARIZATION_ENABLED
+        if not DIARIZATION_ENABLED:
+            raise RuntimeError(
+                "Speaker Diarization is disabled (DIARIZATION_ENABLED=false). "
+                "Job cannot be processed."
+            )
         from app.audio_utils import extract_audio_ffmpeg, get_audio_duration_ffmpeg
         temp_dir = os.path.dirname(input_path)
         temp_wav_path = os.path.join(temp_dir, "diarization_input.wav")

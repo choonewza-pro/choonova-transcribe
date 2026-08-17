@@ -113,8 +113,24 @@ WHISPER_THAI_COMPUTE_TYPE = os.getenv("WHISPER_THAI_COMPUTE_TYPE", "int8_float16
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip() or None
 SUPPORTED_LANGUAGES = ("th", "en", "auto")
 
+
+def _resolve_diarization_enabled(hf_token, env_value) -> bool:
+    """Resolve the speaker-diarization master switch.
+
+    An explicit non-blank DIARIZATION_ENABLED env value wins. When unset or
+    blank, diarization is auto-disabled unless HF_TOKEN is configured
+    (PyAnnote/WhisperX diarization need HF_TOKEN or local models). Pure
+    function so it can be unit-tested.
+    """
+    if env_value is not None and env_value.strip():
+        return env_value.lower() in ("true", "1", "yes")
+    return bool(hf_token)
+
+
 # Speaker Diarization configurations (PyAnnote 3.1 & WhisperX)
-DIARIZATION_ENABLED = os.getenv("DIARIZATION_ENABLED", "true").lower() in ("true", "1", "yes")
+# Master switch enforced across API, workers, web UI, and self-test. Auto-off
+# when HF_TOKEN is missing so a CPU/no-token install stays fully usable.
+DIARIZATION_ENABLED = _resolve_diarization_enabled(HF_TOKEN, os.getenv("DIARIZATION_ENABLED"))
 DIARIZATION_MODEL = os.getenv("DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1")
 DIARIZATION_MIN_SPEAKERS = int(os.getenv("DIARIZATION_MIN_SPEAKERS", "") or 0) or None
 DIARIZATION_MAX_SPEAKERS = int(os.getenv("DIARIZATION_MAX_SPEAKERS", "") or 0) or None

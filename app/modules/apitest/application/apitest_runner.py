@@ -65,6 +65,14 @@ class AssetNotFoundError(FileNotFoundError):
 class ApiTestRunner:
     """Run one self-test pass and aggregate the per-endpoint results."""
 
+    # (model, lang, with_timestamps, enable_diarization, expect_words, expect_speaker)
+    SYNC_MODELS = (
+        ("thai-whisper", "th", True, True, True, True),
+        ("thai-whisper", "th", True, False, True, False),
+        ("whisper", "th", True, False, True, False),
+        ("typhoon", "th", False, False, False, False),
+    )
+
     def __init__(
         self,
         http: ApiHttpPort,
@@ -146,6 +154,11 @@ class ApiTestRunner:
 
         try:
             if suite == "word-diar":
+                if not self._diarization_enabled():
+                    raise ValueError(
+                        "Speaker Diarization is disabled on this server "
+                        "(DIARIZATION_ENABLED=false). Cannot run the 'word-diar' suite."
+                    )
                 await self._audio_word_family(
                     models=(("thai-whisper", "th"), ("whisperx", "auto")),
                     with_timestamps=True, enable_diarization=True, expect_words=True,
@@ -168,17 +181,26 @@ class ApiTestRunner:
                 )
             elif suite == "sync":
                 await self._sync_family(
-                    models=(
-                        ("thai-whisper", "th", True, True, True, True),
-                        ("thai-whisper", "th", True, False, True, False),
-                        ("whisper", "th", True, False, True, False),
-                        ("typhoon", "th", False, False, False, False),
-                    ),
+                    models=self._sync_models(),
                     push=push,
                 )
         finally:
             report.finished_at = _now_iso()
         return report
+
+    # ------------------------------------------------------------- diarization availability
+
+    @staticmethod
+    def _diarization_enabled() -> bool:
+        """Current speaker-diarization master switch (DIARIZATION_ENABLED)."""
+        from app.config import DIARIZATION_ENABLED
+        return DIARIZATION_ENABLED
+
+    def _sync_models(self):
+        """Sync-suite cards; diarization cards are dropped when the switch is off."""
+        if self._diarization_enabled():
+            return list(self.SYNC_MODELS)
+        return [m for m in self.SYNC_MODELS if not m[3]]
 
     # ------------------------------------------------------------- audio word-level job family
 
@@ -435,8 +457,8 @@ class ApiTestRunner:
     def _expected_total(self, cleanup: bool, suite: str = "word-diar") -> int:
         """Predicted test count assuming the async job creates succeed."""
         if suite == "sync":
-            # 4 models × sync transcribe request (no cleanup)
-            return 4
+            # N model cards × sync transcribe request (no cleanup)
+            return len(self._sync_models())
         if suite == "no-word":
             # 3 models × (create + status + cleanup)
             return 9 if cleanup else 6

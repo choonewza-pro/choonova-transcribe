@@ -27,6 +27,8 @@ from app.core.config import (
     GATEWAY_API_KEY_IS_DEFAULT,
     ALLOW_ACCESS_TRANSCRIBE_HISTORY,
     ALLOW_ACCESS_COMPRESS_HISTORY,
+    DIARIZATION_ENABLED,
+    HF_TOKEN,
 )
 
 router = APIRouter(tags=["Web Views"])
@@ -39,6 +41,14 @@ def _compress_retention_summary() -> dict:
     from app.modules.compression.application.compression_service import CompressionService
     svc = CompressionService(SQLiteCompressRepository())
     return svc.get_retention_summary()
+
+
+def _diarization_flags() -> dict:
+    """Frontend-facing speaker-diarization availability flags."""
+    return {
+        "diarization_enabled": DIARIZATION_ENABLED,
+        "hf_token_configured": bool(HF_TOKEN),
+    }
 
 
 def check_history_access(request: Request, history_type: str) -> tuple[bool, str | None]:
@@ -82,6 +92,7 @@ async def home_page(request: Request):
             "allow_access_transcribe_history": ALLOW_ACCESS_TRANSCRIBE_HISTORY,
             "allow_access_compress_history": ALLOW_ACCESS_COMPRESS_HISTORY,
             "using_default_api_key": GATEWAY_API_KEY_IS_DEFAULT,
+            **_diarization_flags(),
         },
     )
 
@@ -94,6 +105,7 @@ async def audio_transcribe_page(request: Request):
         context={
             "max_audio_upload_mb": MAX_AUDIO_UPLOAD_SIZE_MB,
             "max_audio_duration_sec": MAX_AUDIO_DURATION_SEC,
+            **_diarization_flags(),
         },
     )
 
@@ -108,6 +120,7 @@ async def audio_jobs_page(request: Request):
             "max_audio_duration_sec": MAX_AUDIO_DURATION_SEC,
             "max_concurrent": TRANSCRIBE_MAX_CONCURRENT,
             "max_queued": TRANSCRIBE_MAX_QUEUED,
+            **_diarization_flags(),
         },
     )
 
@@ -127,6 +140,7 @@ async def media_transcribe_page(request: Request):
             "max_media_duration_sec": MAX_MEDIA_DURATION_SEC,
             "max_concurrent": TRANSCRIBE_MAX_CONCURRENT,
             "max_queued": TRANSCRIBE_MAX_QUEUED,
+            **_diarization_flags(),
         },
     )
 

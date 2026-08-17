@@ -58,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Model matrix (shared) ---
   if (common) {
+    common.applyDiarizationAvailability(diarizationCheck);
     common.bindModelSelect(modelSelect, languageSelect, diarizationCheck);
   }
   if (diarizationCheck && diarizationOptions) {

@@ -203,6 +203,22 @@ class TranscriptionService:
         from app.engine_router import normalize_language
         return normalize_language(language)
 
+    @staticmethod
+    def ensure_diarization_allowed(enable_diarization: bool) -> None:
+        """Reject speaker-diarization requests when the master switch is off.
+
+        Imported inside the method (not at module top) so tests can monkeypatch
+        ``app.config.DIARIZATION_ENABLED`` and get the current value at call time.
+        """
+        if enable_diarization:
+            from app.config import DIARIZATION_ENABLED
+            if not DIARIZATION_ENABLED:
+                raise ValidationException(
+                    "Speaker Diarization is disabled on this server. "
+                    "Set DIARIZATION_ENABLED=true and configure HF_TOKEN "
+                    "(or place local PyAnnote models in models/) to enable speaker labels."
+                )
+
     @classmethod
     def prepare_request(
         cls,
@@ -238,6 +254,8 @@ class TranscriptionService:
 
         if num_speakers or min_speakers or max_speakers:
             enable_diarization = True
+
+        cls.ensure_diarization_allowed(enable_diarization)
 
         from app.model_selection import resolve_transcription_model
         try:

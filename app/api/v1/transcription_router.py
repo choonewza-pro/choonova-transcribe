@@ -415,6 +415,8 @@ async def create_transcription_job(
     if num_speakers or min_speakers or max_speakers:
         enable_diarization = True
 
+    TranscriptionService.ensure_diarization_allowed(enable_diarization)
+
     if target_chunk_sec is None or max_chunk_sec is None:
         if lang == "th":
             target_chunk_sec = target_chunk_sec or TRANSCRIBE_TYPHOON_TARGET_CHUNK_DURATION_SEC

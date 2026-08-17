@@ -36,12 +36,14 @@ document.addEventListener('DOMContentLoaded', () => {
   let watchTimer = null;
   let renderedOrders = new Set();
   let suiteTestStatus = {};
+  let diarizationEnabled = true;
 
   // Suite Card Click Handling
   const suiteCards = document.querySelectorAll('.suite-card');
   suiteCards.forEach(card => {
     card.addEventListener('click', () => {
       if (running) return;
+      if (card.dataset.disabled) return;
       selectedSuite = card.dataset.suite || 'no-word';
       suiteCards.forEach(c => {
         c.classList.remove('active');
@@ -148,8 +150,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const d = info.defaults || {}, l = info.limits || {};
     limitPanel.innerHTML =
       `⚙️ ภาษาที่ทดสอบ: <code>${escapeText(d.language || 'th')}</code>`
-      + ` · ขีดจำกัด: transcribe <code>${l.transcribe_max_wait_sec}s</code>`;
+      + ` · ขีดจำกัด: transcribe <code>${l.transcribe_max_wait_sec}s</code>`
+      + (info.diarization_enabled === false ? ' · สถานะ Diarization: <code>ปิดอยู่</code>' : '');
+    diarizationEnabled = info.diarization_enabled !== false;
+    applyDiarizationAvailability();
     renderSuiteStatuses(info);
+  }
+
+  function applyDiarizationAvailability() {
+    const card = document.querySelector('.suite-card[data-suite="word-diar"]');
+    if (!card) return;
+    if (diarizationEnabled) {
+      card.dataset.disabled = '';
+      card.style.opacity = '';
+      card.style.cursor = '';
+      const note = card.querySelector('.diar-disabled-note');
+      if (note) note.remove();
+      return;
+    }
+    card.dataset.disabled = 'true';
+    card.style.opacity = '0.55';
+    card.style.cursor = 'not-allowed';
+    if (card.querySelector('.diar-disabled-note')) return;
+    const note = document.createElement('div');
+    note.className = 'diar-disabled-note';
+    note.style.cssText = 'font-size:0.78rem; color:#ff9d2e; border:1px solid rgba(255,157,46,0.4);'
+      + ' border-radius:6px; padding:0.35rem 0.5rem; margin-top:0.6rem; line-height:1.4;';
+    note.textContent = '⛔ ปิดอยู่ — Diarization ต้องมี HF_TOKEN (หรือวาง PyAnnote models ใน models/) และเปิด DIARIZATION_ENABLED=true';
+    card.appendChild(note);
   }
 
   function renderSuiteStatuses(info) {
@@ -475,6 +503,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function runTest() {
     if (running) return;
+    if (selectedSuite === 'word-diar' && !diarizationEnabled) {
+      summaryCard.style.display = 'block';
+      summaryCard.innerHTML = '<h3 style="color:#ff9d2e;">⚠️ ไม่สามารถรันชุด Word-level + ผู้พูด ได้</h3>'
+        + '<p style="color:var(--text-muted);">Speaker Diarization ถูกปิดบนเซิร์ฟเวอร์นี้ — ต้องตั้งค่า HF_TOKEN และเปิด DIARIZATION_ENABLED=true ก่อน</p>';
+      return;
+    }
     const doCleanup = !!cleanupToggle.checked;
     try {
       const res = await fetch(`/v1/tests/run?suite=${selectedSuite}&cleanup=${doCleanup}`, {

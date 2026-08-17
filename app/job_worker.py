@@ -271,6 +271,14 @@ async def process_transcription_job(
         if job and job.get("enable_diarization"):
             enable_diarization = True
 
+        if enable_diarization:
+            from app.config import DIARIZATION_ENABLED
+            if not DIARIZATION_ENABLED:
+                raise RuntimeError(
+                    "Speaker Diarization is disabled (DIARIZATION_ENABLED=false). "
+                    "Job cannot be processed."
+                )
+
         num_speakers = job.get("num_speakers") if job else None
         min_speakers = job.get("min_speakers") if job else None
         max_speakers = job.get("max_speakers") if job else None

@@ -40,6 +40,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const enableDiarizationCheck = document.getElementById('enableDiarization');
   const diarizationOptions = document.getElementById('diarizationOptions');
 
+  // Speaker Diarization master switch (DIARIZATION_ENABLED / HF_TOKEN) from the page.
+  const diarizationAvailable = !document.body || document.body.dataset.diarizationEnabled !== 'false';
+  if (!diarizationAvailable && enableDiarizationCheck) {
+    enableDiarizationCheck.checked = false;
+    enableDiarizationCheck.disabled = true;
+  }
+  if (!diarizationAvailable && diarizationOptions) {
+    diarizationOptions.style.display = 'none';
+  }
+
   if (enableDiarizationCheck && diarizationOptions) {
     enableDiarizationCheck.addEventListener('change', () => {
       diarizationOptions.style.display = enableDiarizationCheck.checked ? 'flex' : 'none';
