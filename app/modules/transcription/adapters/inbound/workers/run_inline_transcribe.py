@@ -105,7 +105,8 @@ def run_transcription(
         else:
             from app.whisperx_engine import transcribe_and_diarize_whisperx
             wx_res = transcribe_and_diarize_whisperx(
-                temp_wav_path, language, num_speakers, min_speakers, max_speakers
+                temp_wav_path, language, num_speakers, min_speakers, max_speakers,
+                model=model,
             )
             text = wx_res.get("text", "")
             timestamps = wx_res.get("segments", [])

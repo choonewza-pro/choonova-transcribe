@@ -14,8 +14,8 @@ class TestResolveTranscriptionModel(unittest.TestCase):
                 resolve_transcription_model("th", False, model), model
             )
 
-    def test_th_with_diarization_allows_thai_whisper_and_whisperx(self):
-        for model in ("thai-whisper", "whisperx"):
+    def test_th_with_diarization_allows_three_models(self):
+        for model in ("thai-whisper", "whisperx", "whisperx-thai"):
             self.assertEqual(
                 resolve_transcription_model("th", True, model), model
             )
@@ -77,6 +77,7 @@ class TestResolveTranscriptionModel(unittest.TestCase):
             resolve_transcription_model("th", True, None)
         self.assertIn("thai-whisper", str(ctx.exception))
         self.assertIn("whisperx", str(ctx.exception))
+        self.assertIn("whisperx-thai", str(ctx.exception))
 
     def test_invalid_combo_error_mentions_allowed_models(self):
         with self.assertRaises(ValueError) as ctx:
@@ -84,6 +85,7 @@ class TestResolveTranscriptionModel(unittest.TestCase):
         msg = str(ctx.exception)
         self.assertIn("thai-whisper", msg)
         self.assertIn("whisperx", msg)
+        self.assertIn("whisperx-thai", msg)
 
 
 if __name__ == "__main__":

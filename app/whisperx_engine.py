@@ -15,6 +15,7 @@ from app.core.config import (
     HF_TOKEN,
     WHISPERX_MODEL,
     WHISPER_COMPUTE_TYPE,
+    WHISPER_THAI_COMPUTE_TYPE,
     DIARIZATION_MODEL,
     DIARIZATION_MIN_SPEAKERS,
     DIARIZATION_MAX_SPEAKERS,
@@ -75,6 +76,24 @@ def _segment_words(seg: Dict[str, Any], lang: str) -> List[Dict[str, Any]]:
     ]
 
 
+def _select_asr_model(model: Optional[str], language: Optional[str]) -> tuple:
+    """Choose the WhisperX ASR model + compute type for a request.
+
+    ``whisperx-thai`` runs WhisperX with the Thai-tuned faster-whisper CT2 model
+    (``WHISPER_THAI_MODEL``, local baked copy preferred), which transcribes
+    Thai more accurately than the generic ``WHISPERX_MODEL`` (large-v3-turbo)
+    while keeping WhisperX's forced-alignment word timestamps. Any other model
+    selection keeps the default WhisperX ASR.
+
+    Returns ``(model_name, compute_type)``.
+    """
+    if (model or "").strip().lower() == "whisperx-thai":
+        from app.whisper_thai_engine import resolve_thai_model_name
+
+        return resolve_thai_model_name(), WHISPER_THAI_COMPUTE_TYPE
+    return WHISPERX_MODEL, WHISPER_COMPUTE_TYPE
+
+
 class WhisperXDiarizer:
     """
     Manager for WhisperX (ASR + Forced Alignment + PyAnnote Diarization).
@@ -90,6 +109,8 @@ class WhisperXDiarizer:
         self.device = device or DEVICE
         self.compute_type = compute_type or WHISPER_COMPUTE_TYPE
         self._asr_model = None
+        self._asr_model_name = None
+        self._asr_compute_type = None
         self._diarize_pipeline = None
         self._last_used_time = 0.0
         self._is_loading = False
@@ -104,23 +125,42 @@ class WhisperXDiarizer:
             return "loaded"
         return "idle"
 
-    def load_asr_model(self) -> None:
+    def load_asr_model(
+        self,
+        model_name: Optional[str] = None,
+        compute_type: Optional[str] = None,
+    ) -> None:
+        model_name = model_name or self.model_name
+        compute_type = compute_type or self.compute_type
+
         if self._asr_model is not None:
-            return
+            if (
+                self._asr_model_name == model_name
+                and self._asr_compute_type == compute_type
+            ):
+                return
+            logger.info(
+                f"Unloading WhisperX ASR model ({self._asr_model_name}) to load {model_name}"
+            )
+            self._asr_model = None
+            gc.collect()
+            clear_cuda_cache()
 
         self._is_loading = True
         logger.info(
-            f"Loading WhisperX ASR model ({self.model_name}) on device={self.device}, compute_type={self.compute_type}..."
+            f"Loading WhisperX ASR model ({model_name}) on device={self.device}, compute_type={compute_type}..."
         )
         start_t = time.time()
         try:
             import whisperx
 
             self._asr_model = whisperx.load_model(
-                self.model_name,
+                model_name,
                 device=self.device,
-                compute_type=self.compute_type,
+                compute_type=compute_type,
             )
+            self._asr_model_name = model_name
+            self._asr_compute_type = compute_type
             self._last_used_time = time.time()
             elapsed = time.time() - start_t
             logger.info(f"WhisperX ASR model loaded successfully in {elapsed:.2f}s")
@@ -164,16 +204,21 @@ class WhisperXDiarizer:
         num_speakers: Optional[int] = None,
         min_speakers: Optional[int] = None,
         max_speakers: Optional[int] = None,
+        model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Run WhisperX full pipeline: Transcribe -> Forced Alignment (with fallback) -> Diarize -> Assign Speakers.
+
+        ``model='whisperx-thai'`` selects the Thai-tuned faster-whisper CT2 ASR
+        model (accurate Thai text) instead of the default WhisperX ASR.
         """
         if not os.path.exists(audio_path):
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
         import whisperx
 
-        self.load_asr_model()
+        asr_model_name, asr_compute_type = _select_asr_model(model, language)
+        self.load_asr_model(asr_model_name, asr_compute_type)
         self.load_diarize_pipeline()
         self._last_used_time = time.time()
 
@@ -331,6 +376,7 @@ def transcribe_and_diarize_whisperx(
     num_speakers: Optional[int] = None,
     min_speakers: Optional[int] = None,
     max_speakers: Optional[int] = None,
+    model: Optional[str] = None,
 ) -> Dict[str, Any]:
     diarizer = get_whisperx_diarizer()
     return diarizer.transcribe_and_diarize(
@@ -339,4 +385,5 @@ def transcribe_and_diarize_whisperx(
         num_speakers=num_speakers,
         min_speakers=min_speakers,
         max_speakers=max_speakers,
+        model=model,
     )

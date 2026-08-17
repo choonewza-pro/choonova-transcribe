@@ -72,7 +72,8 @@ document.addEventListener('DOMContentLoaded', () => {
     'thai-whisper': { label: 'Thai Whisper' },
     typhoon: { label: 'Typhoon ASR' },
     whisper: { label: 'Whisper' },
-    whisperx: { label: 'WhisperX' }
+    whisperx: { label: 'WhisperX' },
+    'whisperx-thai': { label: 'WhisperX (Thai)' }
   };
 
   function modelLabel(modelId) {

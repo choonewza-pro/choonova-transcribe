@@ -247,11 +247,11 @@ class TranscriptionService:
         except ValueError as e:
             raise ValidationException(str(e))
 
-        if resolved_model == "whisperx":
+        if resolved_model in ("whisperx", "whisperx-thai"):
             from app.config import HF_TOKEN
             if not HF_TOKEN:
                 raise ValidationException(
-                    "model='whisperx' requires HF_TOKEN to be set in the server environment."
+                    f"model='{resolved_model}' requires HF_TOKEN to be set in the server environment."
                 )
 
         if resolved_model == "typhoon" and with_timestamps:

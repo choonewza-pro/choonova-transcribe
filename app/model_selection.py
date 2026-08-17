@@ -9,12 +9,12 @@ from typing import Optional
 
 from app.config import SUPPORTED_LANGUAGES
 
-SUPPORTED_MODELS = ("thai-whisper", "typhoon", "whisper", "whisperx")
+SUPPORTED_MODELS = ("thai-whisper", "typhoon", "whisper", "whisperx", "whisperx-thai")
 
 # Allowed transcription model per (language, enable_diarization) combination.
 _MODEL_MATRIX = {
     ("th", False): {"thai-whisper", "typhoon", "whisper"},
-    ("th", True): {"thai-whisper", "whisperx"},
+    ("th", True): {"thai-whisper", "whisperx", "whisperx-thai"},
     ("en", False): {"whisper"},
     ("en", True): {"whisperx"},
     ("auto", False): {"whisper"},

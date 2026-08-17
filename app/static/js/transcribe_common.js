@@ -6,6 +6,7 @@ window.TranscribeCommon = (function () {
       if (diarization) {
         return [
           { value: 'thai-whisper', label: 'Thai Whisper — คำต่อคำ + PyAnnote' },
+          { value: 'whisperx-thai', label: 'WhisperX (Thai) — Thai-Tuned + Diarization' },
           { value: 'whisperx', label: 'WhisperX — ASR + Diarization' },
         ];
       }
